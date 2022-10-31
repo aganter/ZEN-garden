@@ -17,3 +17,7 @@
 compileAG.py
 postprocess/eth_colorsAG.py
 postprocess/visualizationAG.py
+zen_garden.egg-info/top_level.txt
+zen_garden.egg-info/SOURCES.txt
+zen_garden.egg-info/PKG-INFO
+zen_garden.egg-info/dependency_links.txt
