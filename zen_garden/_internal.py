@@ -69,7 +69,7 @@ def compile(config, dataset_path=None):
         module      = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         scenarios   = module.scenarios
-        config.scenarios.update(scenarios)
+        config.scenarios = scenarios
 
     # create a dictionary with the paths to access the model inputs and check if input data exists
     prepare = Prepare(config)
@@ -82,30 +82,45 @@ def compile(config, dataset_path=None):
     # get rolling horizon years
     stepsOptimizationHorizon    = optimizationSetup.getOptimizationHorizon()
 
-    # update input data
-    for scenario, elements in config.scenarios.items():
-        optimizationSetup.restoreBaseConfiguration(scenario, elements)  # per default scenario="" is used as base configuration. Use setBaseConfiguration(scenario, elements) if you want to change that
-        optimizationSetup.overwriteParams(scenario, elements)
-        # iterate through horizon steps
-        for stepHorizon in stepsOptimizationHorizon:
-            if len(stepsOptimizationHorizon) == 1:
-                logging.info("\n--- Conduct optimization for perfect foresight --- \n")
-            else:
-                logging.info(f"\n--- Conduct optimization for rolling horizon step {stepHorizon} of {max(stepsOptimizationHorizon)}--- \n")
-            # overwrite time indices
-            optimizationSetup.overwriteTimeIndices(stepHorizon)
-            # create optimization problem
-            optimizationSetup.constructOptimizationProblem()
-            # SOLVE THE OPTIMIZATION PROBLEM
-            optimizationSetup.solve(config.solver)
-            # add newly builtCapacity of first year to existing capacity
-            optimizationSetup.addNewlyBuiltCapacity(stepHorizon)
-            # add cumulative carbon emissions to previous carbon emissions
-            optimizationSetup.addCarbonEmissionsCumulative(stepHorizon)
-            # EVALUATE RESULTS
-            modelName = os.path.basename(config.analysis["dataset"])
-            if len(stepsOptimizationHorizon) > 1:
-                modelName += f"_MF{stepHorizon}"
-            if config.system["conductScenarioAnalysis"]:
-                modelName += f"_{scenario}"
-            evaluation = Postprocess(optimizationSetup, modelName=modelName)
+    # determine base scenarios
+    if "useBaseScenarios" in config.system.keys() and config.system["useBaseScenarios"]:
+        baseScenarios=dict()
+        for scenario in config.scenarios.keys():
+            baseScenarios[scenario] = {tech: ["existingCapacity"] for tech in config.system["setTechnologies"]}
+    else:
+        baseScenarios = {"":{}}
+
+    # update base scenario
+    for baseScenario, elements in baseScenarios.items():
+        optimizationSetup.setBaseConfiguration(baseScenario, elements)
+
+        # update input data
+        for scenario, elements in config.scenarios.items():
+            if scenario != baseScenario or baseScenario == "":
+                optimizationSetup.restoreBaseConfiguration(scenario, elements)  # per default scenario="" is used as base configuration. Use setBaseConfiguration(scenario, elements) if you want to change that
+                optimizationSetup.overwriteParams(scenario, elements)
+                # iterate through horizon steps
+                for stepHorizon in stepsOptimizationHorizon:
+                    if len(stepsOptimizationHorizon) == 1:
+                        logging.info(f"\n--- Conduct optimization for perfect foresight for scenario {baseScenario}_{scenario}--- \n")
+                    else:
+                        logging.info(f"\n--- Conduct optimization for rolling horizon step {stepHorizon} of {max(stepsOptimizationHorizon)}--- \n")
+                    # overwrite time indices
+                    optimizationSetup.overwriteTimeIndices(stepHorizon)
+                    # create optimization problem
+                    optimizationSetup.constructOptimizationProblem()
+                    # SOLVE THE OPTIMIZATION PROBLEM
+                    optimizationSetup.solve(config.solver)
+                    # add newly builtCapacity of first year to existing capacity
+                    optimizationSetup.addNewlyBuiltCapacity(stepHorizon)
+                    # add cumulative carbon emissions to previous carbon emissions
+                    optimizationSetup.addCarbonEmissionsCumulative(stepHorizon)
+                    # EVALUATE RESULTS
+                    modelName = os.path.basename(config.analysis["dataset"])
+                    if len(stepsOptimizationHorizon) > 1:
+                        modelName += f"_MF{stepHorizon}"
+                    if baseScenario != "":
+                        modelName += f"_{baseScenario}"
+                    if config.system["conductScenarioAnalysis"] and not scenario == "":
+                        modelName += f"_{scenario}"
+                    evaluation = Postprocess(optimizationSetup, modelName=modelName, baseScenario=baseScenario)

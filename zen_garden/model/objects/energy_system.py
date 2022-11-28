@@ -87,6 +87,7 @@ class EnergySystem:
 
         # in class <EnergySystem>, all sets are constructed
         self.setNodes               = self.dataInput.extractLocations()
+        self.setCountryNodes        = self.dataInput.readInputData("setNodes")["country"].drop_duplicates()
         self.setNodesOnEdges        = self.calculateEdgesFromNodes()
         self.setEdges               = list(self.setNodesOnEdges.keys())
         self.setCarriers            = []
@@ -560,6 +561,10 @@ class EnergySystem:
         model.setNodes = pe.Set(
             initialize=energySystem.setNodes,
             doc='Set of nodes')
+        model.setCountryNodes = pe.Set(
+            initialize=energySystem.setCountryNodes,
+            doc = 'Set of country nodes'
+        )
         # edges
         model.setEdges = pe.Set(
             initialize = energySystem.setEdges,
@@ -656,6 +661,11 @@ class EnergySystem:
             model.setTimeStepsYearly,
             domain=pe.NonNegativeReals,
             doc="overshoot carbon emissions of energy system at the end of the time horizon. Domain: Reals"
+        )
+        model.carbonEmissionsLimitOvershoot= pe.Var(
+            model.setTimeStepsYearly,
+            domain=pe.NonNegativeReals,
+            doc="overshoot carbon emissions of energy system for each year. Domain: Reals"
         )
         # cost of carbon emissions
         model.costCarbonEmissionsTotal = pe.Var(
@@ -792,20 +802,26 @@ def constraintCarbonCostTotalRule(model, year):
     """ carbon cost associated with the carbon emissions of the system in each year """
     # get parameter object
     params = Parameter.getParameterObject()
+    if params.carbonPriceOvershoot != np.inf:
+        carbonOvershoot =  model.carbonEmissionsOvershoot[year] * params.carbonPriceOvershoot\
+                           + model.carbonEmissionsLimitOvershoot[year] * params.carbonPriceOvershoot
+    else:
+        carbonOvershoot = 0
     return (
             model.costCarbonEmissionsTotal[year] ==
-            params.carbonPrice[year] * model.carbonEmissionsTotal[year]
-            # add overshoot price
-            + model.carbonEmissionsOvershoot[year] * params.carbonPriceOvershoot
+            params.carbonPrice[year] * model.carbonEmissionsTotal[year] + carbonOvershoot
     )
 
 def constraintCarbonEmissionsLimitRule(model, year):
     """ time dependent carbon emissions limit from technologies and carriers"""
     # get parameter object
     params = Parameter.getParameterObject()
+    carbonEmissionsLimitOvershoot = 0
     if params.carbonEmissionsLimit[year] != np.inf:
+        if params.carbonPriceOvershoot != np.inf:
+            carbonEmissionsLimitOvershoot = model.carbonEmissionsLimitOvershoot[year]
         return (
-            params.carbonEmissionsLimit[year] >= model.carbonEmissionsTotal[year]
+            params.carbonEmissionsLimit[year] + carbonEmissionsLimitOvershoot >= model.carbonEmissionsTotal[year]
         )
     else:
         return pe.Constraint.Skip
@@ -818,10 +834,12 @@ def constraintCarbonEmissionsBudgetRule(model, year):
     params = Parameter.getParameterObject()
     intervalBetweenYears = EnergySystem.getSystem()["intervalBetweenYears"]
     if params.carbonEmissionsBudget != np.inf: #TODO check for last year - without last term?
-        return (
-                params.carbonEmissionsBudget + model.carbonEmissionsOvershoot[year] >=
-                model.carbonEmissionsCumulative[year] + model.carbonEmissionsTotal[year] * (intervalBetweenYears - 1)
-        )
+        if params.carbonPriceOvershoot != np.inf:
+            return (params.carbonEmissionsBudget + model.carbonEmissionsOvershoot[year] >=
+                    model.carbonEmissionsCumulative[year] + model.carbonEmissionsTotal[year] * (intervalBetweenYears - 1))
+        else:
+            return (params.carbonEmissionsBudget >=
+                    model.carbonEmissionsCumulative[year] + model.carbonEmissionsTotal[year] * (intervalBetweenYears - 1))
     else:
         return pe.Constraint.Skip
 

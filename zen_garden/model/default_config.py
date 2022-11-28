@@ -7,7 +7,6 @@ Organization: Laboratory of Reliability and Risk Engineering, ETH Zurich
 Description:  Default settings. Changes from the default values are specified in settings.py
 ==========================================================================================================================================================================="""
 
-
 class Config(object):
     """
     A class that contains all relevant parameters for the ZEN-Garden
@@ -73,7 +72,9 @@ class Config(object):
                                "setTechnologies": ["setConversionTechnologies", "setTransportTechnologies","setStorageTechnologies"],
                                "setConversionTechnologies": ["setConditioningTechnologies"]}
         # headers for the generation of input files
-        self.analysis["headerDataInputs"] =   {"setNodes": ["node", "x", "y"],
+        self.analysis["headerDataInputs"] =   {
+                                          "setNodes": ["node", "x", "y","country"],
+                                          "setCountryNodes": ["country"],
                                           "setEdges": ["edge"],
                                           "setScenarios":["scenario"],
                                           "setTimeSteps":["time"],

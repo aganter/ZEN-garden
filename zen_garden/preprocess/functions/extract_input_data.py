@@ -311,7 +311,7 @@ class DataInput():
 
         return carrierDict
 
-    def extractSetExistingTechnologies(self, storageEnergy = False):
+    def extractSetExistingTechnologies(self, storageEnergy = False, scenario=""):
         """ reads input data and creates setExistingCapacity for each technology
         :param storageEnergy: boolean if existing energy capacity of storage technology (instead of power)
         :return setExistingTechnologies: return set existing technologies"""
@@ -321,8 +321,8 @@ class DataInput():
             else:
                 _energyString = ""
 
-            dfInput = self.readInputData(f"existingCapacity{_energyString}")
-            if dfInput is None:
+            dfInput = self.readInputData(f"existingCapacity{_energyString}{scenario}")
+            if dfInput is None or dfInput.empty:
                 return  [0]
 
             if self.element.name in self.system["setTransportTechnologies"]:
@@ -336,20 +336,21 @@ class DataInput():
 
         return setExistingTechnologies
 
-    def extractLifetimeExistingTechnology(self, fileName, indexSets):
+    def extractLifetimeExistingTechnology(self, fileName, indexSets,scenario=""):
         """ reads input data and restructures the dataframe to return (multi)indexed dict
         :param fileName:  name of selected file
         :param indexSets: index sets of attribute. Creates (multi)index. Corresponds to order in pe.Set/pe.Param
         :return existingLifetimeDict: return existing capacity and existing lifetime """
         column   = "yearConstruction"
-        dfOutput = pd.Series(index=self.element.existingCapacity.index,data=0)
+        indexList, indexNameList = self.constructIndexList(indexSets, None)
+        multiidx = pd.MultiIndex.from_product(indexList, names=indexNameList)
+        dfOutput = pd.Series(index=multiidx, data=0)
         # if no existing capacities
         if not self.analysis["useExistingCapacities"]:
             return dfOutput
 
-        if f"{fileName}.csv" in os.listdir(self.folderPath):
-            indexList, indexNameList = self.constructIndexList(indexSets, None)
-            dfInput                  = self.readInputData( fileName)
+        if f"{fileName}{scenario}.csv" in os.listdir(self.folderPath):
+            dfInput                  = self.readInputData(fileName+scenario)
             # fill output dataframe
             dfOutput = self.extractGeneralInputData(dfInput, dfOutput, fileName, indexNameList, column, defaultValue = 0)
             # get reference year

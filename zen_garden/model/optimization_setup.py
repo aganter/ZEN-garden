@@ -28,9 +28,6 @@ from ..preprocess.functions.time_series_aggregation       import TimeSeriesAggre
 
 class OptimizationSetup():
 
-    baseScenario      = ""
-    baseConfiguration = {}
-
     def __init__(self, analysis, prepare):
         """setup Pyomo Concrete Model
         :param analysis: dictionary defining the analysis framework
@@ -46,6 +43,8 @@ class OptimizationSetup():
         self.stepHorizon = 0
         # set optimization attributes (the five set above) to class <EnergySystem>
         EnergySystem.setOptimizationAttributes(analysis, self.system, self.paths, self.solver)
+        # set base scenario
+        self.setBaseConfiguration()
         # add Elements to optimization
         self.addElements()
 
@@ -113,12 +112,17 @@ class OptimizationSetup():
             self.stepsHorizon   = {0: energySystem.setTimeStepsYearly}
         return list(self.stepsHorizon.keys())
 
-    def setBaseConfiguration(self, scenario, elements):
+    def setBaseConfiguration(self, scenario="", configuration={}):
         """set base configuration
         :param scenario: name of base scenario
         :param elements: elements in base scenario """
+        if not hasattr(self,"baseScenario"):
+            self.initialScenario  = scenario
+            self.initialConfiguration = configuration
+        else:
+            self.overwriteParams(self.initialScenario, self.initialConfiguration)
         self.baseScenario      = scenario
-        self.baseConfiguration = elements
+        self.baseConfiguration = configuration
 
     def restoreBaseConfiguration(self, scenario, elements):
         """restore default configuration
@@ -135,14 +139,19 @@ class OptimizationSetup():
                     for param in params:
                         if param not in self.baseConfiguration[elementName]:
                             self.baseConfiguration[elementName].append(param)
+                # continuously update initialConfiguration as well
+                if elementName not in self.initialConfiguration.keys():
+                    self.initialConfiguration[elementName] = params
+                else:
+                    for param in params:
+                        if param not in self.initialConfiguration[elementName]:
+                            self.initialConfiguration[elementName].append(param)
 
     def overwriteParams(self, scenario, elements):
         """overwrite scenario dependent parameters
         :param scenario: scenario name
         :param elements: dictionary of scenario dependent elements and parameters"""
-        if scenario == self.baseScenario:
-            scenario = ""
-        else:
+        if scenario != "": #self.baseScenario
             scenario = "_" + scenario
         # list of parameters with rawTimeSeries
         conductTimeSeriesAggregation = False
@@ -162,21 +171,31 @@ class OptimizationSetup():
                 _indexNames = _oldParam.index.names
                 _indexSets  = [indexSet for indexSet, indexName in element.dataInput.indexNames.items() if indexName in _indexNames]
                 _timeSteps  = None
+                if "setExistingTechnologies" in _indexSets: # special case existing technologies, where setExistingTechnologies, existing lifetime, and capexExistingCapacity have to be updated as well
+                    setattr(element, "setExistingTechnologies", element.dataInput.extractSetExistingTechnologies(scenario=scenario)) # update setExistingTechnologies
+                    setattr(element, "lifetimeExistingTechnology", element.dataInput.extractLifetimeExistingTechnology(param,indexSets=_indexSets,scenario=scenario)) # update lifetimeExistingTechnology
                 # set new parameter value
                 if hasattr(element, "rawTimeSeries") and param in element.rawTimeSeries.keys():
                     conductTimeSeriesAggregation = True
                     _timeSteps                   = EnergySystem.getEnergySystem().setBaseTimeStepsYearly
                     element.rawTimeSeries[param] = element.dataInput.extractInputData(fileName, indexSets=_indexSets,column=param,timeSteps=_timeSteps,scenario=scenario)
                 else:
-                    if isinstance(_oldParam, pd.Series) or isinstance(_oldParam, pd.DataFrame):
-                        if "time" in _indexNames:
-                            _timeSteps = list(_oldParam.index.unique("time"))
-                        _newParam  = element.dataInput.extractInputData(fileName,indexSets=_indexSets,timeSteps=_timeSteps,scenario=scenario)
-                    #else: _newParam = element.dataInput.extractAttributeData(param,scenario=scenario,skipWarning=True)["value"]
+                    assert isinstance(_oldParam, pd.Series) or isinstance(_oldParam, pd.DataFrame), f"Param values of '{param}' have to be a dataframe or series."
+                    if "time" in _indexNames:
+                        _timeSteps = list(_oldParam.index.unique("time"))
+                    _newParam  = element.dataInput.extractInputData(fileName,indexSets=_indexSets,timeSteps=_timeSteps,scenario=scenario)
                     setattr(element, param, _newParam)
+
+                    if "existingCapacity" in param:
+                        storageEnergy=False
+                        if element in EnergySystem.system["setStorageTechnologies"]:
+                            storageEnergy=True
+                        setattr(element, "capexExistingCapacity", element.calculateCapexOfExistingCapacities(storageEnergy=storageEnergy))
+
         # if scenario contains timeSeries dependent params conduct timeSeriesAggregation
         if conductTimeSeriesAggregation:
             TimeSeriesAggregation.conductTimeSeriesAggregation()
+            a=1
 
     def overwriteTimeIndices(self,stepHorizon):
         """ select subset of time indices, matching the step horizon

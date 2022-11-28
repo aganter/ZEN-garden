@@ -138,8 +138,7 @@ class StorageTechnology(Technology):
     @classmethod
     def constructParams(cls):
         """ constructs the pe.Params of the class <StorageTechnology> """
-        model = EnergySystem.getConcreteModel()
-        
+
         # time step duration of storage level
         Parameter.addParameter(
             name ="timeStepsStorageLevelDuration",
