@@ -116,7 +116,7 @@ def main(config, dataset_path=None):
             # iterate through horizon steps
             for stepHorizon in stepsOptimizationHorizon:
                 if len(stepsOptimizationHorizon) == 1:
-                    logging.info("\n--- Conduct optimization for perfect foresight --- \n")
+                    logging.info(f"\n--- Conduct optimization for perfect foresight {scenario} --- \n")
                 else:
                     logging.info(f"\n--- Conduct optimization for rolling horizon step {stepHorizon} of {max(stepsOptimizationHorizon)}--- \n")
                 # overwrite time indices
@@ -133,7 +133,10 @@ def main(config, dataset_path=None):
                 subfolder = ""
                 if config.system["conductScenarioAnalysis"]:
                     # handle scenarios
-                    subfolder += f"scenario_{scenario}"
+                    if baseScenario != "":
+                        subfolder += f"scenario_{baseScenario}_{scenario}"
+                    else:
+                        subfolder += f"scenario_{scenario}"
                 # handle myopic foresight
                 if len(stepsOptimizationHorizon) > 1:
                     if subfolder != "":

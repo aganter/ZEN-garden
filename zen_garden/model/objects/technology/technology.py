@@ -792,7 +792,7 @@ def constraintCapexYearlyAuxRule(model, tech, capacityType, loc, year):
     """ aggregates the capex of built capacity and of existing capacity w/o discounting """
     return (model.capexYearlyAux[tech, capacityType, loc, year] == sum(
                 model.capex[tech, capacityType, loc, time]
-                for time in Technology.getLifetimeRange(tech, year, timeStepType="invest"))
+                for time in Technology.getLifetimeRange(tech, year, timeStepType="yearly"))
             + Technology.getAvailableExistingQuantity(tech, capacityType, loc, year, typeExistingQuantity="capex",timeStepType="invest"))
 
 

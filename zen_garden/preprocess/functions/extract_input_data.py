@@ -66,7 +66,6 @@ class DataInput():
             defaultName = fileName
         # read input file
         dfInput = self.readInputData(fileName+scenario)
-
         assert(dfInput is not None or defaultValue is not None), f"input file for attribute {defaultName} could not be imported and no default value is given."
         if dfInput is not None and not dfInput.empty:
             dfOutput = self.extractGeneralInputData(dfInput,dfOutput,fileName,indexNameList,column,defaultValue)
