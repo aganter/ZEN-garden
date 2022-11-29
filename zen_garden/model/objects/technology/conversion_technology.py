@@ -42,13 +42,14 @@ class ConversionTechnology(Technology):
         # define input and output carrier
         self.inputCarrier               = self.dataInput.extractConversionCarriers()["inputCarrier"]
         self.outputCarrier              = self.dataInput.extractConversionCarriers()["outputCarrier"]
-        self.capacityLimitCountry       = self.dataInput.extractInputData("capacityLimitCountry",indexSets=["setCountryNodes", "setTimeSteps"],timeSteps= EnergySystem.getEnergySystem().setTimeStepsYearly)
         EnergySystem.setTechnologyOfCarrier(self.name, self.inputCarrier + self.outputCarrier)
         # check if reference carrier in input and output carriers and set technology to correspondent carrier
         assert self.referenceCarrier[0] in (self.inputCarrier + self.outputCarrier), f"reference carrier {self.referenceCarrier} of technology {self.name} not in input and output carriers {self.inputCarrier + self.outputCarrier}"
         # get conversion efficiency and capex
         self.getConverEfficiency()
         self.getAnnualizedCapex()
+        if EnergySystem.getAnalysis()["capacityLimitCountry"]:
+            self.capacityLimitCountry = self.dataInput.extractInputData("capacityLimitCountry",indexSets=["setCountryNodes", "setTimeSteps"],timeSteps=EnergySystem.getEnergySystem().setTimeStepsYearly)
 
     def getConverEfficiency(self):
         """retrieves and stores converEfficiency for <ConversionTechnology>.
@@ -178,12 +179,13 @@ class ConversionTechnology(Technology):
             data= cls.getCapexConverEfficiencyOfAllElements("converEfficiency",False,indexNames=["setConversionTechnologies","setConverEfficiencyLinear","setNodes","setTimeStepsInvest"]),
             doc = "Parameter which specifies the slope of the conversion efficiency if approximated linearly. Dimensions: setConversionTechnologies, setDependentCarriers, setNodes, setTimeStepsOperation"
         )
-        # slope of linearly modeled capex
-        Parameter.addParameter(
-            name="capacityLimitCountry",
-            data=EnergySystem.initializeComponent(cls,"capacityLimitCountry",indexNames=["setConversionTechnologies", "setCapacityTypes", "setCountryNodes", "setTimeStepsYearly"], capacityTypes = True),
-            doc = "Parameter which specifies the country specific capacity limit of a conversion technology. Dimensions: setConversionTechnologies, setCountryNodes, setTimeStepsInvest"
-        )
+        # country specific capacity limit
+        if EnergySystem.getAnalysis()["capacityLimitCountry"]:
+            Parameter.addParameter(
+                name="capacityLimitCountry",
+                data=EnergySystem.initializeComponent(cls,"capacityLimitCountry",indexNames=["setConversionTechnologies", "setCapacityTypes", "setCountryNodes", "setTimeStepsYearly"], capacityTypes = True),
+                doc = "Parameter which specifies the country specific capacity limit of a conversion technology. Dimensions: setConversionTechnologies, setCountryNodes, setTimeStepsInvest"
+            )
 
     @classmethod
     def constructVars(cls):
@@ -318,10 +320,11 @@ class ConversionTechnology(Technology):
             rule = constraintDependentFlowCouplingRule,
             doc = "couples the real dependent flow variables with the approximated variables. Dimension: setConversionTechnologies, setDependentCarriers, setNodes, setTimeStepsOperation.")
         # country-specific capacity limit for conversion technologies
-        model.constraintCapacityLimitCountry = pe.Constraint(
-            cls.createCustomSet(["setConversionTechnologies", "setCapacityTypes", "setCountryNodes","setTimeStepsYearly"]),
-            rule=constraintCapacityLimitCountryRule,
-            doc="country specifc capacity limit for each conversion technology. Dimension: setConversionTechnologies, setCapacityTypes, setCountryNodes, setTimeStepsYearly.")
+        if EnergySystem.getAnalysis()["capacityLimitCountry"]:
+            model.constraintCapacityLimitCountry = pe.Constraint(
+                cls.createCustomSet(["setConversionTechnologies", "setCapacityTypes", "setCountryNodes","setTimeStepsYearly"]),
+                rule=constraintCapacityLimitCountryRule,
+                doc="country specifc capacity limit for each conversion technology. Dimension: setConversionTechnologies, setCapacityTypes, setCountryNodes, setTimeStepsYearly.")
 
     # defines disjuncts if technology on/off
     @classmethod
@@ -447,5 +450,5 @@ def constraintCapacityLimitCountryRule(model,tech,capacityType,country,time):
     if params.capacityLimitCountry[tech,capacityType,country,time] == np.inf:
         return pe.Constraint.Skip
     else:
-        return(sum(model.builtCapacity[tech,capacityType, node, time] for node in model.setNodes if node[:2]==country)
+        return(sum(model.capacity[tech,capacityType, node, time] for node in model.setNodes if node[:2]==country)
                <= params.capacityLimitCountry[tech,capacityType,country,time])
