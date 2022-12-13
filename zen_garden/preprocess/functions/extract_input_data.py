@@ -283,7 +283,7 @@ class DataInput():
                 _energyString = ""
 
             dfInput = self.readInputData(f"existingCapacity{_energyString}"+scenario)
-            if dfInput is None or dfInput.empty:
+            if dfInput is None:
                 return  [0]
 
             if self.element.name in self.system["setTransportTechnologies"]:
@@ -305,7 +305,7 @@ class DataInput():
         column   = "yearConstruction"
         indexList, indexNameList = self.constructIndexList(indexSets, None)
         multiidx = pd.MultiIndex.from_product(indexList, names=indexNameList)
-        dfOutput = pd.Series(index=multiidx, data=0)
+        dfOutput = pd.Series(index=multiidx,data=0)
         # if no existing capacities
         if not self.analysis["useExistingCapacities"]:
             return dfOutput

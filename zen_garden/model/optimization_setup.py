@@ -203,7 +203,7 @@ class OptimizationSetup():
                         storageEnergy=False
                         if element in EnergySystem.system["setStorageTechnologies"]:
                             storageEnergy=True
-                        _capexExistingCapacities =element.calculateCapexOfExistingCapacities(storageEnergy=storageEnergy)
+                        _capexExistingCapacities = element.calculateCapexOfExistingCapacities(storageEnergy=storageEnergy)
                         setattr(element, "capexExistingCapacity", _capexExistingCapacities)
 
         # if scenario contains timeSeries dependent params conduct timeSeriesAggregation
