@@ -7,6 +7,7 @@ Organization: Laboratory of Reliability and Risk Engineering, ETH Zurich
 Description:  Default settings. Changes from the default values are specified in settings.py
 ==========================================================================================================================================================================="""
 
+
 class Config(object):
     """
     A class that contains all relevant parameters for the ZEN-Garden
@@ -72,17 +73,30 @@ class Config(object):
                                "setTechnologies": ["setConversionTechnologies", "setTransportTechnologies","setStorageTechnologies"],
                                "setConversionTechnologies": ["setConditioningTechnologies"]}
         # headers for the generation of input files
-        self.analysis["headerDataInputs"] =   {
-                                          "setNodes": ["node", "x", "y","country"],
-                                          "setCountryNodes": ["country"],
-                                          "setEdges": ["edge"],
-                                          "setScenarios":["scenario"],
-                                          "setTimeSteps":["time"],
-                                          "setTimeStepsYearly":["year"],
-                                          "setCarriers":["demandCarrier", "availabilityCarrier", "exportPriceCarrier", "importPriceCarrier"],
-                                          "setConversionTechnologies":["availability"],
-                                          "setTransportTechnologies":["availability", "costPerDistance", "distanceEuclidean", "efficiencyPerDistance"],
-                                          "setExistingTechnologies": ["existingTechnology"]}
+        self.analysis["headerDataInputs"] = {
+                                            "setNodes": "node",
+                                            "setCountryNodes": "country",
+                                            "setEdges": "edge",
+                                            "setLocation": "location",
+                                            "setScenarios":"scenario",
+                                            "setTimeSteps":"time",
+                                            "setTimeStepsOperation":"timeOperation",
+                                            "setTimeStepsStorageLevel":"timeStorageLevel",
+                                            "setTimeStepsYearly":"year",
+                                            "setTimeStepsYearlyEntireHorizon":"year",
+                                            "setCarriers":"carrier",
+                                            "setInputCarriers":"carrier",
+                                            "setOutputCarriers":"carrier",
+                                            "setDependentCarriers":"carrier",
+                                            "setConditioningCarriers":"carrier",
+                                            "setConditioningCarrierParents":"carrier",
+                                            "setElements":"element",
+                                            "setConversionTechnologies":"technology",
+                                            "setTransportTechnologies":"technology",
+                                            "setStorageTechnologies":"technology",
+                                            "setTechnologies":"technology",
+                                            "setExistingTechnologies": "existingTechnology",
+                                            "setCapacityTypes":"capacityType"}
 
         # file format of input data
         self.analysis["fileFormat"] = "csv"
@@ -96,39 +110,16 @@ class Config(object):
             "representationMethod"  : "meanRepresentation",
             "resolution"            : 1,
             "segmentation"          : False,
-            "noSegments"            : 12
-        }
-
-        self.analysis['headerDataOutputs']=   {'capexTotal': ['capacity[€]'],
-                                        'costCarrierTotal': ['capacity[€]'],
-                                        'opexTotal':['capacity[€]'],
-                                        'carbonEmissionsCarrierTotal':['capacity[GWh]'],
-                                        'carbonEmissionsTechnologyTotal':['capacity[GWh]'],
-                                        'carbonEmissionsTotal':['capacity[GWh]'],
-                                        'carbonEmissionsCarrier':['carrier','node','time','capacity[GWh]'],
-                                        'costCarrier': ['carrier','node','time','capacity[GWh]'],
-                                        'exportCarrierFlow':['carrier','node','time','capacity[GWh]'],
-                                        'importCarrierFlow':['carrier','node','time','capacity[GWh]'],
-                                        'carrierFlow':['transportationTechnology','edge','time','capacity[GWh]'],
-                                        'carrierLoss':['transportationTechnology','edge','time','capacity[GWh]'],
-                                        'dependentFlowApproximation':['conversionTechnology','carrier','node','time','capacity[GWh]'],
-                                        'inputFlow':['conversionTechnology','carrier','node','time','capacity[GWh]'],
-                                        'outputFlow':['conversionTechnology','carrier','node','time','capacity[GWh]'],
-                                        'referenceFlowApproximation':['conversionTechnology','carrier','node','time','capacity[GWh]'],
-                                        'installTechnology':['conversionTechnology','node','time','T/F'],
-                                        'builtCapacity':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'capacity':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'capacityApproximation':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'capex':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'capexApproximation':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'carbonEmissionsTechnology':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'opex':['conversionTechnology','node','time','capacity[GWh]'],
-                                        'carrierFlowCharge':['?','??','???','????'],
-                                        'carrierFlowDischarge':['?','??','???','????'],
-                                        'levelCharge':['?','??','???','????'],
-                                        }
+            "noSegments"            : 12}
 
         self.analysis['postprocess'] = False
+        self.analysis["folderOutput"] = "./outputs/"
+        self.analysis["overwriteOutput"] = True
+        self.analysis["compressOutput"] = True
+        self.analysis["writeResultsYML"] = False
+        self.analysis["maxOutputSizeMB"] = 500
+        # name of data folder for energy system specification
+        self.analysis["folderNameSystemSpecification"] = "systemSpecification"
 
         ## System - Items assignment
         # set of energy carriers
@@ -164,13 +155,7 @@ class Config(object):
         # social discount rate
         self.system["socialDiscountRate"] = 0
         # folder output
-        self.system["folderOutput"] = "./outputs/"
-        self.system["overwriteOutput"] = True
-        self.system["compressOutput"] = True
-        self.system["writeResultsYML"] = False
-        self.system["maxOutputSizeMB"] = 500
-        # name of data folder for energy system specification
-        self.system["folderNameSystemSpecification"] = "systemSpecification"
+
 
 
         ## Solver - Items assignment
