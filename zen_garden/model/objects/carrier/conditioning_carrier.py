@@ -90,8 +90,6 @@ def constraintNodalEnergyBalanceWithConditioningRule(model, carrier, node, time)
     """
     params = Parameter.getComponentObject()
 
-    # decode to baseTimeStep
-    baseTimeStep            = EnergySystem.decodeTimeStep(carrier + "EnergyBalance", time)
     # carrier input and output conversion technologies
     carrierConversionIn, carrierConversionOut = 0, 0
     for tech in model.setConversionTechnologies:
