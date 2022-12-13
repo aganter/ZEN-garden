@@ -48,11 +48,13 @@ class DataInput():
         :return dataDict: dictionary with attribute values """
 
         # generic time steps
+        yearlyVariation=False
         if not timeSteps:
             timeSteps = self.energySystem.setBaseTimeSteps
         # if time steps are the yearly base time steps
         elif timeSteps is self.energySystem.setBaseTimeStepsYearly:
-            self.extractYearlyVariation(fileName,indexSets,column)
+            yearlyVariation = True
+            self.extractYearlyVariation(fileName,indexSets,column,scenario)
 
         # if existing capacities and existing capacities not used
         if (fileName == "existingCapacity" or fileName == "existingCapacityEnergy") and not self.analysis["useExistingCapacities"]:
@@ -67,6 +69,10 @@ class DataInput():
             defaultName = fileName
         # read input file
         dfInput = self.readInputData(fileName+scenario)
+        if scenario and yearlyVariation and dfInput is None:
+            logging.info(f"{fileName}{scenario} is missing from {self.folderPath}. {fileName} is used as input file")
+            dfInput = self.readInputData(fileName)
+
         assert(dfInput is not None or defaultValue is not None), f"input file for attribute {defaultName} could not be imported and no default value is given."
         if dfInput is not None and not dfInput.empty:
             dfOutput = self.extractGeneralInputData(dfInput,dfOutput,fileName,indexNameList,column,defaultValue)
@@ -116,7 +122,7 @@ class DataInput():
         dfInput     = dfInput.dropna()
 
         # get common index of dfOutput and dfInput
-        if not isinstance(dfInput.index, pd.MultiIndex):
+        if not isinstance(dfInput.index, pd.MultiIndex) and isinstance(dfOutput.index, pd.MultiIndex):
             indexList               = dfInput.index.to_list()
             if len(indexList) == 1:
                 indexMultiIndex     = pd.MultiIndex.from_tuples([(indexList[0],)], names=[dfInput.index.name])
@@ -186,7 +192,7 @@ class DataInput():
             attributeName = attributeName + "Default"
         return attributeName
 
-    def extractYearlyVariation(self,fileName,indexSets,column):
+    def extractYearlyVariation(self,fileName,indexSets,column,scenario=""):
         """ reads the yearly variation of a time dependent quantity
         :param self.folderPath: path to input files
         :param fileName: name of selected file.
@@ -200,7 +206,10 @@ class DataInput():
         # add YearlyVariation to fileName
         fileName  += "YearlyVariation"
         # read input data
-        dfInput         = self.readInputData(fileName)
+        dfInput   = self.readInputData(fileName+scenario)
+        if scenario and dfInput is None:
+            logging.info(f"{fileName}{scenario} is missing from {self.folderPath}. {fileName} is used as input file")
+            dfInput = self.readInputData(fileName)
         if dfInput is not None:
             if column is not None and column not in dfInput:
                 return
@@ -263,7 +272,7 @@ class DataInput():
 
         return carrierDict
 
-    def extractSetExistingTechnologies(self, storageEnergy = False, scenario=""):
+    def extractSetExistingTechnologies(self, storageEnergy = False,scenario=""):
         """ reads input data and creates setExistingCapacity for each technology
         :param storageEnergy: boolean if existing energy capacity of storage technology (instead of power)
         :return setExistingTechnologies: return set existing technologies"""
@@ -273,7 +282,7 @@ class DataInput():
             else:
                 _energyString = ""
 
-            dfInput = self.readInputData(f"existingCapacity{_energyString}{scenario}")
+            dfInput = self.readInputData(f"existingCapacity{_energyString}"+scenario)
             if dfInput is None or dfInput.empty:
                 return  [0]
 
@@ -487,12 +496,17 @@ class DataInput():
         """ saves the unit of an attribute, converted to the base unit """
         # if numerics analyzed
         if self.solver["analyzeNumerics"]:
+            attributes = "attributes"
+            if scenario and os.path.exists(os.path.join(self.folderPath,"attributes"+scenario+".csv")):
+                attributes += scenario
+            dfInput = self.readInputData(attributes).set_index("index").squeeze(axis=1)
+            # get attribute
             if fileName:
-                dfInput = self.readInputData("attributes" + scenario).set_index("index").squeeze(axis=1)
-                # get attribute
                 attributeName = self.adaptAttributeName(fileName,dfInput)
                 inputUnit = dfInput.loc[attributeName, "unit"]
-                self.unitHandling.setBaseUnitCombination(inputUnit=inputUnit,attribute=(self.element.name,fileName))
+            else:
+                inputUnit = np.nan
+            self.unitHandling.setBaseUnitCombination(inputUnit=inputUnit,attribute=(self.element.name,fileName))
 
     def saveValuesOfAttribute(self,dfOutput,fileName):
         """ saves the values of an attribute """
@@ -557,7 +571,8 @@ class DataInput():
         :param fileName: name of selected file
         :return dfInput: reformulated input dataframe
         """
-        dfInput = dfInput.set_index(indexNameList)
+        if indexNameList:
+            dfInput = dfInput.set_index(indexNameList)
         if column:
             assert column in dfInput.columns, f"Requested column {column} not in columns {dfInput.columns.to_list()} of input file {fileName}"
             dfInput = dfInput[column]
