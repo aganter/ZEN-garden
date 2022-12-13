@@ -85,6 +85,7 @@ class EnergySystem:
 
         # in class <EnergySystem>, all sets are constructed
         self.setNodes               = self.dataInput.extractLocations()
+        self.setCountryNodes        = self.dataInput.extractLocations(extractNodes="country")
         self.setNodesOnEdges        = self.calculateEdgesFromNodes()
         self.setEdges               = list(self.setNodesOnEdges.keys())
         self.setCarriers            = []
@@ -676,7 +677,7 @@ class EnergySystem:
             name="carbonEmissionsLimitOvershoot",
             indexSets=model.setTimeStepsYearly,
             domain=pe.NonNegativeReals,
-            doc="overshoot carbon emissions of energy system for each year. Domain: Reals"
+            doc="overshoot carbon emissions of energy system for each year"
         )
         # cost of carbon emissions
         Variable.addVariable(

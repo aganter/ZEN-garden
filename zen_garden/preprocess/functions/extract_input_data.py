@@ -218,7 +218,11 @@ class DataInput():
     def extractLocations(self,extractNodes = True):
         """ reads input data to extract nodes or edges.
         :param extractNodes: boolean to switch between nodes and edges """
-        if extractNodes:
+        if extractNodes == "country":
+            setCountryNodes = self.readInputData("setNodes")["country"]
+            setCountryNodes = setCountryNodes.drop_duplicates().to_list()
+            return setCountryNodes
+        elif extractNodes:
             setNodesConfig  = self.system["setNodes"]
             setNodesInput   = self.readInputData("setNodes")["node"].to_list()
             # if no nodes specified in system, use all nodes

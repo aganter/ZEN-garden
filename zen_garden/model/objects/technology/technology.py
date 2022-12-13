@@ -856,7 +856,7 @@ def constraintCapexYearlyAuxRule(model, tech, capacityType, loc, year):
     return (model.capexYearlyAux[tech, capacityType, loc, year] == sum(
                 model.capex[tech, capacityType, loc, time]
                 for time in Technology.getLifetimeRange(tech, year, timeStepType="yearly"))
-            + Technology.getAvailableExistingQuantity(tech, capacityType, loc, year, typeExistingQuantity="capex",timeStepType="invest"))
+            + Technology.getAvailableExistingQuantity(tech, capacityType, loc, year, typeExistingQuantity="capex",timeStepType="yearly"))
 
 
 def constraintCapexTotalRule(model,year):

@@ -49,7 +49,7 @@ class ConditioningCarrier(Carrier):
             name="endogenousCarrierDemand",
             indexSets= cls.createCustomSet(["setConditioningCarriers","setNodes","setTimeStepsOperation"]),
             domain = pe.NonNegativeReals,
-            doc = 'node- and time-dependent model endogenous carrier demand. \n\t Dimensions: setCarriers, setNodes, setTimeStepsCarrier. Domain: NonNegativeReals'
+            doc = 'node- and time-dependent model endogenous carrier demand'
         )
 
     @classmethod
@@ -63,7 +63,7 @@ class ConditioningCarrier(Carrier):
             name="constraintCarrierDemandCoupling",
             indexSets= cls.createCustomSet(["setConditioningCarrierParents","setNodes","setTimeStepsOperation"]),
             rule = constraintCarrierDemandCouplingRule,
-            doc = 'coupeling model endogenous and exogenous carrier demand. Dimensions: setConditioningCarriers, setNodes, setTimeStepsCarrier',
+            doc = 'coupling model endogenous and exogenous carrier demand',
         )
         # overwrite energy balance when conditioning carriers are included
         model.constraintNodalEnergyBalance.deactivate()
