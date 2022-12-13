@@ -158,7 +158,7 @@ class ConversionTechnology(Technology):
         model.setDependentCarriers = pe.Set(
             model.setConversionTechnologies,
             initialize = _dependentCarriers,
-            doc = "set of carriers that are an output to a specific conversion technology.\n\t Dimensions: setConversionTechnologies"
+            doc = "set of carriers that are an output to a specific conversion technology. Dimensions: setConversionTechnologies"
         )
 
         # add pe.Sets of the child classes
@@ -186,7 +186,7 @@ class ConversionTechnology(Technology):
             Parameter.addParameter(
                 name= "capacityLimitCountry",
                 data= EnergySystem.initializeComponent(cls,"capacityLimitCountry",indexNames=["setConversionTechnologies", "setCapacityTypes", "setCountryNodes", "setTimeStepsYearly"], capacityTypes = True),
-                doc = "Parameter which specifies the country specific capacity limit of a conversion technology. Dimensions: setConversionTechnologies, setCountryNodes, setTimeStepsInvest"
+                doc = "Parameter which specifies the country specific capacity limit of a conversion technology"
             )
 
     @classmethod
@@ -352,7 +352,7 @@ class ConversionTechnology(Technology):
                 name="constraintCapacityLimitCountry",
                 indexSets=cls.createCustomSet(["setConversionTechnologies", "setCapacityTypes", "setCountryNodes","setTimeStepsYearly"]),
                 rule=constraintCapacityLimitCountryRule,
-                doc="country specifc capacity limit for each conversion technology. Dimension: setConversionTechnologies, setCapacityTypes, setCountryNodes, setTimeStepsYearly.")
+                doc="country specifc capacity limit for each conversion technology")
 
 
     # defines disjuncts if technology on/off
