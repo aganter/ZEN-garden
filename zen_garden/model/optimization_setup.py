@@ -28,9 +28,6 @@ from ..preprocess.functions.time_series_aggregation       import TimeSeriesAggre
 
 class OptimizationSetup():
 
-    baseScenario      = ""
-    baseConfiguration = {}
-
     def __init__(self, analysis, prepare):
         """setup Pyomo Concrete Model
         :param analysis: dictionary defining the analysis framework
