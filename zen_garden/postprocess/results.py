@@ -360,6 +360,8 @@ class Results(object):
         if self.results["system"]["conductScenarioAnalysis"]:
             self.has_scenarios = True
             if scenarios:
+                if not isinstance(scenarios, list):
+                    scenarios = list(scenarios)
                 self.scenarios=scenarios
             else:
                 self.scenarios = [f"scenario_{scenario}" for scenario in self.results["scenarios"].keys()]
