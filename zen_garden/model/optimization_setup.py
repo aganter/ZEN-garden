@@ -168,6 +168,7 @@ class OptimizationSetup():
                 column   = None
                 if type(param) is tuple:
                     fileName, column = param
+                    param = param[1]
                 if "YearlyVariation" in param:
                     param    = param.replace("YearlyVariation","")
                     fileName = param
@@ -180,8 +181,8 @@ class OptimizationSetup():
                 if "setExistingTechnologies" in _indexSets:
                     # update setExistingTechnologies and existingLifetime
                     _existingTechnologies = element.dataInput.extractSetExistingTechnologies(scenario=scenario)
-                    _lifetimeExistingTechnologies = element.dataInput.extractLifetimeExistingTechnology(param, indexSets=_indexSets,scenario=scenario)
                     setattr(element, "setExistingTechnologies", _existingTechnologies)
+                    _lifetimeExistingTechnologies = element.dataInput.extractLifetimeExistingTechnology(param, indexSets=_indexSets,scenario=scenario)
                     setattr(element, "lifetimeExistingTechnology", _lifetimeExistingTechnologies)
                 # set new parameter value
                 if hasattr(element, "rawTimeSeries") and param in element.rawTimeSeries.keys():

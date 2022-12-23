@@ -7,14 +7,12 @@ Organization: Laboratory of Reliability and Risk Engineering, ETH Zurich
 Description:  Class is defining to read in the results of an Optimization problem.
 ==========================================================================================================================================================================="""
 import logging
-
 import numpy as np
 import pandas as pd
 import importlib
 import json
 import zlib
 import os
-
 from zen_garden.model.objects.time_steps import SequenceTimeStepsDicts
 
 class Results(object):
@@ -128,6 +126,13 @@ class Results(object):
             with open(f"{name}.gzip", "rb") as f:
                 content_compressed = f.read()
             return zlib.decompress(content_compressed).decode()
+        # todo quick fix, so resutls don't have to be re-run
+        elif "scenario" in name:
+            name = name.split("_scenario")[0]
+            if os.path.exists(f"{name}.gzip"):
+                with open(f"{name}.gzip", "rb") as f:
+                    content_compressed = f.read()
+                return zlib.decompress(content_compressed).decode()
 
         # normal version
         if os.path.exists(f"{name}.json"):

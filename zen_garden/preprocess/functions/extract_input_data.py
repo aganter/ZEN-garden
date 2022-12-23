@@ -276,6 +276,7 @@ class DataInput():
         """ reads input data and creates setExistingCapacity for each technology
         :param storageEnergy: boolean if existing energy capacity of storage technology (instead of power)
         :return setExistingTechnologies: return set existing technologies"""
+        setExistingTechnologies = np.array([0])
         if self.analysis["useExistingCapacities"]:
             if storageEnergy:
                 _energyString = "Energy"
@@ -291,9 +292,8 @@ class DataInput():
             else:
                 location = "node"
             maxNodeCount = dfInput[location].value_counts().max()
-            setExistingTechnologies = np.arange(0, maxNodeCount)
-        else:
-            setExistingTechnologies = np.array([0])
+            if maxNodeCount is not np.nan:
+                setExistingTechnologies = np.arange(0, maxNodeCount)
 
         return setExistingTechnologies
 
