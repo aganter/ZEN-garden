@@ -436,8 +436,8 @@ class Technology(Element):
         # annual capex of having capacity
         Variable.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
             domain=pe.NonNegativeReals, doc='annual capex for having technology at location l')
-        Variable.add_variable(model,name="capex_yearly_aux", indexSets=cls.createCustomSet(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
-            domain=pe.NonNegativeReals, doc='annual capex for having technology at location l without discount rate.')
+        Variable.add_variable(model,name="capex_yearly_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
+            domain=pe.NonNegativeReals, doc='annual capex for having technology at location l without discount rate')
         # total capex
         Variable.add_variable(model, name="capex_total", index_sets=model.set_time_steps_yearly, domain=pe.NonNegativeReals,
             doc='total capex for installing all technologies in all locations at all times')
@@ -492,10 +492,8 @@ class Technology(Element):
         Constraint.add_constraint(model, name="constraint_capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
             rule=constraint_capex_yearly_rule, doc='annual capex of having capacity of technology.')
         # annual capex of having capacity (auxilary constraint)
-        Constraint.add_constraint(model, name="constraint_capex_yearly_aux", index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
-                                  rule=constraint_capex_yearly_aux_rule,
-                                  doc='auxiliary constratin for annual capex of having capacity of technology.'
+        Constraint.add_constraint(model, name="constraint_capex_yearly_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
+                                  rule=constraint_capex_yearly_aux_rule,doc='auxiliary constraint for annual capex of having capacity of technology.')
         # total capex of all technologies
         Constraint.add_constraint(model, name="constraint_capex_total", index_sets=model.set_time_steps_yearly, rule=constraint_capex_total_rule,
             doc='total capex of all technology that can be installed.')
@@ -683,7 +681,7 @@ def constraint_capex_yearly_aux_rule(model, tech, capacity_type, loc, year):
         for time in Technology.get_lifetime_range(tech, year, time_step_type="yearly"))
     +Technology.get_available_existing_quantity(tech, capacity_type, loc, year, type_existing_quantity="capex",time_step_type="yearly"))
 
-def constraintCapexTotalRule(model,year):
+def constraint_capex_total_rule(model,year):
     """ sums over all technologies to calculate total capex """
     return (model.capex_total[year] == sum(
         model.capex_yearly[tech, capacity_type, loc, year] for tech, capacity_type, loc in Element.create_custom_set(["set_technologies", "set_capacity_types", "set_location"])[0]))

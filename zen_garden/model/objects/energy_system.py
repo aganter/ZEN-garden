@@ -585,7 +585,7 @@ class EnergySystem:
         Variable.add_variable(model, name="carbon_emissions_overshoot", index_sets=model.set_time_steps_yearly, domain=pe.NonNegativeReals,
             doc="overshoot carbon emissions of energy system at the end of the time horizon")
         # carbon emissions overshoot
-        Variable.add_variable(model, name="carbon_emissions_limit_overshoot", indexSets=model.set_time_steps_yearly, domain=pe.NonNegativeReals,
+        Variable.add_variable(model, name="carbon_emissions_limit_overshoot", index_sets=model.set_time_steps_yearly, domain=pe.NonNegativeReals,
             doc="overshoot carbon emissions of energy system for each year")
         # cost of carbon emissions
         Variable.add_variable(model, name="cost_carbon_emissions_total", index_sets=model.set_time_steps_yearly, domain=pe.Reals, doc="total cost of carbon emissions of energy system")
@@ -708,7 +708,7 @@ def constraint_carbon_emissions_budget_rule(model, year):
         #TODO check capexAux
         if params.carbon_price_overshoot != np.inf:
             return (params.carbon_emissions_budget + model.carbon_emissions_overshoot[year] >= model.carbon_emissions_cumulative[year] + model.carbon_emissions_total[year] * (interval_between_years - 1))
-     else:
+    else:
         return pe.Constraint.Skip
 
 

@@ -114,6 +114,11 @@ class OptimizationSetup():
         """set base configuration
         :param scenario: name of base scenario
         :param elements: elements in base configuration """
+        if not hasattr(self, "base_scenario"):
+            self.initial_scenario = scenario
+            self.initial_configuration = elements
+        else:
+            self.overwrite_params(self.initial_scenario, self.initial_configuration)
         self.base_scenario = scenario
         self.base_configuration = elements
 
@@ -160,11 +165,11 @@ class OptimizationSetup():
                 file_name = param
                 column = None
                 if type(param) is tuple:
-                    fileName, column = param
+                    file_name, column = param
                     param = param[1]
                 if "yearly_variation" in param:
                     param    = param.replace("_yearly_variation","")
-                    fileName = param
+                    file_name = param
                 # get old param value
                 _old_param = getattr(element, param)
                 _index_names = _old_param.index.names

@@ -208,7 +208,7 @@ class DataInput():
         _index_sets.remove("set_time_steps")
         _index_sets.append("set_time_steps_yearly")
         # add YearlyVariation to file_name
-        file_name += "YearlyVariation"
+        file_name += "_yearly_variation"
         # read input data
         df_input = self.read_input_data(file_name + scenario)
         if scenario and df_input is None:
@@ -221,7 +221,7 @@ class DataInput():
             # set yearlyVariation attribute to df_output
             if column:
                 _selected_column = column
-                _name_yearly_variation = column + "YearlyVariation"
+                _name_yearly_variation = column + "_yearly_variation"
             else:
                 _selected_column = None
                 _name_yearly_variation = file_name
