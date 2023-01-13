@@ -104,7 +104,7 @@ class DataInput():
         else:
             missing_index = missing_index[0]
             # check if special case of existing Technology
-            if "existingTechnology" in missing_index:
+            if "existing_technology" in missing_index:
                 if column:
                     default_name = column
                 else:
@@ -281,11 +281,11 @@ class DataInput():
         set_existing_technologies = np.array([0])
         if self.analysis["use_existing_capacities"]:
             if storage_energy:
-                _energy_string = "Energy"
+                _energy_string = "_energy"
             else:
                 _energy_string = ""
 
-            df_input = self.read_input_data(f"existing_capacity{_energy_string}")
+            df_input = self.read_input_data(f"existing_capacity{_energy_string}{scenario}")
             if df_input is None:
                 return [0]
             if self.element.name in self.system["set_transport_technologies"]:
@@ -294,7 +294,7 @@ class DataInput():
                 location = "node"
             _max_node_count = df_input[location].value_counts().max()
             if _max_node_count is not np.nan:
-                setExistingTechnologies = np.arange(0, _max_node_count)
+                set_existing_technologies = np.arange(0, _max_node_count)
 
         return set_existing_technologies
 

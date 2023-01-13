@@ -193,7 +193,7 @@ class OptimizationSetup():
                         _time_steps = list(_old_param.index.unique("time"))
                     _new_param = element.datainput.extract_input_data(file_name, index_sets=_index_sets, time_steps=_time_steps, scenario=scenario)
                     setattr(element, param, _new_param)
-                    # if existing capacity is changed, capexExistingCapacity also has to be updated
+                    # if existing capacity is changed, capex_existing_capacity also has to be updated
                     if "existing_capacity" in param:
                         storage_energy = False
                         if element in EnergySystem.system["set_storage_technologies"]:

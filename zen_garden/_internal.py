@@ -107,13 +107,13 @@ def main(config, dataset_path=None):
 
         # update input data
         for scenario, elements in config.scenarios.items():
-            optimization_setup.restore_base_configuration(scenario,
-                                                          elements)  # per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) if you want to change that
+            # Per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) to change it
+            optimization_setup.restore_base_configuration(scenario, elements)
             optimization_setup.overwrite_params(scenario, elements)
             # iterate through horizon steps
             for step_horizon in steps_optimization_horizon:
                 if len(steps_optimization_horizon) == 1:
-                    logging.info("\n--- Conduct optimization for perfect foresight --- \n")
+                    logging.info(f"\n--- Conduct optimization for perfect foresight {base_scenario}_{scenario}--- \n")
                 else:
                     logging.info(f"\n--- Conduct optimization for rolling horizon step {step_horizon} of {max(steps_optimization_horizon)}--- \n")
                 # overwrite time indices
@@ -133,7 +133,6 @@ def main(config, dataset_path=None):
                     # handle scenarios
                     if base_scenario != str():
                         subfolder += f"scenario_{base_scenario}_{scenario}"
-                        scenario_name = subfolder
                     else:
                         subfolder += f"scenario_{scenario}"
                     scenario_name = subfolder

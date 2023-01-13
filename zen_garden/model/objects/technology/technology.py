@@ -674,8 +674,6 @@ def constraint_capex_yearly_rule(model, tech, capacity_type, loc, year):
 
 def constraint_capex_yearly_aux_rule(model, tech, capacity_type, loc, year):
     """ aggregates the capex of built capacity and of existing capacity """
-    system = EnergySystem.get_system()
-    discount_rate = EnergySystem.get_analysis()["discount_rate"]
     return (model.capex_yearly_aux[tech, capacity_type, loc, year] == sum(
         model.capex[tech, capacity_type, loc, time]
         for time in Technology.get_lifetime_range(tech, year, time_step_type="yearly"))

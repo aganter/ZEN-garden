@@ -79,8 +79,8 @@ class Config(object):
                 "set_edges": "edge",
                 "set_location": "location",
                 "set_time_steps":"time",
-                "set_time_steps_operation":"timeOperation",
-                "set_time_steps_storage_level":"time_storage_level",
+                "set_time_steps_operation":"time_operation",
+                "set_time_steps_storage_level":"time_storage",
                 "set_time_steps_yearly":"year",
                 "set_time_steps_yearly_entire_horizon":"year",
                 "set_carriers":"carrier",
@@ -94,7 +94,7 @@ class Config(object):
                 "set_transport_technologies":"technology",
                 "set_storage_technologies":"technology",
                 "set_technologies":"technology",
-                "set_existing_technologies": "existingTechnology",
+                "set_existing_technologies": "existing_technology",
                 "set_capacity_types":"capacity_type"}
         # time series aggregation
         self.analysis["time_series_aggregation"] = {

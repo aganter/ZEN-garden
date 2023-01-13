@@ -146,14 +146,8 @@ class Results(object):
         if os.path.exists(f"{name}.gzip"):
             with open(f"{name}.gzip", "rb") as f:
                 content_compressed = f.read()
-            return zlib.decompress(content_compressed).decode()
-        # todo quick fix, so resutls don't have to be re-run
-        elif "scenario" in name:
-            name = name.split("_scenario")[0]
-            if os.path.exists(f"{name}.gzip"):
-                with open(f"{name}.gzip", "rb") as f:
-                    content_compressed = f.read()
-                return zlib.decompress(content_compressed).decode()
+            content = zlib.decompress(content_compressed).decode()
+            return json.loads(content)
 
         # normal version
         if os.path.exists(f"{name}.json"):
@@ -354,7 +348,7 @@ class Results(object):
 
         return out_dict
 
-    def get_df(self, name, is_storage=False, scenario=None, to_csv=None, csv_kwargs=None):
+    def get_df(self, name, is_storage=False, scenarios=None, to_csv=None, csv_kwargs=None):
         """
         Extracts the dataframe from the results
         :param name: The name of the dataframe to extract
@@ -367,10 +361,10 @@ class Results(object):
         """
 
         # select the scenarios
-        if scenario is not None:
-            scenarios = [scenario]
-        else:
+        if scenarios is None:
             scenarios = self.scenarios
+        if not isinstance(scenarios, list):
+                scenarios = [scenarios]
 
         # loop
         _data = {}
