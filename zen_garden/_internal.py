@@ -94,12 +94,11 @@ def main(config, dataset_path=None):
             logging.warning("Existing files will be overwritten!")
 
     # determine base scenarios
+    base_scenarios = {"": {}}
     if "use_base_scenarios" in config.system.keys() and config.system["use_base_scenarios"]:
         base_scenarios = dict()
         for scenario in config.scenarios.keys():
             base_scenarios[scenario] = {tech: ["existing_capacity"] for tech in config.system["set_technologies"]}
-    else:
-        base_scenarios = {"": {}}
 
     # update base scenario
     for base_scenario, elements in base_scenarios.items():
@@ -107,7 +106,7 @@ def main(config, dataset_path=None):
 
         # update input data
         for scenario, elements in config.scenarios.items():
-            # Per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) to change it
+            # per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) to change it
             optimization_setup.restore_base_configuration(scenario, elements)
             optimization_setup.overwrite_params(scenario, elements)
             # iterate through horizon steps

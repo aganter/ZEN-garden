@@ -179,9 +179,9 @@ class Technology(Element):
             time_step_year = EnergySystem.encode_time_step(tech, base_time_steps, time_step_type, yearly=True)
         else:
             time_step_year = time
-        tStart, tEnd = cls.get_start_end_time_of_period(tech, time_step_year)
+        t_start, t_end = cls.get_start_end_time_of_period(tech, time_step_year)
 
-        return range(tStart, tEnd + 1)
+        return range(t_start, t_end + 1)
 
     @classmethod
     def get_available_existing_quantity(cls, tech, capacity_type, loc, time, type_existing_quantity, time_step_type: str = None):
@@ -214,7 +214,7 @@ class Technology(Element):
             raise KeyError(f"Wrong type of existing quantity {type_existing_quantity}")
 
         for id_existing_capacity in model.set_existing_technologies[tech]:
-            tStart = cls.get_start_end_time_of_period(tech, time_step_year, id_existing_capacity=id_existing_capacity, loc=loc)
+            t_start = cls.get_start_end_time_of_period(tech, time_step_year, id_existing_capacity=id_existing_capacity, loc=loc)
             # discount existing capex
             if type_existing_quantity == "capex":
                 year_construction = max(0, time * system["interval_between_years"] - params.lifetime_technology[tech] + params.lifetime_existing_technology[tech, loc, id_existing_capacity])
@@ -222,7 +222,9 @@ class Technology(Element):
             else:
                 discount_factor = 1
             # if still available at first base time step, add to list
-            if tStart == model.set_base_time_steps.at(1) or tStart == time_step_year:
+            if  t_start == model.set_base_time_steps.at(1) and tech=="SMR":
+                a=1
+            if t_start == model.set_base_time_steps.at(1) or t_start == time_step_year:
                 existing_quantity += existing_variable[tech, capacity_type, loc, id_existing_capacity] * discount_factor
         return existing_quantity
 
@@ -236,7 +238,7 @@ class Technology(Element):
         :param id_existing_capacity: id of existing capacity
         :param loc: location (node or edge) of existing capacity
         :return beganInPast: boolean if the period began before the first optimization step
-        :return starttime_step_year,endtime_step_year: start and end of period in invest time step domain"""
+        :return starttime_step_year,end_time_step_year: start and end of period in invest time step domain"""
 
         # get model and system
         params = Parameter.get_component_object()
@@ -248,15 +250,15 @@ class Technology(Element):
         elif period_type == "construction_time":
             period_time = params.construction_time_technology
         else:
-            raise NotImplemented(f"getStartEndOfPeriod not yet implemented for {period_type}")
-        # get endtime_step_year
+            raise NotImplemented(f"get_startEndOfPeriod not yet implemented for {period_type}")
+        # get end_time_step_year
         if not isinstance(time_step_year, np.ndarray):
-            endtime_step_year = time_step_year
+            end_time_step_year = time_step_year
         elif len(time_step_year) == 1:
-            endtime_step_year = time_step_year[0]
+            end_time_step_year = time_step_year[0]
         # if more than one investment time step
         else:
-            endtime_step_year = time_step_year[-1]
+            end_time_step_year = time_step_year[-1]
             time_step_year = time_step_year[0]
         # convert period to interval of base time steps
         if id_existing_capacity is None:
@@ -269,6 +271,7 @@ class Technology(Element):
                 else:
                     return -1
             period_yearly = params.lifetime_existing_technology[tech, loc, id_existing_capacity]
+
         base_period = period_yearly / system["interval_between_years"] * system["unaggregated_time_steps_per_year"]
         base_period = round(base_period, EnergySystem.get_solver()["rounding_decimal_points"])
         if int(base_period) != base_period:
@@ -288,9 +291,9 @@ class Technology(Element):
         # if period of existing capacity, then only return the start base time step
         if id_existing_capacity is not None:
             return start_base_time_step
-        starttime_step_year = EnergySystem.encode_time_step(tech, start_base_time_step, time_step_type="yearly", yearly=True)[0]
+        start_time_step_year = EnergySystem.encode_time_step(tech, start_base_time_step, time_step_type="yearly", yearly=True)[0]
 
-        return starttime_step_year, endtime_step_year
+        return start_time_step_year, end_time_step_year
 
     ### --- classmethods to construct sets, parameters, variables, and constraints, that correspond to Technology --- ###
     @classmethod
@@ -641,14 +644,15 @@ def constraint_technology_diffusion_limit_rule(model, tech, capacity_type, loc, 
         # actual years between first invest time step and end_time
         delta_time = interval_between_years * (end_time - model.set_time_steps_yearly.at(1))
         # sum up all existing capacities that ever existed and convert to knowledge stock
-        total_capacity_knowledge = (sum((params.existing_capacity[tech, capacity_type, loc, existing_time] # add spillover from other regions
-                                         + sum(
-                    params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
+        total_capacity_knowledge = (sum((params.existing_capacity[tech, capacity_type, loc, existing_time]
+                                         # add spillover from other regions
+                                            + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
                                                     1 - knowledge_depreciation_rate) ** (delta_time + params.lifetime_technology[tech] - params.lifetime_existing_technology[tech, loc, existing_time])
-                                        for existing_time in model.set_existing_technologies[tech]) + sum(
-            (model.built_capacity[tech, capacity_type, loc, horizon_time] # add spillover from other regions
-             + sum(# add spillover from other regions
-                        model.built_capacity[tech, capacity_type, loc, horizon_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
+                                        for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] < params.lifetime_existing_technology[tech, loc, existing_time])
+                                    #add spillover from other regions
+                                    + sum((model.built_capacity[tech, capacity_type, loc, horizon_time]
+                                     # add spillover from other regions
+                                    + sum(model.built_capacity[tech, capacity_type, loc, horizon_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
                         1 - knowledge_depreciation_rate) ** (interval_between_years * (end_time - horizon_time)) for horizon_time in range_time))
 
         total_capacity_all_techs = sum((Technology.get_available_existing_quantity(other_tech, capacity_type, loc, time, type_existing_quantity="capacity") + sum(

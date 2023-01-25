@@ -110,17 +110,24 @@ class OptimizationSetup():
             self.steps_horizon = {0: energy_system.set_time_steps_yearly}
         return list(self.steps_horizon.keys())
 
+    def set_initial_scenario(self, scenario="", elements={}):
+        """set base configuration
+        :param scenario: name of base scenario
+        :param elements: elements in base configuration """
+        if not hasattr(self, "initial_scenario"):
+            self.initial_scenario = scenario
+            self.initial_configuration = elements
+
     def set_base_configuration(self, scenario="", elements={}):
         """set base configuration
         :param scenario: name of base scenario
         :param elements: elements in base configuration """
-        if not hasattr(self, "base_scenario"):
-            self.initial_scenario = scenario
-            self.initial_configuration = elements
-        else:
-            self.overwrite_params(self.initial_scenario, self.initial_configuration)
+        if not hasattr(self, "initial_scenario"):
+            self.set_initial_scenario()
         self.base_scenario = scenario
         self.base_configuration = elements
+        self.overwrite_params(self.initial_scenario, self.initial_configuration)
+        self.overwrite_params(self.base_scenario, self.base_configuration)
 
     def restore_base_configuration(self, scenario, elements):
         """restore default configuration
@@ -175,9 +182,9 @@ class OptimizationSetup():
                 _index_names = _old_param.index.names
                 _index_sets = [index_set for index_set, index_name in element.datainput.index_names.items() if index_name in _index_names]
                 _time_steps = None
-                # if existing capacity is changed, setExistingTechnologies, existing lifetime, and capexExistingCapacity have to be updated as well
+                # if existing capacity is changed, set_existing_technologies, existing lifetime, and capex_existing_capacity have to be updated as well
                 if "set_existing_technologies" in _index_sets:
-                    # update setExistingTechnologies and existingLifetime
+                    # update set_existing_technologies and existing_lifetime
                     _existing_technologies = element.datainput.extract_set_existing_technologies(scenario=scenario)
                     setattr(element, "set_existing_technologies", _existing_technologies)
                     _lifetime_existing_technologies = element.datainput.extract_lifetime_existing_technology(param, index_sets=_index_sets, scenario=scenario)
@@ -280,7 +287,7 @@ class OptimizationSetup():
 
         if solver_name == "gurobi_persistent":
             self.opt = pe.SolverFactory(solver_name, options=solver_options)
-            self.opt.set_instance(self.model, symbolic_solver_labels=solver["useSymbolicLabels"])
+            self.opt.set_instance(self.model, symbolic_solver_labels=solver["use_symbolic_labels"])
             self.results = self.opt.solve(tee=solver["verbosity"], logfile=solver["solver_options"]["logfile"], options_string=solver_parameters)
         else:
             self.opt = pe.SolverFactory(solver_name)
