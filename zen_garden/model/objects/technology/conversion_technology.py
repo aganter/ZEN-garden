@@ -33,8 +33,6 @@ class ConversionTechnology(Technology):
         super().__init__(tech, energy_system)
         # store input data
         self.store_input_data()
-        # add ConversionTechnology to list
-        ConversionTechnology.add_element(self)
 
     def store_input_data(self):
         """ retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes """
@@ -280,10 +278,10 @@ class ConversionTechnology(Technology):
             index_sets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_dependent_carriers", "set_location", "set_time_steps_operation"], energy_system),
             rule=rules.constraint_dependent_flow_coupling_rule, doc="couples the real dependent flow variables with the approximated variables")
         # country-specific capacity limit for conversion technologies
-        if energy_system.get_analysis()["capacity_limit_country"]:
+        if energy_system.analysis["capacity_limit_country"]:
             energy_system.constraints.add_constraint(model, name="constraint_capacity_limit_country",
-                    indexSets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_country_nodes", "setTimeStepsYearly"]), rule=constraint_capacity_limit_country_rule,
-                    doc="country specifc capacity limit for each conversion technology")
+                    indexSets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_country_nodes", "setTimeStepsYearly"],energy_system)
+                    , rule=rules.constraint_capacity_limit_country_rule,doc="country specifc capacity limit for each conversion technology")
 
     # defines disjuncts if technology on/off
     @classmethod

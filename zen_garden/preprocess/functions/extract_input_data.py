@@ -108,7 +108,7 @@ class DataInput():
                 return df_output
             # index missing
             else:
-                df_input = DataInput.extract_from_input_with_missing_index(df_input, df_output, copy.deepcopy(index_name_list), file_name, missing_index)
+                df_input = DataInput.extract_from_input_with_missing_index(df_input, df_output, copy.deepcopy(index_name_list), missing_index)
 
         # apply multiplier to input data
         df_input = df_input * default_value["multiplier"]
@@ -554,14 +554,26 @@ class DataInput():
         """
         # check if input data is time-dependent and has yearly time steps
         if time_steps is self.energy_system.set_time_steps_yearly:
+            idx_name_year = self.index_names["set_time_steps_yearly"]
             # check if temporal header of input data is still given as 'time' instead of 'year'
             if "time" in df_input.axes[1]:
                 logging.warning(f"DeprecationWarning: The column header 'time' (used in {file_name}) will not be supported for input data with yearly time steps any longer! Use the header 'year' instead")
                 df_input = df_input.rename(
                     {self.index_names["set_time_steps"]: self.index_names["set_time_steps_yearly"]}, axis=1)
             # does not contain annual index
-            elif self.index_names["set_time_steps_yearly"] not in df_input.axes[1]:
-                return df_input
+            elif idx_name_year not in df_input.axes[1]:
+                idx_name_list = [idx for idx in index_name_list if idx != idx_name_year]
+                df_input = df_input.set_index(idx_name_list)
+                df_input = df_input.rename(columns={col: int(col) for col in df_input.columns})
+                requested_index_values = set(self.energy_system.set_time_step_years)
+                _requested_index_values_in_columns = requested_index_values.intersection(df_input.columns)
+                if not _requested_index_values_in_columns:
+                    return df_input
+                else:
+                    requested_index_values = _requested_index_values_in_columns
+                    df_input.columns = df_input.columns.set_names(idx_name_year)
+                    df_input = df_input[list(requested_index_values)].stack()
+                    df_input = df_input.reset_index()
             # check if input data is still given with generic time indices
             temporal_header = self.index_names["set_time_steps_yearly"]
             if max(df_input.loc[:,temporal_header]) < self.analysis["earliest_year_of_data"]:
@@ -619,7 +631,7 @@ class DataInput():
         return df_input
 
     @staticmethod
-    def extract_from_input_with_missing_index(df_input, df_output, index_name_list, file_name, missing_index):
+    def extract_from_input_with_missing_index(df_input, df_output, index_name_list, missing_index):
         """ extracts the demanded values from Input dataframe and reformulates dataframe if the index is missing.
         Either, the missing index is the column of df_input, or it is actually missing in df_input.
         Then, the values in df_input are extended to all missing index values.

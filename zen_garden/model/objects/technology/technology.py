@@ -430,6 +430,9 @@ class Technology(Element):
         # annual capex of having capacity
         energy_system.variables.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], energy_system),
             domain=pe.NonNegativeReals, doc='annual capex for having technology at location l')
+        # annual capex of having capacity
+        energy_system.variables.add_variable(model, name="capex_yearly_aux", index_sets=cls.create_custom_set( ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], energy_system),
+            domain=pe.NonNegativeReals,doc='auxiliary annual capex for having technology at location l')
         # total capex
         energy_system.variables.add_variable(model, name="capex_total", index_sets=model.set_time_steps_yearly, domain=pe.NonNegativeReals,
             doc='total capex for installing all technologies in all locations at all times')
@@ -486,8 +489,8 @@ class Technology(Element):
         energy_system.constraints.add_constraint(model, name="constraint_capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], energy_system),
             rule=rules.constraint_capex_yearly_rule, doc='annual capex of having capacity of technology.')
         # annual capex of having capacity (auxilary constraint)
-        enerhy_system.constraints.add_constraint(model, name="constraint_capex_yearly_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"]),
-            rule=constraint_capex_yearly_aux_rule,doc='auxiliary constraint for annual capex of having capacity of technology.')
+        energy_system.constraints.add_constraint(model, name="constraint_capex_yearly_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], energy_system),
+            rule=rules.constraint_capex_yearly_aux_rule,doc='auxiliary constraint for annual capex of having capacity of technology.')
         # total capex of all technologies
         energy_system.constraints.add_constraint(model, name="constraint_capex_total", index_sets=model.set_time_steps_yearly, rule=rules.constraint_capex_total_rule,
             doc='total capex of all technology that can be installed.')
@@ -672,10 +675,21 @@ class TechnologyRules:
         """ aggregates the capex of built capacity and of existing capacity """
         system = self.energy_system.system
         discount_rate = self.energy_system.analysis["discount_rate"]
-        return (model.capex_yearly[tech, capacity_type, loc, year] == (1 + discount_rate) ** (system["interval_between_years"] * (year - model.set_time_steps_yearly.at(1))) * (sum(
-            model.capex[tech, capacity_type, loc, time] * (1 / (1 + discount_rate)) ** (system["interval_between_years"] * (time - model.set_time_steps_yearly.at(1))) for time in
-            Technology.get_lifetime_range(self.energy_system, tech, year, time_step_type="yearly"))) + Technology.get_available_existing_quantity(self.energy_system, tech, capacity_type, loc, year, type_existing_quantity="capex",
-                                                                                                                              time_step_type="yearly"))
+        return (model.capex_yearly[tech, capacity_type, loc, year] == (1 + discount_rate)
+                ** (system["interval_between_years"] * (year - model.set_time_steps_yearly.at(1)))
+                * (sum(model.capex[tech, capacity_type, loc, time] * (1 / (1 + discount_rate))
+            ** (system["interval_between_years"] * (time - model.set_time_steps_yearly.at(1))) for time in
+            Technology.get_lifetime_range(self.energy_system, tech, year, time_step_type="yearly")))
+                + Technology.get_available_existing_quantity(self.energy_system, tech, capacity_type, loc, year,
+                                                             type_existing_quantity="capex",time_step_type="yearly"))
+
+    def constraint_capex_yearly_aux_rule(self, model, tech, capacity_type, loc, year):
+        """ aggregates the capex of built capacity and of existing capacity """
+        return (model.capex_yearly_aux[tech, capacity_type, loc, year] ==
+                sum( model.capex[tech, capacity_type, loc, time]
+                     for time in Technology.get_lifetime_range(self.energy_system, tech, year,time_step_type="yearly"))
+                + Technology.get_available_existing_quantity(self.energy_system, tech, capacity_type, loc, year,
+                                                             type_existing_quantity="capex",time_step_type="yearly"))
 
     def constraint_capex_total_rule(self, model, year):
         """ sums over all technologies to calculate total capex """
