@@ -570,7 +570,6 @@ def constraint_technology_capacity_limit_rule(model, tech, capacity_type, loc, t
     else:
         return pe.Constraint.Skip
 
-
 def constraint_technology_min_capacity_rule(model, tech, capacity_type, loc, time):
     """ min capacity expansion of technology."""
     # get parameter object
@@ -579,7 +578,6 @@ def constraint_technology_min_capacity_rule(model, tech, capacity_type, loc, tim
         return (params.min_built_capacity[tech, capacity_type] * model.install_technology[tech, capacity_type, loc, time] <= model.built_capacity[tech, capacity_type, loc, time])
     else:
         return pe.Constraint.Skip
-
 
 def constraint_technology_max_capacity_rule(model, tech, capacity_type, loc, time):
     """max capacity expansion of technology"""
@@ -648,8 +646,14 @@ def constraint_technology_diffusion_limit_rule(model, tech, capacity_type, loc, 
                                          # add spillover from other regions
                                             + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
                                                     1 - knowledge_depreciation_rate) ** (delta_time + params.lifetime_technology[tech] - params.lifetime_existing_technology[tech, loc, existing_time])
-                                        for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] < params.lifetime_existing_technology[tech, loc, existing_time])
-                                    #add spillover from other regions
+                                        for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] > params.lifetime_existing_technology[tech, loc, existing_time])
+                                    # add spillover from existing capacity, built at a future point
+                                    + sum((params.existing_capacity[tech, capacity_type, loc, existing_time]
+                                         # add spillover from other regions
+                                            + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
+                                                    1 - knowledge_depreciation_rate) ** (params.lifetime_existing_technology[tech, loc, existing_time]-params.lifetime_technology[tech])
+                                        for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] >= params.lifetime_existing_technology[tech, loc, existing_time] - delta_time)
+                                    # add spillover from built capacity
                                     + sum((model.built_capacity[tech, capacity_type, loc, horizon_time]
                                      # add spillover from other regions
                                     + sum(model.built_capacity[tech, capacity_type, loc, horizon_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
