@@ -72,8 +72,7 @@ def main(config, dataset_path=None):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         scenarios = module.scenarios
-        # config.scenarios.update(scenarios)
-        config.scenarios = scenarios
+        config.scenarios.update(scenarios)
 
     # create a dictionary with the paths to access the model inputs and check if input data exists
     prepare = Prepare(config)
@@ -143,4 +142,5 @@ def main(config, dataset_path=None):
                 # write results
                 evaluation = Postprocess(optimization_setup, scenarios=config.scenarios, subfolder=subfolder,
                                      model_name=model_name, scenario_name=scenario_name)
+
     return optimization_setup

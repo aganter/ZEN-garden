@@ -78,11 +78,11 @@ class Config(object):
                 "set_country_nodes": "country",
                 "set_edges": "edge",
                 "set_location": "location",
-                "set_time_steps":"time",
+                "set_time_steps":"time", # IMPORTANT: time must be unique
                 "set_time_steps_operation":"time_operation",
-                "set_time_steps_storage_level":"time_storage",
-                "set_time_steps_yearly":"year",
-                "set_time_steps_yearly_entire_horizon":"year",
+                "set_time_steps_storage_level":"time_storage_level",
+                "set_time_steps_yearly":"year", # IMPORTANT: year must be unique
+                "set_time_steps_yearly_entire_horizon":"year_entire_horizon",
                 "set_carriers":"carrier",
                 "set_input_carriers":"carrier",
                 "set_output_carriers":"carrier",
@@ -117,7 +117,8 @@ class Config(object):
         self.analysis["max_output_size_mb"] = 500
         # name of data folder for energy system specification
         self.analysis["folder_name_system_specification"] = "system_specification"
-
+        #earliest possible year of in input data, needed to differentiate between yearly and generic time indices
+        self.analysis["earliest_year_of_data"] = 1900
         ## System - Items assignment
         # set of energy carriers
         self.system["set_carriers"] = []
@@ -168,17 +169,17 @@ class Config(object):
         # use symbolic labels, only sensible for debugging infeasible problems. Adds overhead
         self.solver["use_symbolic_labels"] = False
         # analyze numerics
-        self.solver["analyze_numerics"]   = False
-        self.solver["immutable_unit"]     = []
-        self.solver["rangeUnitExponents"]    = {"min":-1,"max":1,"step_width":1}
+        self.solver["analyze_numerics"] = False
+        self.solver["immutable_unit"] = []
+        self.solver["rangeUnitExponents"] = {"min":-1,"max":1,"step_width":1}
         # round down to number of decimal points, for new capacity and unit multipliers
-        self.solver["rounding_decimal_points"]     = 5
+        self.solver["rounding_decimal_points"] = 5
         # round down to number of decimal points, for time series after TSA
-        self.solver["rounding_decimal_points_ts"]   = 3
+        self.solver["rounding_decimal_points_ts"] = 3
         # verbosity
         self.solver["verbosity"] = True
         # typology of model solved: MILP or MINLP
-        self.solver["model"]      = "MILP"
+        self.solver["model"] = "MILP"
         # parameters of meta-heuristic algorithm
         self.solver["parametersMetaheuristic"] = {
             "FEsMax":1e12, "kNumber":90, "mNumber":5, "q":0.05099, "xi":0.6795, "epsilon":1e-5, "MaxStagIter":650,
