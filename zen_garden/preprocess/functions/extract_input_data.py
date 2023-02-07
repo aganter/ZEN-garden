@@ -318,8 +318,9 @@ class DataInput:
             _time_steps = self.energy_system.set_time_steps_yearly
         elif variable_type == "conver_efficiency":
             _attribute_name = "conver_efficiency"
-            _index_sets = ["set_nodes", "set_time_steps"]
-            _time_steps = self.energy_system.set_base_time_steps
+            _index_sets = ["set_nodes", "set_time_steps_yearly"]
+            _index_name = self.index_names[_index_sets[-1]]
+            _time_steps = self.energy_system.set_time_steps_yearly
         else:
             raise KeyError(f"variable type {variable_type} unknown.")
         # import all input data
@@ -327,8 +328,8 @@ class DataInput:
         df_input_breakpoints = self.read_pwa_files(variable_type, fileType="breakpoints_pwa_")
         df_input_linear = self.read_pwa_files(variable_type, fileType="linear_")
         df_linear_exist = self.exists_attribute(_attribute_name)
-        assert (
-                           df_input_nonlinear is not None and df_input_breakpoints is not None) or df_linear_exist or df_input_linear is not None, f"Neither pwa nor linear data exist for {variable_type} of {self.element.name}"
+        assert (df_input_nonlinear is not None and df_input_breakpoints is not None) or df_linear_exist or df_input_linear is not None, \
+            f"Neither pwa nor linear data exist for {variable_type} of {self.element.name}"
         # check if capex_specific exists
         if (df_input_nonlinear is not None and df_input_breakpoints is not None):
             # select data
@@ -415,9 +416,9 @@ class DataInput:
                 else:
                     df_output, default_value, index_name_list = self.create_default_output(_index_sets, None, time_steps=_time_steps, manual_default_value=1)
                     assert (df_input_linear is not None), f"input file for linear_conver_efficiency could not be imported."
-                    df_input_linear = df_input_linear.rename(columns={'year': 'time'})
+                    # df_input_linear = df_input_linear.rename(columns={'year': 'time'})
                     for carrier in _dependent_carrier:
-                        df_input_carrier = df_input_linear[["time",carrier]]
+                        df_input_carrier = df_input_linear[[_index_name,carrier]]
                         linear_dict[carrier] = self.extract_general_input_data(df_input_carrier, df_output, "linear_conver_efficiency", index_name_list, default_value, time_steps=None).copy(deep=True)
                 linear_dict = pd.DataFrame.from_dict(linear_dict)
                 linear_dict.columns.name = "carrier"
