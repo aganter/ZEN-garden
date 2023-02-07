@@ -72,7 +72,8 @@ def main(config, dataset_path=None):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         scenarios = module.scenarios
-        config.scenarios.update(scenarios)
+        # config.scenarios.update(scenarios)
+        config.scenarios = scenarios
 
     # create a dictionary with the paths to access the model inputs and check if input data exists
     prepare = Prepare(config)
