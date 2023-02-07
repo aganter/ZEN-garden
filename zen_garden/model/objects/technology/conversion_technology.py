@@ -280,9 +280,9 @@ class ConversionTechnology(Technology):
             index_sets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_dependent_carriers", "set_location", "set_time_steps_operation"], optimization_setup),
             rule=rules.constraint_dependent_flow_coupling_rule, doc="couples the real dependent flow variables with the approximated variables")
         # country-specific capacity limit for conversion technologies
-        if energy_system.analysis["capacity_limit_country"]:
-            energy_system.constraints.add_constraint(model, name="constraint_capacity_limit_country",
-                    indexSets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_country_nodes", "setTimeStepsYearly"],energy_system)
+        if optimization_setup.analysis["capacity_limit_country"]:
+            optimization_setup.constraints.add_constraint(model, name="constraint_capacity_limit_country",
+                    indexSets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_country_nodes", "setTimeStepsYearly"],optimization_setup)
                     , rule=rules.constraint_capacity_limit_country_rule,doc="country specifc capacity limit for each conversion technology")
 
     # defines disjuncts if technology on/off
@@ -409,7 +409,7 @@ class ConversionTechnologyRules:
 
     def constraint_capacity_limit_country_rule(self, model,tech,capacity_type,country,time):
         """country specific capacity limit"""
-        params = self.energy_system.parameters
+        params = self.optimization_setup.parameters
         if params.capacity_limit_country[tech,capacity_type,country,time] == np.inf:
             return pe.Constraint.Skip
         else:

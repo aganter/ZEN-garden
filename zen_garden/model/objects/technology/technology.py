@@ -431,6 +431,9 @@ class Technology(Element):
         # annual capex of having capacity
         optimization_setup.variables.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             domain=pe.NonNegativeReals, doc='annual capex for having technology at location l')
+        # annual capex of having capacity
+        optimization_setup.variables.add_variable(model, name="capex_yearly_aux", index_sets=cls.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), domain=pe.NonNegativeReals, doc='annual capex aux for having technology at location l')
         # total capex
         optimization_setup.variables.add_variable(model, name="capex_total", index_sets=model.set_time_steps_yearly, domain=pe.NonNegativeReals,
             doc='total capex for installing all technologies in all locations at all times')
@@ -477,9 +480,10 @@ class Technology(Element):
         optimization_setup.constraints.add_constraint(model, name="constraint_technology_lifetime", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             rule=rules.constraint_technology_lifetime_rule, doc='max capacity of  technology that can be installed')
         # limit diffusion rate
-        optimization_setup.constraints.add_constraint(model, name="constraint_technology_diffusion_limit",
-            index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), rule=rules.constraint_technology_diffusion_limit_rule,
-            doc="Limits the newly built capacity by the existing knowledge stock")
+        if not optimization_setup.system["add_technology_diffusion"]:
+            optimization_setup.constraints.add_constraint(model, name="constraint_technology_diffusion_limit",
+                index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), rule=rules.constraint_technology_diffusion_limit_rule,
+                doc="Limits the newly built capacity by the existing knowledge stock")
         # limit max load by installed capacity
         optimization_setup.constraints.add_constraint(model, name="constraint_capacity_factor", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], optimization_setup),
             rule=rules.constraint_capacity_factor_rule, doc='limit max load by installed capacity')
@@ -487,7 +491,7 @@ class Technology(Element):
         optimization_setup.constraints.add_constraint(model, name="constraint_capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             rule=rules.constraint_capex_yearly_rule, doc='annual capex of having capacity of technology.')
         # annual capex of having capacity (auxilary constraint)
-        optimization_setup.constraints.add_constraint(model, name="constraint_capex_yearly_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], energy_system),
+        optimization_setup.constraints.add_constraint(model, name="constraint_capex_yearly_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             rule=rules.constraint_capex_yearly_aux_rule,doc='auxiliary constraint for annual capex of having capacity of technology.')
         # total capex of all technologies
         optimization_setup.constraints.add_constraint(model, name="constraint_capex_total", index_sets=model.set_time_steps_yearly, rule=rules.constraint_capex_total_rule,
@@ -675,8 +679,8 @@ class TechnologyRules:
         discount_rate = self.optimization_setup.analysis["discount_rate"]
         return (model.capex_yearly[tech, capacity_type, loc, year] == (1 + discount_rate) ** (system["interval_between_years"] * (year - model.set_time_steps_yearly.at(1))) * (sum(
             model.capex[tech, capacity_type, loc, time] * (1 / (1 + discount_rate)) ** (system["interval_between_years"] * (time - model.set_time_steps_yearly.at(1))) for time in
-            Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly"))) + Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, year, type_existing_quantity="capex",
-                                                                                                                                                       time_step_type="yearly"))
+            Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly")))
+                + Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, year, type_existing_quantity="capex", time_step_type="yearly"))
 
     def constraint_capex_yearly_aux_rule(self, model, tech, capacity_type, loc, year):
         """ aggregates the capex of built capacity and of existing capacity """

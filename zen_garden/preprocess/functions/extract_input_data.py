@@ -553,7 +553,6 @@ class DataInput:
         :return df_input: input dataframe with generic time indices
         """
         # check if input data is time-dependent and has yearly time steps
-        idx_name_year = self.index_names["set_time_steps_yearly"]
         if time_steps is self.energy_system.set_time_steps_yearly:
             idx_name_year = self.index_names["set_time_steps_yearly"]
             # check if temporal header of input data is still given as 'time' instead of 'year'
@@ -566,7 +565,7 @@ class DataInput:
                 idx_name_list = [idx for idx in index_name_list if idx != idx_name_year]
                 df_input = df_input.set_index(idx_name_list)
                 df_input = df_input.rename(columns={col: int(col) for col in df_input.columns})
-                requested_index_values = set(self.energy_system.set_time_step_years)
+                requested_index_values = set(self.energy_system.set_time_steps_years)
                 _requested_index_values_in_columns = requested_index_values.intersection(df_input.columns)
                 if not _requested_index_values_in_columns:
                     return df_input
@@ -585,7 +584,7 @@ class DataInput:
             # set index
             index_names_column = df_input.columns.intersection(index_name_list).to_list()
             df_input = df_input.set_index(index_names_column)
-            combined_years = df_input.index.get_level_values(temporal_header).union(
+            combined_years = df_input.index.get_level_values(temporal_header).unique().union(
                 self.energy_system.set_time_steps_years).sort_values().to_list()
             if df_input.index.nlevels == 1:
                 combined_index = pd.Index(combined_years, name=temporal_header)
