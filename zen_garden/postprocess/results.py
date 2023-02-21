@@ -118,7 +118,8 @@ class Results(object):
                 self.results[scenario][mf]["pars_and_vars"].update(vars)
 
                 # load duals
-                if self.results["solver"]["add_duals"]:
+                if "add_duals" in self.results["solver"].keys() \
+                        and self.results["solver"]["add_duals"]:
                     duals = self.load_duals(current_path, lazy = True)
                     self.results[scenario][mf]["duals"] = duals
                 # the opt we only load when requested
