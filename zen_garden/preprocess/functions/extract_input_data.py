@@ -366,9 +366,8 @@ class DataInput:
                     else:
                         _relative_intercept = np.abs(linear_regress_object.intercept)
                     # check if to a reasonable degree linear
-                    if _relative_intercept <= self.solver["linear_regression_check"][
-                        "eps_intercept"] and linear_regress_object.rvalue >= self.solver["linear_regression_check"][
-                        "epsRvalue"]:
+                    if _relative_intercept <= self.solver["linear_regression_check"]["eps_intercept"] \
+                            and linear_regress_object.rvalue >= self.solver["linear_regression_check"]["epsRvalue"]:
                         # model as linear function
                         slope_lin_reg = linear_regress_object.slope
                         linear_dict[value_variable] = \
@@ -425,14 +424,19 @@ class DataInput:
                                                                                  index_sets=_index_sets,
                                                                                  time_steps=_time_steps)
                 else:
-                    df_output, default_value, index_name_list = self.create_default_output(_index_sets, None, time_steps=_time_steps, manual_default_value=1)
+                    df_output, default_value, index_name_list = self.create_default_output(_index_sets, None,
+                                                                                           time_steps=_time_steps,
+                                                                                           manual_default_value=1)
                     assert (df_input_linear is not None), f"input file for linear_conver_efficiency could not be imported."
                     # df_input_linear = df_input_linear.rename(columns={'year': 'time'})
                     for carrier in _dependent_carrier:
-                        df_input_carrier = df_input_linear[[_index_name,carrier]]
-                        linear_dict[carrier] = self.extract_general_input_data(df_input_carrier, df_output, "linear_conver_efficiency", index_name_list, default_value, time_steps=_time_steps).copy(deep=True)
+                        df_input_carrier = df_input_linear[[_index_name, carrier]]
+                        linear_dict[carrier] = self.extract_general_input_data(df_input_carrier, df_output,
+                                                                               "linear_conver_efficiency",
+                                                                               index_name_list, default_value,
+                                                                               time_steps=_time_steps).copy(deep=True)
 
-                        linear_dict = pd.DataFrame.from_dict(linear_dict)
+                linear_dict = pd.DataFrame.from_dict(linear_dict)
                 linear_dict.columns.name = "carrier"
                 linear_dict = linear_dict.stack()
                 _conver_efficiency_levels = [linear_dict.index.names[-1]] + linear_dict.index.names[:-1]
