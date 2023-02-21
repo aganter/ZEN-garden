@@ -106,42 +106,43 @@ def main(config, dataset_path=None):
 
         # update input data
         for scenario, elements in config.scenarios.items():
-            # per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) to change it
-            optimization_setup.restore_base_configuration(scenario, elements)
-            optimization_setup.overwrite_params(scenario, elements)
-            # iterate through horizon steps
-            for step_horizon in steps_optimization_horizon:
-                if len(steps_optimization_horizon) == 1:
-                    logging.info(f"\n--- Conduct optimization for perfect foresight {base_scenario}_{scenario}--- \n")
-                else:
-                    logging.info(f"\n--- Conduct optimization for rolling horizon step {step_horizon} of {max(steps_optimization_horizon)}--- \n")
-                # overwrite time indices
-                optimization_setup.overwrite_time_indices(step_horizon)
-                # create optimization problem
-                optimization_setup.construct_optimization_problem()
-                # SOLVE THE OPTIMIZATION PROBLEM
-                optimization_setup.solve(config.solver)
-                # add newly built_capacity of first year to existing capacity
-                optimization_setup.add_newly_built_capacity(step_horizon)
-                # add cumulative carbon emissions to previous carbon emissions
-                optimization_setup.add_carbon_emission_cumulative(step_horizon)
-                # EVALUATE RESULTS
-                subfolder = ""
-                scenario_name = None
-                if config.system["conduct_scenario_analysis"]:
-                    # handle scenarios
-                    if base_scenario != str():
-                        subfolder += f"scenario_{base_scenario}_{scenario}"
+            if not base_scenario == scenario:
+                # per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) to change it
+                optimization_setup.restore_base_configuration(scenario, elements)
+                optimization_setup.overwrite_params(scenario, elements)
+                # iterate through horizon steps
+                for step_horizon in steps_optimization_horizon:
+                    if len(steps_optimization_horizon) == 1:
+                        logging.info(f"\n--- Conduct optimization for perfect foresight {base_scenario}_{scenario}--- \n")
                     else:
-                        subfolder += f"scenario_{scenario}"
-                    scenario_name = subfolder
-                # handle myopic foresight
-                if len(steps_optimization_horizon) > 1:
-                    if subfolder != "":
-                        subfolder += f"_"
-                    subfolder += f"MF_{step_horizon}"
-                # write results
-                evaluation = Postprocess(optimization_setup, scenarios=config.scenarios, subfolder=subfolder,
-                                     model_name=model_name, scenario_name=scenario_name)
+                        logging.info(f"\n--- Conduct optimization for rolling horizon step {step_horizon} of {max(steps_optimization_horizon)}--- \n")
+                    # overwrite time indices
+                    optimization_setup.overwrite_time_indices(step_horizon)
+                    # create optimization problem
+                    optimization_setup.construct_optimization_problem()
+                    # SOLVE THE OPTIMIZATION PROBLEM
+                    optimization_setup.solve(config.solver)
+                    # add newly built_capacity of first year to existing capacity
+                    optimization_setup.add_newly_built_capacity(step_horizon)
+                    # add cumulative carbon emissions to previous carbon emissions
+                    optimization_setup.add_carbon_emission_cumulative(step_horizon)
+                    # EVALUATE RESULTS
+                    subfolder = ""
+                    scenario_name = None
+                    if config.system["conduct_scenario_analysis"]:
+                        # handle scenarios
+                        if base_scenario != str():
+                            subfolder += f"scenario_{base_scenario}_{scenario}"
+                        else:
+                            subfolder += f"scenario_{scenario}"
+                        scenario_name = subfolder
+                    # handle myopic foresight
+                    if len(steps_optimization_horizon) > 1:
+                        if subfolder != "":
+                            subfolder += f"_"
+                        subfolder += f"MF_{step_horizon}"
+                    # write results
+                    evaluation = Postprocess(optimization_setup, scenarios=config.scenarios, subfolder=subfolder,
+                                         model_name=model_name, scenario_name=scenario_name)
 
     return optimization_setup
