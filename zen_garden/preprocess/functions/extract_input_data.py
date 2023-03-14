@@ -44,7 +44,6 @@ class DataInput:
         """ reads input data and restructures the dataframe to return (multi)indexed dict
         :param file_name: name of selected file.
         :param index_sets: index sets of attribute. Creates (multi)index. Corresponds to order in pe.Set/pe.Param
-        :param column: select specific column
         :param time_steps: specific time_steps of element
         :param scenario: scenario name
         :return dataDict: dictionary with attribute values """
@@ -219,7 +218,6 @@ class DataInput:
         if extract_nodes == "country":
             set_nodes_config = self.system["set_nodes"]
             set_country_nodes = self.read_input_data("set_nodes").set_index("node")
-
             if len(set_nodes_config) > 0:
                 set_country_nodes = set_country_nodes.loc[set_nodes_config].reset_index()
             set_country_nodes = set_country_nodes["country"].drop_duplicates().to_list()
@@ -370,8 +368,9 @@ class DataInput:
                     else:
                         _relative_intercept = np.abs(linear_regress_object.intercept)
                     # check if to a reasonable degree linear
-                    if _relative_intercept <= self.solver["linear_regression_check"]["eps_intercept"] \
-                            and linear_regress_object.rvalue >= self.solver["linear_regression_check"]["epsRvalue"]:
+                    if _relative_intercept <= self.solver["linear_regression_check"][
+                        "eps_intercept"] and linear_regress_object.rvalue >= self.solver["linear_regression_check"][
+                        "epsRvalue"]:
                         # model as linear function
                         slope_lin_reg = linear_regress_object.slope
                         linear_dict[value_variable] = \
@@ -428,17 +427,12 @@ class DataInput:
                                                                                  index_sets=_index_sets,
                                                                                  time_steps=_time_steps)
                 else:
-                    df_output, default_value, index_name_list = self.create_default_output(_index_sets, None,
-                                                                                           time_steps=_time_steps,
-                                                                                           manual_default_value=1)
+                    df_output, default_value, index_name_list = self.create_default_output(_index_sets, None, time_steps=_time_steps, manual_default_value=1)
                     assert (df_input_linear is not None), f"input file for linear_conver_efficiency could not be imported."
                     # df_input_linear = df_input_linear.rename(columns={'year': 'time'})
                     for carrier in _dependent_carrier:
-                        df_input_carrier = df_input_linear[[_index_name, carrier]]
-                        linear_dict[carrier] = self.extract_general_input_data(df_input_carrier, df_output,
-                                                                               "linear_conver_efficiency",
-                                                                               index_name_list, default_value,
-                                                                               time_steps=_time_steps).copy(deep=True)
+                        df_input_carrier = df_input_linear[[_index_name,carrier]]
+                        linear_dict[carrier] = self.extract_general_input_data(df_input_carrier, df_output, "linear_conver_efficiency", index_name_list, default_value, time_steps=_time_steps).copy(deep=True)
 
                 linear_dict = pd.DataFrame.from_dict(linear_dict)
                 linear_dict.columns.name = "carrier"
@@ -532,7 +526,7 @@ class DataInput:
         # add rest of indices
         for index in index_sets:
             index_name_list.append(self.index_names[index])
-            if index == "set_time_steps" and time_steps:
+            if "set_time_steps" in index and time_steps:
                 index_list.append(time_steps)
             elif index == "set_existing_technologies":
                 index_list.append(self.element.set_existing_technologies)
@@ -584,11 +578,11 @@ class DataInput:
             elif idx_name_year not in df_input.axes[1]:
                 idx_name_list = [idx for idx in index_name_list if idx != idx_name_year]
                 df_input = df_input.set_index(idx_name_list)
-                df_input = df_input.rename(columns={col: int(col) for col in df_input.columns})
-                requested_index_values = set(self.energy_system.set_time_steps_years)
+                df_input = df_input.rename(columns={col: int(col) for col in df_input.columns if col.isnumeric()})
+                requested_index_values = set(self.energy_system.set_time_steps_yearly)
                 _requested_index_values_in_columns = requested_index_values.intersection(df_input.columns)
                 if not _requested_index_values_in_columns:
-                    return df_input
+                    return df_input.reset_index()
                 else:
                     requested_index_values = _requested_index_values_in_columns
                     df_input.columns = df_input.columns.set_names(idx_name_year)
@@ -604,7 +598,6 @@ class DataInput:
             # set index
             index_names_column = df_input.columns.intersection(index_name_list).to_list()
             df_input = df_input.set_index(index_names_column)
-            combined_years = df_input.index.get_level_values(temporal_header).union(self.energy_system.set_time_steps_years).sort_values().to_list()
             if df_input.index.nlevels == 1:
                 combined_index = df_input.index.union(self.energy_system.set_time_steps_years)
                 is_single_index = True
@@ -612,8 +605,7 @@ class DataInput:
                 index_list = []
                 for index_name in index_names_column:
                     if index_name == temporal_header:
-                        index_list.append(df_input.index.get_level_values(index_name).unique().union(
-                            self.energy_system.set_time_steps_years))
+                        index_list.append(df_input.index.get_level_values(index_name).unique().union(self.energy_system.set_time_steps_years))
                     else:
                         index_list.append(df_input.index.get_level_values(index_name).unique())
                 combined_index = pd.MultiIndex.from_product(index_list,names=index_name_list).sort_values()

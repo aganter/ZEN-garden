@@ -107,7 +107,10 @@ def main(config, dataset_path=None):
 
         # update input data
         for scenario, elements in config.scenarios.items():
-            # per default scenario="" is used as base configuration. Use set_base_configuration(scenario, elements) to change it
+            if len(config.scenarios.items()) > 1:
+                additional_scenario_string = f"for scenario {scenario} "
+            else:
+                additional_scenario_string = ""
             optimization_setup.restore_base_configuration(scenario, elements)
             optimization_setup.overwrite_params(scenario, elements)
             # iterate through horizon steps
@@ -122,6 +125,9 @@ def main(config, dataset_path=None):
                 optimization_setup.construct_optimization_problem()
                 # SOLVE THE OPTIMIZATION PROBLEM
                 optimization_setup.solve(config.solver)
+                # break if infeasible
+                if not optimization_setup.optimality:
+                    break
                 # add newly built_capacity of first year to existing capacity
                 optimization_setup.add_newly_built_capacity(step_horizon)
                 # add cumulative carbon emissions to previous carbon emissions
@@ -144,5 +150,5 @@ def main(config, dataset_path=None):
                 # write results
                 Postprocess(optimization_setup, scenarios=config.scenarios, subfolder=subfolder,
                             model_name=model_name, scenario_name=scenario_name)
-
+    logging.info("Optimization finished")
     return optimization_setup

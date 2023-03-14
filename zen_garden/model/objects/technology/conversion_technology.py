@@ -44,11 +44,11 @@ class ConversionTechnology(Technology):
         self.output_carrier = self.data_input.extract_conversion_carriers()["output_carrier"]
         self.energy_system.set_technology_of_carrier(self.name, self.input_carrier + self.output_carrier)
         # check if reference carrier in input and output carriers and set technology to correspondent carrier
-        assert self.reference_carrier[0] in (
-                    self.input_carrier + self.output_carrier), f"reference carrier {self.reference_carrier} of technology {self.name} not in input and output carriers {self.input_carrier + self.output_carrier}"
+        assert self.reference_carrier[0] in (self.input_carrier + self.output_carrier), \
+            f"reference carrier {self.reference_carrier} of technology {self.name} not in input and output carriers {self.input_carrier + self.output_carrier}"
         # get conversion efficiency and capex
         self.get_conver_efficiency()
-        self.get_annualized_capex()
+        self.convert_to_fraction_of_capex()
 
     def get_conver_efficiency(self):
         """retrieves and stores conver_efficiency for <ConversionTechnology>.
@@ -60,21 +60,19 @@ class ConversionTechnology(Technology):
         else:
             self.conver_efficiency_linear = _pwa_conver_efficiency
 
-    def get_annualized_capex(self):
+    def convert_to_fraction_of_capex(self):
         """ this method retrieves the total capex and converts it to annualized capex """
         _pwa_capex, self.capex_is_pwa = self.data_input.extract_pwa_data("capex")
         # annualize capex
-        fractional_annuity = self.calculate_fractional_annuity()
-        system = self.optimization_setup.system
-        _fraction_year = system["unaggregated_time_steps_per_year"] / system["total_hours_per_year"]
+        fraction_year = self.calculate_fraction_of_year()
+        self.fixed_opex_specific = self.fixed_opex_specific * fraction_year
         if not self.capex_is_pwa:
-            self.capex_specific = _pwa_capex["capex"] * fractional_annuity + self.fixed_opex_specific * _fraction_year
+            self.capex_specific = _pwa_capex["capex"] * fraction_year
         else:
             self.pwa_capex = _pwa_capex
-            assert (self.fixed_opex_specific == self.fixed_opex_specific).all(), "pwa_capex is only implemented for constant values of fixed Opex"
-            self.pwa_capex["capex"] = [(value * fractional_annuity + self.fixed_opex_specific[0] * _fraction_year) for value in self.pwa_capex["capex"]]
+            self.pwa_capex["capex"] = [value * fraction_year for value in self.pwa_capex["capex"]]
             # set bounds
-            self.pwa_capex["bounds"]["capex"] = tuple([(bound * fractional_annuity + self.fixed_opex_specific[0] * _fraction_year) for bound in self.pwa_capex["bounds"]["capex"]])
+            self.pwa_capex["bounds"]["capex"] = tuple([(bound * fraction_year) for bound in self.pwa_capex["bounds"]["capex"]])
         # calculate capex of existing capacity
         self.capex_existing_capacity = self.calculate_capex_of_existing_capacities()
 
@@ -191,7 +189,7 @@ class ConversionTechnology(Technology):
                 bounds = optimization_setup.get_attribute_of_specific_element(cls, tech, "pwa_conver_efficiency")["bounds"][carrier]
             else:
                 # convert operationTimeStep to time_step_year: operationTimeStep -> base_time_step -> time_step_year
-                time_step_year = energy_system.time_steps.convert_time_step_operation2invest(tech, time)
+                time_step_year = energy_system.time_steps.convert_time_step_operation2year(tech, time)
                 if carrier == model.set_reference_carriers[tech].at(1):
                     _conver_efficiency = 1
                 else:
@@ -299,7 +297,7 @@ class ConversionTechnology(Technology):
         else:
             reference_flow = model.output_flow[tech, reference_carrier, node, time]
         # get invest time step
-        time_step_year = energy_system.time_steps.convert_time_step_operation2invest(tech, time)
+        time_step_year = energy_system.time_steps.convert_time_step_operation2year(tech, time)
         # disjunct constraints min load
         disjunct.constraint_min_load = pe.Constraint(expr=reference_flow >= params.min_load[tech, capacity_type, node, time] * model.capacity[tech, capacity_type, node, time_step_year])
         # couple reference flows
@@ -378,7 +376,7 @@ class ConversionTechnologyRules:
         # get parameter object
         params = self.optimization_setup.parameters
         # get invest time step
-        time_step_year = self.energy_system.time_steps.convert_time_step_operation2invest(tech, time)
+        time_step_year = self.energy_system.time_steps.convert_time_step_operation2year(tech, time)
         return (model.dependent_flow_approximation[tech, dependent_carrier, node, time] == params.conver_efficiency_specific[tech, dependent_carrier, node, time_step_year] *
                 model.reference_flow_approximation[tech, dependent_carrier, node, time])
 
