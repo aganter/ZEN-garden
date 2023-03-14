@@ -162,6 +162,8 @@ class EnergySystem:
         pyomo_model = self.optimization_setup.model
         # nodes
         pyomo_model.set_nodes = pe.Set(initialize=self.set_nodes, doc='Set of nodes')
+        # nodes
+        pyomo_model.set_country_nodes = pe.Set(initialize=self.set_country_nodes, doc='Set of nodes')
         # edges
         pyomo_model.set_edges = pe.Set(initialize=self.set_edges, doc='Set of edges')
         # nodes on edges

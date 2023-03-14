@@ -217,8 +217,12 @@ class DataInput:
         """ reads input data to extract nodes or edges.
         :param extractNodes: boolean to switch between nodes and edges """
         if extract_nodes == "country":
-            set_country_nodes = self.read_input_data("set_nodes")["country"]
-            set_country_nodes = set_country_nodes.drop_duplicates().to_list()
+            set_nodes_config = self.system["set_nodes"]
+            set_country_nodes = self.read_input_data("set_nodes").set_index("node")
+
+            if len(set_nodes_config) > 0:
+                set_country_nodes = set_country_nodes.loc[set_nodes_config].reset_index()
+            set_country_nodes = set_country_nodes["country"].drop_duplicates().to_list()
             return set_country_nodes
         elif extract_nodes:
             set_nodes_config  = self.system["set_nodes"]
@@ -600,8 +604,7 @@ class DataInput:
             # set index
             index_names_column = df_input.columns.intersection(index_name_list).to_list()
             df_input = df_input.set_index(index_names_column)
-            combined_years = df_input.index.get_level_values(temporal_header).union(
-                self.energy_system.set_time_steps_years).sort_values().to_list()
+            combined_years = df_input.index.get_level_values(temporal_header).union(self.energy_system.set_time_steps_years).sort_values().to_list()
             if df_input.index.nlevels == 1:
                 combined_index = df_input.index.union(self.energy_system.set_time_steps_years)
                 is_single_index = True
