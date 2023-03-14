@@ -425,6 +425,9 @@ class Technology(Element):
         # invested_capacity technology
         optimization_setup.variables.add_variable(model, name="invested_capacity", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             domain=pe.NonNegativeReals, doc='size of invested technology at location l and time t')
+        # invested_capacity technology
+        #optimization_setup.variables.add_variable(model, name="invested_capacity_aux", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+        #    domain=pe.NonNegativeReals, doc='size of invested technology at location l and time t')
         # capex of building capacity
         optimization_setup.variables.add_variable(model, name="capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), domain=pe.NonNegativeReals,
             doc='capex for building technology at location l and time t')
@@ -480,7 +483,7 @@ class Technology(Element):
         optimization_setup.constraints.add_constraint(model, name="constraint_technology_lifetime", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             rule=rules.constraint_technology_lifetime_rule, doc='max capacity of  technology that can be installed')
         # limit diffusion rate
-        if not optimization_setup.system["add_technology_diffusion"]:
+        if optimization_setup.system["add_technology_diffusion"]:
             optimization_setup.constraints.add_constraint(model, name="constraint_technology_diffusion_limit",
                 index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), rule=rules.constraint_technology_diffusion_limit_rule,
                 doc="Limits the newly built capacity by the existing knowledge stock")
@@ -615,7 +618,7 @@ class TechnologyRules:
         return (model.capacity[tech, capacity_type, loc, time] == existing_capacities + sum(
             model.built_capacity[tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, time)))
 
-    def constraint_technology_diffusion_limit_rule(self, model, tech, capacity_type, loc, time):
+    def constraint_technology_diffusion_limit_rule_nodal(self, model, tech, capacity_type, loc, time):
         """limited technology diffusion based on the existing capacity in the previous year """
         # get parameter object
         params = self.optimization_setup.parameters
@@ -624,6 +627,16 @@ class TechnologyRules:
         knowledge_depreciation_rate = self.optimization_setup.system["knowledge_depreciation_rate"]
         knowledge_spillover_rate = self.optimization_setup.system["knowledge_spillover_rate"]
         reference_carrier = model.set_reference_carriers[tech].at(1)
+        if "hydrogen" in reference_carrier:
+            reference_carrier == "hydrogen"
+        elif "carbon" in reference_carrier:
+            reference_carrier = "carbon"
+
+        if reference_carrier in self.optimization_setup.system["unbounded_initial_capacity"].keys():
+            unbounded_initial_capacity = self.optimization_setup.system["unbounded_initial_capacity"][reference_carrier]
+        else:
+            unbounded_initial_capacity = 0
+
         if params.max_diffusion_rate[tech, time] != np.inf:
             if tech in model.set_transport_technologies:
                 set_locations = model.set_edges
@@ -650,26 +663,107 @@ class TechnologyRules:
                                              # add spillover from other regions
                                                 + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
                                                         1 - knowledge_depreciation_rate) ** (delta_time + params.lifetime_technology[tech] - params.lifetime_existing_technology[tech, loc, existing_time])
-                                            for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] > params.lifetime_existing_technology[tech, loc, existing_time])
+                                            for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] >= params.lifetime_existing_technology[tech, loc, existing_time])
                                         # add spillover from existing capacity, built at a future point
                                         + sum((params.existing_capacity[tech, capacity_type, loc, existing_time]
                                              # add spillover from other regions
                                                 + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
                                                         1 - knowledge_depreciation_rate) ** (params.lifetime_existing_technology[tech, loc, existing_time]-params.lifetime_technology[tech])
-                                            for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] >= params.lifetime_existing_technology[tech, loc, existing_time] - delta_time)
+                                            for existing_time in model.set_existing_technologies[tech]
+                                              if params.lifetime_technology[tech] < params.lifetime_existing_technology[tech, loc, existing_time]
+                                              and params.lifetime_technology[tech] >= params.lifetime_existing_technology[tech, loc, existing_time] - delta_time)
                                         # add spillover from built capacity
                                         + sum((model.built_capacity[tech, capacity_type, loc, horizon_time]
                                          # add spillover from other regions
                                         + sum(model.built_capacity[tech, capacity_type, loc, horizon_time] * knowledge_spillover_rate for other_loc in set_locations if other_loc != loc)) * (
                             1 - knowledge_depreciation_rate) ** (interval_between_years * (end_time - horizon_time)) for horizon_time in range_time))
 
-            total_capacity_all_techs = sum((Technology.get_available_existing_quantity(self.optimization_setup, other_tech, capacity_type, loc, time, type_existing_quantity="capacity") + sum(
-                model.built_capacity[other_tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, end_time))) for other_tech in set_technology if
-                                           model.set_reference_carriers[other_tech].at(1) == reference_carrier)
+            total_capacity_all_techs = sum((Technology.get_available_existing_quantity(self.optimization_setup, other_tech, capacity_type, loc, time, type_existing_quantity="capacity") +
+                                            sum(model.built_capacity[other_tech, capacity_type, loc, previous_time]
+                                                for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, end_time)))
+                                                    for other_tech in set_technology if reference_carrier in model.set_reference_carriers[other_tech].at(1))
 
             return (model.invested_capacity[tech, capacity_type, loc, time] <= (
                         (1 + params.max_diffusion_rate[tech, time]) ** interval_between_years - 1) * total_capacity_knowledge # add initial market share until which the diffusion rate is unbounded
-                    + unbounded_market_share * total_capacity_all_techs)
+                    + unbounded_market_share * total_capacity_all_techs
+                    + unbounded_initial_capacity)
+        else:
+            return pe.Constraint.Skip
+
+    def constraint_technology_diffusion_limit_rule(self, model, tech, capacity_type, country, time):
+        """limited technology diffusion based on the existing capacity in the previous year """
+        # get parameter object
+        params = self.optimization_setup.parameters
+        interval_between_years = self.optimization_setup.system["interval_between_years"]
+        unbounded_market_share = self.optimization_setup.system["unbounded_market_share"]
+        knowledge_depreciation_rate = self.optimization_setup.system["knowledge_depreciation_rate"]
+        knowledge_spillover_rate = self.optimization_setup.system["knowledge_spillover_rate"]
+        reference_carrier = model.set_reference_carriers[tech].at(1)
+        if "hydrogen" in reference_carrier:
+            reference_carrier == "hydrogen"
+        elif "carbon" in reference_carrier:
+            reference_carrier = "carbon"
+
+        if reference_carrier in self.optimization_setup.system["unbounded_initial_capacity"].keys():
+            unbounded_initial_capacity = self.optimization_setup.system["unbounded_initial_capacity"][reference_carrier]
+        else:
+            unbounded_initial_capacity = 0
+
+        if params.max_diffusion_rate[tech, time] != np.inf:
+            if tech in model.set_transport_technologies:
+                set_locations = model.set_edges
+                set_technology = model.set_transport_technologies
+            else:
+                set_locations = model.set_nodes
+                if tech in model.set_conversion_technologies:
+                    set_technology = model.set_conversion_technologies
+                else:
+                    set_technology = model.set_storage_technologies
+            # add built capacity of entire previous horizon
+            if params.construction_time_technology[tech] > 0:
+                # if technology has lead time, restrict to current capacity
+                end_time = time
+            else:
+                # else, to capacity in previous time step
+                end_time = time - 1
+
+            set_country_locations = [loc for loc in set_locations.data() if country in loc]
+            set_other_locations = [loc for loc in set_locations.data() if country not in loc]
+            range_time = range(model.set_time_steps_yearly.at(1), end_time + 1)
+            # actual years between first invest time step and end_time
+            delta_time = interval_between_years * (end_time - model.set_time_steps_yearly.at(1))
+            # sum up all existing capacities that ever existed and convert to knowledge stock
+            total_capacity_knowledge = (sum(sum((params.existing_capacity[tech, capacity_type, loc, existing_time]
+                                             # add spillover from other regions
+                                                + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_other_locations)) * (
+                                                        1 - knowledge_depreciation_rate) ** (delta_time + params.lifetime_technology[tech] - params.lifetime_existing_technology[tech, loc, existing_time])
+                                            for existing_time in model.set_existing_technologies[tech] if params.lifetime_technology[tech] >= params.lifetime_existing_technology[tech, loc, existing_time])
+                                            for loc in set_country_locations)
+                                        # add spillover from existing capacity, built at a future point
+                                        + sum(sum((params.existing_capacity[tech, capacity_type, loc, existing_time]
+                                             # add spillover from other regions
+                                                + sum(params.existing_capacity[tech, capacity_type, other_loc, existing_time] * knowledge_spillover_rate for other_loc in set_other_locations)) * (
+                                                        1 - knowledge_depreciation_rate) ** (params.lifetime_existing_technology[tech, loc, existing_time]-params.lifetime_technology[tech])
+                                            for existing_time in model.set_existing_technologies[tech]
+                                              if params.lifetime_technology[tech] < params.lifetime_existing_technology[tech, loc, existing_time]
+                                              and params.lifetime_technology[tech] >= params.lifetime_existing_technology[tech, loc, existing_time] - delta_time)
+                                              for loc in set_country_locations)
+                                        # add spillover from built capacity
+                                        + sum((sum(model.built_capacity[tech, capacity_type, loc, horizon_time] for loc in set_country_locations)
+                                         # add spillover from other regions
+                                        + sum(model.built_capacity[tech, capacity_type, other_loc, horizon_time] * knowledge_spillover_rate for other_loc in set_other_locations)) * (
+                            1 - knowledge_depreciation_rate) ** (interval_between_years * (end_time - horizon_time)) for horizon_time in range_time))
+
+
+            total_capacity_all_techs = sum(sum((Technology.get_available_existing_quantity(self.optimization_setup, other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
+                 + sum(model.built_capacity[other_tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, end_time)))
+                    for other_tech in set_technology if model.set_reference_carriers[tech].at(1).startswith(reference_carrier))
+                    for loc in set_country_locations)
+
+            return (sum(model.invested_capacity[tech, capacity_type, loc, time] for loc in set_country_locations) <= (
+                    (1 + params.max_diffusion_rate[tech, time]) ** interval_between_years - 1) * total_capacity_knowledge # add initial market share until which the diffusion rate is unbounded
+                    + unbounded_market_share * total_capacity_all_techs
+                    + unbounded_initial_capacity)
         else:
             return pe.Constraint.Skip
 
