@@ -275,8 +275,12 @@ class CarrierRules:
         base_time_step = self.energy_system.time_steps.decode_time_step(carrier, time)
         yearly_time_step = self.energy_system.time_steps.encode_time_step(None, base_time_step, "yearly")
         if params.availability_carrier_import[carrier, node, time] != 0 or params.availability_carrier_export[carrier, node, time] != 0:
-            return (model.carbon_emissions_carrier[carrier, node, time] == params.carbon_intensity_carrier[carrier, node, yearly_time_step] * (
-                    model.import_carrier_flow[carrier, node, time] - model.export_carrier_flow[carrier, node, time]))
+            if carrier=="electricity":
+                return (model.carbon_emissions_carrier[carrier, node, time] == params.carbon_intensity_carrier[
+                    carrier, node, yearly_time_step] * model.import_carrier_flow[carrier, node, time])
+            else:
+                return (model.carbon_emissions_carrier[carrier, node, time] == params.carbon_intensity_carrier[carrier, node, yearly_time_step] * (
+                        model.import_carrier_flow[carrier, node, time] - model.export_carrier_flow[carrier, node, time] ))
         else:
             return (model.carbon_emissions_carrier[carrier, node, time] == 0)
 
