@@ -43,6 +43,7 @@ class ConversionTechnology(Technology):
         self.input_carrier = self.data_input.extract_conversion_carriers()["input_carrier"]
         self.output_carrier = self.data_input.extract_conversion_carriers()["output_carrier"]
         self.energy_system.set_technology_of_carrier(self.name, self.input_carrier + self.output_carrier)
+        self.capacity_limit_country = self.data_input.extract_input_data("capacity_limit_country", index_sets=["set_country_nodes","set_time_steps_yearly"])
         # check if reference carrier in input and output carriers and set technology to correspondent carrier
         assert self.reference_carrier[0] in (self.input_carrier + self.output_carrier), \
             f"reference carrier {self.reference_carrier} of technology {self.name} not in input and output carriers {self.input_carrier + self.output_carrier}"
@@ -166,9 +167,13 @@ class ConversionTechnology(Technology):
             doc="Parameter which specifies the slope of the capex if approximated linearly")
         # slope of linearly modeled conversion efficiencies
         optimization_setup.parameters.add_parameter(name="conver_efficiency_specific", data=cls.get_capex_conver_efficiency_all_elements(optimization_setup, "conver_efficiency", False,
-                                                                                                                     index_names=["set_conversion_technologies", "set_conver_efficiency_linear",
-                                                                                                                                  "set_nodes", "set_time_steps_yearly"]),
+                                                    index_names=["set_conversion_technologies", "set_conver_efficiency_linear","set_nodes", "set_time_steps_yearly"]),
             doc="Parameter which specifies the slope of the conversion efficiency if approximated linearly")
+        # capacity_limit of technologies
+        optimization_setup.parameters.add_parameter(name="capacity_limit_country",data=optimization_setup.initialize_component(cls, "capacity_limit_country",
+                                                        index_names=["set_conversion_technologies","set_capacity_types","set_country_nodes","set_time_steps_yearly"],capacity_types=True),
+                                                        doc='Parameter which specifies the country capacity limit of technologies')
+
 
     @classmethod
     def construct_vars(cls, optimization_setup):
@@ -280,8 +285,8 @@ class ConversionTechnology(Technology):
         # country-specific capacity limit for conversion technologies
         if optimization_setup.analysis["capacity_limit_country"]:
             optimization_setup.constraints.add_constraint(model, name="constraint_capacity_limit_country",
-                    indexSets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_country_nodes", "setTimeStepsYearly"],optimization_setup)
-                    , rule=rules.constraint_capacity_limit_country_rule,doc="country specifc capacity limit for each conversion technology")
+                    index_sets=cls.create_custom_set(["set_conversion_technologies", "set_capacity_types", "set_country_nodes", "set_time_steps_yearly"],optimization_setup),
+                    rule=rules.constraint_capacity_limit_country_rule,doc="country specifc capacity limit for each conversion technology")
 
     # defines disjuncts if technology on/off
     @classmethod
@@ -405,11 +410,11 @@ class ConversionTechnologyRules:
         else:
             return (model.output_flow[tech, dependent_carrier, node, time] == model.dependent_flow_approximation[tech, dependent_carrier, node, time])
 
-    def constraint_capacity_limit_country_rule(self, model,tech,capacity_type,country,time):
+    def constraint_capacity_limit_country_rule(self, model,tech,capacity_type,country,year):
         """country specific capacity limit"""
         params = self.optimization_setup.parameters
-        if params.capacity_limit_country[tech,capacity_type,country,time] == np.inf:
+        if params.capacity_limit_country[tech,capacity_type,country,year] == np.inf:
             return pe.Constraint.Skip
         else:
-            return(sum(model.capacity[tech,capacity_type, node, time] for node in model.set_nodes if node[:2]==country)
-                   <= params.capacity_limit_country[tech,capacity_type,country,time])
+            return(sum(model.capacity[tech,capacity_type, node, year] for node in model.set_nodes if node.startswith(country))
+                   <= params.capacity_limit_country[tech,capacity_type,country,year])

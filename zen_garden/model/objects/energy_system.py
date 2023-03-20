@@ -310,8 +310,11 @@ class EnergySystemRules:
         """ carbon cost associated with the carbon emissions of the system in each year """
         # get parameter object
         params = self.optimization_setup.parameters
-        return (model.cost_carbon_emissions_total[year] == params.carbon_price[year] * model.carbon_emissions_total[year] # add overshoot price
-                + model.carbon_emissions_overshoot[year] * params.carbon_price_overshoot)
+        if params.carbon_price_overshoot != np.inf:
+            return (model.cost_carbon_emissions_total[year] == params.carbon_price[year] * model.carbon_emissions_total[year] # add overshoot price
+                    + model.carbon_emissions_overshoot[year] * params.carbon_price_overshoot)
+        else:
+            return (model.cost_carbon_emissions_total[year] == params.carbon_price[year] * model.carbon_emissions_total[year])
 
     def constraint_carbon_emissions_limit_rule(self, model, year):
         """ time dependent carbon emissions limit from technologies and carriers"""
@@ -340,7 +343,11 @@ class EnergySystemRules:
 
     def constraint_carbon_emissions_overshoot_limit_rule(self, model, year):
         """ ensure that overshoot is lower or equal to total carbon emissions -> overshoot cannot be banked """
-        return (model.carbon_emissions_total[year] >= model.carbon_emissions_overshoot[year])
+        params = self.optimization_setup.parameters
+        if params.carbon_price_overshoot != np.inf:
+            return (model.carbon_emissions_total[year] >= model.carbon_emissions_overshoot[year])
+        else:
+            return(model.carbon_emissions_overshoot[year]==0)
 
     def constraint_cost_total_rule(self, model, year):
         """ add up all costs from technologies and carriers"""

@@ -324,10 +324,6 @@ class OptimizationSetup(object):
             for param in params:
                 assert "pwa" not in param, "Scenarios are not implemented for piece-wise affine parameters."
                 file_name = param
-                column = None
-                if type(param) is tuple:
-                    file_name, column = param
-                    param = param[1]
                 if "yearly_variation" in param:
                     param = param.replace("_yearly_variation", "")
                     file_name = param
@@ -354,7 +350,7 @@ class OptimizationSetup(object):
                         # _time_steps = list(_old_param.index.unique("time"))
                         _time_steps = self.energy_system.set_base_time_steps_yearly
                     elif "year" in _index_names:
-                        _time_steps = self.energy_system.set_time_steps_yearly_entire_horizon
+                        _time_steps = self.energy_system.set_time_steps_yearly
                     _new_param = element.data_input.extract_input_data(file_name, index_sets=_index_sets, time_steps=_time_steps, scenario=scenario)
                     setattr(element, param, _new_param)
                     # if existing capacity is changed, capex_existing_capacity also has to be updated

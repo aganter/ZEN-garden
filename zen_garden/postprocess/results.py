@@ -162,8 +162,7 @@ class Results(object):
                 content = f.read()
             return json.loads(content)
 
-        # raise Error if nothing is found
-        raise FileNotFoundError(f"The file does not exists as json or gzip: {name}")
+        # raise Error if nothing is found        raise FileNotFoundError(f"The file does not exists as json or gzip: {name}")
 
     @classmethod
     def _dict2df(cls, dict_raw):
