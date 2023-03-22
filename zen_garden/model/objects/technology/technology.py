@@ -829,14 +829,14 @@ class TechnologyRules:
                 for time in self.optimization_setup.energy_system.time_steps.get_time_steps_year2operation(tech, year))
             for tech, loc in Element.create_custom_set(["set_technologies", "set_location"], self.optimization_setup)[0]))
 
-    def constraint_opex_total_rule(self, model, year):
-        """ sums over all technologies to calculate total opex """
-        # get parameter object
-        params = self.optimization_setup.parameters
-        base_time_step = self.optimization_setup.energy_system.time_steps.decode_time_step(None, year, "yearly")
-        return (model.opex_total[year] == sum(
-            sum(model.opex[tech, loc, time] * params.time_steps_operation_duration[tech, time] for time in self.optimization_setup.energy_system.time_steps.encode_time_step(tech, base_time_step, "operation", yearly=True)) for tech, loc in
-            Element.create_custom_set(["set_technologies", "set_location"], self.optimization_setup)[0]))
+    # def constraint_opex_total_rule(self, model, year):
+    #     """ sums over all technologies to calculate total opex """
+    #     # get parameter object
+    #     params = self.optimization_setup.parameters
+    #     base_time_step = self.optimization_setup.energy_system.time_steps.decode_time_step(None, year, "yearly")
+    #     return (model.opex_total[year] == sum(
+    #         sum(model.opex[tech, loc, time] * params.time_steps_operation_duration[tech, time] for time in self.optimization_setup.energy_system.time_steps.encode_time_step(tech, base_time_step, "operation", yearly=True)) for tech, loc in
+    #         Element.create_custom_set(["set_technologies", "set_location"], self.optimization_setup)[0]))
 
     def constraint_capacity_factor_rule(self, model, tech, capacity_type, loc, time):
         """Load is limited by the installed capacity and the maximum load factor"""
