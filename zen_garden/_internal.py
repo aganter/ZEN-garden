@@ -102,8 +102,8 @@ def main(config, dataset_path=None):
             base_scenario_list = config.system["base_scenarios"]
             if not isinstance(base_scenario_list,list):
                 base_scenario_list = [base_scenario_list]
-            else:
-                base_scenario_list = config.scenarios.keys()
+        else:
+            base_scenario_list = config.scenarios.keys()
         for scenario in base_scenario_list:
             base_scenarios[scenario] = {tech: ["existing_capacity"] for tech in config.system["set_technologies"]}
 
