@@ -371,7 +371,7 @@ class Results(object):
 
         return out_dict
 
-    def get_df(self, name, scenarios=None, to_csv=None, csv_kwargs=None,is_dual = False):
+    def get_df(self, name, scenario=None, to_csv=None, csv_kwargs=None,is_dual = False):
         """
         Extracts the dataframe from the results
         :param name: The name of the dataframe to extract
@@ -385,10 +385,11 @@ class Results(object):
         """
 
         # select the scenarios
-        if scenarios is None:
+        # select the scenarios
+        if scenario is not None:
+            scenarios = [scenario]
+        else:
             scenarios = self.scenarios
-        if not isinstance(scenarios, list):
-            scenarios = [scenarios]
 
         # loop
         _data = {}

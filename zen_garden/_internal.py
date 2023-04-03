@@ -98,7 +98,13 @@ def main(config, dataset_path=None):
     base_scenarios = {"": {}}
     if "use_base_scenarios" in config.system.keys() and config.system["use_base_scenarios"]:
         base_scenarios = dict()
-        for scenario in config.scenarios.keys():
+        if "base_scenarios" in config.system.keys():
+            base_scenario_list = config.system["base_scenarios"]
+            if not isinstance(base_scenario_list,list):
+                base_scenario_list = [base_scenario_list]
+            else:
+                base_scenario_list = config.scenarios.keys()
+        for scenario in base_scenario_list:
             base_scenarios[scenario] = {tech: ["existing_capacity"] for tech in config.system["set_technologies"]}
 
     # update base scenario
