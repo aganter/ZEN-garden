@@ -577,6 +577,9 @@ class DataInput:
             # does not contain annual index
             elif idx_name_year not in df_input.axes[1]:
                 idx_name_list = [idx for idx in index_name_list if idx != idx_name_year]
+                # no other index called, return original time series
+                if not idx_name_list:
+                    return df_input
                 df_input = df_input.set_index(idx_name_list)
                 df_input = df_input.rename(columns={col: int(col) for col in df_input.columns if col.isnumeric()})
                 requested_index_values = set(self.energy_system.set_time_steps_years)
@@ -665,6 +668,13 @@ class DataInput:
         :return df_input: reformulated input dataframe
         """
         index_name_list.remove(missing_index)
+        if not index_name_list:
+            # assert that single value
+            assert df_input.size == 1, f"Cannot establish unique values for file {file_name} because of too many columns or not overlapping index"
+            val_input = df_input.squeeze()
+            df_output[:] = val_input
+            df_input = df_output.copy()
+            return df_input
         df_input = df_input.set_index(index_name_list)
         # missing index values
         requested_index_values = set(df_output.index.get_level_values(missing_index))
