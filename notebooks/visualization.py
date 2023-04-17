@@ -16,13 +16,14 @@ def merge_nutsdata(dataframe):
     return gdf_merged
 
 
-def excel_data(excel_name, sheet_name):
-    """takes name of Excel table, sheet and returns dataframe
-    :param excel_name: name of Excel table
-    :param sheet_name: name of Excel sheet"""
-    path_to_data = os.path.join("employment_data", excel_name)
-    df = pd.read_excel(path_to_data, sheet_name=sheet_name)
-    return df
+def production_job_ratio(tech):
+    """takes tech and returns corresponding job ratio in FTE/GWh
+    :param tech: name of technology"""
+    path_to_data = os.path.join("employment_data", "results_production.csv")
+    df = pd.read_csv(path_to_data)
+    filtered_df = df[df['production_method'] == tech]
+    mean_job_ratio = filtered_df['job_ratio [FTE/GWh]'].mean()
+    return mean_job_ratio
 
 
 def plot_europe_map(dataframe, column, colormap='Reds', x_axis=None, y_axis=None, legend_bool=False, legend_label=None):
@@ -42,21 +43,6 @@ def plot_europe_map(dataframe, column, colormap='Reds', x_axis=None, y_axis=None
     plt.xlabel(x_axis)
     plt.ylabel(y_axis)
     plt.show()
-
-
-def job_ratio_electrolysis():
-    """calculates total jobs per GWh of hydrogen produced by electrolysis as a mean value"""
-    employee_data = np.zeros((3,), dtype=object)
-    employee_data[0] = excel_data("ETHZ_GESA_Fragen copy.xlsx", "Electrolysis")
-    employee_data[1] = excel_data("ebs_Fragen copy.xlsx", "Electrolysis")
-    employee_data[2] = excel_data("Fragen_Osterwalder_FC copy.xlsx", "Electrolysis")
-    jobs_data = np.zeros(len(employee_data))
-    jobs_data[0] = employee_data[0].iloc[16:32, 2].sum() / 5.9853   # 5.9853 is production capacity per year of this specific facility in GWh
-    jobs_data[1] = employee_data[1].iloc[16:32, 2].sum() / 19.5     # 19.5 is production capacity per year of this specific facility in GWh
-    jobs_data[2] = employee_data[2].iloc[16:32, 2].sum() / 9.8443   # 9.8443 is production capacity per year of this specific facility in GWh
-                                                                    # all the number above are calculated with: 'https://www.bayernets.de/infrastruktur/wasserstoff/h2-umrechner'
-    job_ratio = np.mean(jobs_data)  # jobs per GWh hydrogen
-    return job_ratio
 
 
 class Visualization:
@@ -93,60 +79,48 @@ class Visualization:
 
         plot_europe_map(gdf_merged, column='hydrogen_output', colormap='Reds', legend_bool=True, legend_label='Hydrogen Production in [GWh]')
 
+    def plot_tech_jobs(self, year, techs, carrier='hydrogen', scenario=None):
+        """load data from csv  and plot total jobs for specific year, tech"""
 
-    def plot_totaljobs_electrolysis(self, carrier, year, scenario=None, techs=None):
-        """load data from Excel sheets and plot total jobs in electrolysis for specific year"""
+        # Read in data from csv file and use calculation method: mean
 
-        # Read in data from the Excel sheets and use calculation method: mean
-
-        job_ratio = job_ratio_electrolysis()  # jobs per GWh hydrogen
+        job_ratio = production_job_ratio(tech=techs)  # jobs per GWh hydrogen
 
         # get data from HSC modeling results
-        output_flow = self.results.get_total("output_flow", scenario=scenario, year=year).loc[techs]
-
-        if techs == "conversion":
-            _techs = self.system["set_hydrogen_conversion_technologies"]
-            output_flow = output_flow.loc[_techs]
-        else:
-            print(Warning, "Only conversion techs implemented")
-        total_jobs = output_flow.groupby(["node"]).sum() * job_ratio  # total_number of jobs
+        output_flow = self.results.get_total("output_flow", scenario=scenario, year=year, element_name=techs)
+        total_jobs = output_flow.loc[carrier].groupby(["node"]).sum() * job_ratio  # total_number of jobs
         total_jobs.name = "total_jobs"
 
         # Load NUTS2 data and join with output_flow
         gdf_merged = merge_nutsdata(total_jobs)
 
         # plot as a map with limited axes
-        plot_europe_map(dataframe=gdf_merged, column='total_jobs', colormap='Reds', legend_bool=True, legend_label='Total Jobs')
+        plot_europe_map(dataframe=gdf_merged, column='total_jobs', colormap='Reds', legend_bool=True, legend_label=f'Total Jobs, {techs.capitalize()}')
 
-    def plot_jobs_change_electrolysis(self, carrier, scenario=None, techs=None):
-        """load data from excel sheets and plot temporal change in electrolysis for NUTS0 regions"""
+    def plot_jobs_change(self, carrier, techs, scenario=None):
+        """load data from csv and plot temporal change for specific tech for NUTS0 regions"""
 
-        # Read in data from the Excel sheet
+        # Read in data from the csv
 
-        job_ratio = job_ratio_electrolysis()
+        job_ratio = production_job_ratio(tech=techs)
 
         # get data from HSC modeling results
-        output_flow = self.results.get_total("output_flow", scenario=scenario).loc[techs]
-        if techs == "conversion":
-            _techs = self.system["set_hydrogen_conversion_technologies"]
-            output_flow = output_flow.loc[_techs]
-        else:
-            print(Warning, "Only conversion techs implemented")
+        output_flow = self.results.get_total("output_flow", scenario=scenario, element_name=techs)
 
         # get the desired form of the data frame to plot
-        output_flow = output_flow.groupby(["node"]).sum() * job_ratio  # total_number of jobs
+        output_flow = output_flow.loc[carrier].groupby(["node"]).sum() * job_ratio  # total_number of jobs
         # Extract the first two initials of each row label
         initials = [label[:2] for label in output_flow.index]
 
         # Create a new DataFrame with the summed values grouped by the first two initials
-        electrolysis_jobs = output_flow.groupby(initials).sum()
-        electrolysis_jobs.index.name = "NUTS0"
-        pivoted_data = electrolysis_jobs.transpose()
+        tech_jobs = output_flow.groupby(initials).sum()
+        tech_jobs.index.name = "NUTS0"
+        pivoted_data = tech_jobs.transpose()
 
         # Create plot with temporal change
         pivoted_data.plot(figsize=(30, 20), cmap='gist_rainbow')
         plt.xlabel('Time')
-        plt.ylabel('Jobs')
+        plt.ylabel(f'Jobs in {techs}')
         plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int))
         plt.show()
 
@@ -172,10 +146,6 @@ class Visualization:
 
     def plot_jobs_truck_gas(self, year=7, technology='hydrogen_truck_gas', scenario=None):
         """plot jobs by truck in gaseous form"""
-
-        # get data from Excel sheet
-        df = excel_data(excel_name="Fragen_Osterwalder_FC copy.xlsx", sheet_name="Transportation")
-        jobs_ratio = 1.65 / 9.8443  # data not readable because of type range, Jobs per GWh hydrogen
 
         # get results for carrier flow and combine
         carrier_flow = self.results.get_total("carrier_flow", scenario=scenario, year=year)
@@ -226,8 +196,9 @@ if __name__ == "__main__":
     vis = Visualization(results_path, scenario)
     # these work:
     vis.plot_output_flows("hydrogen", scenario=scenario, techs="conversion", year=year)
-    vis.plot_totaljobs_electrolysis("hydrogen", scenario=scenario, techs="electrolysis", year=year)
-    vis.plot_jobs_change_electrolysis("hydrogen", scenario=scenario, techs="electrolysis")
+    vis.plot_tech_jobs(scenario=scenario, techs="electrolysis", year=year)
+    vis.plot_tech_jobs(scenario=scenario, techs='SMR_CCS', year=year)
+    vis.plot_jobs_change("hydrogen", scenario=scenario, techs="electrolysis")
     vis.plot_jobs_truck_gas(scenario=scenario)
     vis.plot_jobs_pipeline(scenario=scenario,year=year)
     # these do not:
