@@ -1,4 +1,5 @@
 import os
+
 from zen_garden.postprocess.results import Results
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -25,18 +26,18 @@ def merge_nutsdata(dataframe, nuts=2):
     return gdf_merged
 
 
-def job_ratio_results(tech, calculation_method='mean'):
-    """takes tech and returns corresponding mean job ratio in FTE/GW or FTE/(GW*km)
+def job_ratio_results(tech, calc_method='mean'):
+    """takes tech and returns corresponding job ratio in FTE/GW or FTE/(GW*km) with chosen calc method
     :param tech: name of technology
-    :param calculation_method: method of using employment data"""
+    :param calc_method: method of using employment data"""
     path_to_data = os.path.join("employment_data", "job_ratio_results.xlsx")
     df = pd.read_excel(path_to_data)
     filtered_df = df[df['technology'] == tech]
-    job_ratio = filtered_df['job_ratio'].agg(calculation_method)
+    job_ratio = filtered_df['job_ratio'].agg(calc_method)
     return job_ratio
 
 
-def plot_europe_map(dataframe, column, colormap='Reds', x_axis=None, y_axis=None, legend_bool=False, legend_label=None, year=None, nuts=2):
+def plot_europe_map(dataframe, column, colormap='Greens', x_axis=None, y_axis=None, legend_bool=False, legend_label=None, year=None, nuts=2):
     """plots map of europe with correct x and y-limits, axes names
     :param dataframe: europe joined with data
     :param column: data to plot
@@ -46,7 +47,8 @@ def plot_europe_map(dataframe, column, colormap='Reds', x_axis=None, y_axis=None
 
     dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe['NUTS_ID'].str.startswith(('TR', 'IS'))), column] = \
         dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe['NUTS_ID'].str.startswith(('TR', 'IS'))), column].fillna(0)
-    dataframe.plot(column=column, figsize=(30, 20), cmap=colormap, legend=legend_bool, legend_kwds={'label': legend_label}, edgecolor='black')
+
+    dataframe.plot(figsize=(30, 20), column=column, cmap=colormap, legend=legend_bool, legend_kwds={'label': legend_label}, edgecolor='black')
     x_lower_limit = 0.23 * 10 ** 7
     x_upper_limit = 0.6 * 10 ** 7
     y_lower_limit = 1.3 * 10 ** 6
@@ -56,7 +58,9 @@ def plot_europe_map(dataframe, column, colormap='Reds', x_axis=None, y_axis=None
     plt.xlabel(x_axis)
     plt.ylabel(y_axis)
     plt.axis('off')
-    plt.title(2020 + 2*year, fontsize=40)
+    plt.title(str(2020 + 2*year) + f', {legend_label}', fontsize=40)
+    plot_name = f'{legend_label}_{year}.svg'
+    plt.savefig(plot_name, format='svg', dpi=800)
     plt.show()
 
 
@@ -83,7 +87,7 @@ class Visualization:
             output_flow = output_flow.loc[_techs]
         else:
             print(Warning, "Only conversion techs implemented")
-        output_flow = output_flow.groupby(["node"]).sum()  # in GWh
+        output_flow = output_flow.loc[carrier].groupby(["node"]).sum()  # in GWh
         output_flow.name = "hydrogen_output"
 
         # Load NUTS2 data and joins with output_flow
@@ -92,20 +96,46 @@ class Visualization:
 
         # plot as a map with limited axes:
 
-        plot_europe_map(gdf_merged, column='hydrogen_output', colormap='Reds', legend_bool=True, legend_label='Hydrogen Production in [GWh]', year=year, nuts=nuts)
+        plot_europe_map(gdf_merged, column='hydrogen_output', colormap='Greens', legend_bool=True, legend_label='Hydrogen Production in [GWh]', year=year, nuts=nuts)
 
-    def plot_tech_jobs(self, year, techs, carrier='hydrogen', scenario=None, calculation_method='mean', nuts=2):
+    def plot_demand(self, carrier, year, scenario=None, nuts=2):
+        """plot hydrogen demand for selected carrier"""
+
+        demand = self.results.get_total("demand_carrier", scenario=scenario, year=year)
+
+        demand = demand.loc[carrier].groupby(["node"]).sum() # in GWh
+        demand.name = "hydrogen_demand"
+
+        # Load geographical data and join with demand
+
+        gdf_merged = merge_nutsdata(demand, nuts=nuts)
+
+        plot_europe_map(gdf_merged, column='hydrogen_demand', legend_bool=True, legend_label='Hydrogen Demand in [GWh]', year=year, nuts=nuts)
+
+    def plot_tech_jobs(self, year, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2):
         """load data from Excel file and plot total jobs for specific year, tech"""
 
-        # Read in data from Excel file and use calculation method: mean
+        # Read in data from Excel file and use calculation method
 
-        job_ratio = job_ratio_results(tech=techs, calculation_method=calculation_method)  # jobs per GW hydrogen
+        job_ratio = job_ratio_results(tech=techs, calc_method=calc_method)  # jobs per GW hydrogen
 
-        # get data from HSC modeling results and check with output_flow for active capacities
+        # get data from HSC modeling results
         capacity = self.results.get_total("capacity", scenario=scenario, year=year, element_name=techs)
         output_flow = self.results.get_total("output_flow", scenario=scenario, year=year, element_name=techs)
-        check = output_flow.loc[carrier].groupby(["node"]).sum()
+
         total_jobs = capacity.droplevel(0) * job_ratio # total_number of jobs
+
+        # If gasification or SMR additionally add the CCS jobs:
+        if techs=='SMR':
+            job_ratio_CCS = job_ratio_results(tech='SMR_CCS', calc_method=calc_method)
+            total_jobs += capacity.droplevel(0) * job_ratio_CCS
+
+        if techs=='gasification':
+            job_ratio_CCS = job_ratio_results(tech='gasification_CCS', calc_method=calc_method)
+            total_jobs += capacity.droplevel(0) * job_ratio_CCS
+
+        # Check with output_flow for active capacities
+        check = output_flow.loc[carrier].groupby(["node"]).sum()
         total_jobs[check == 0] = 0
         total_jobs.name = "total_jobs"
 
@@ -113,45 +143,49 @@ class Visualization:
         gdf_merged = merge_nutsdata(total_jobs, nuts=nuts)
 
         # plot as a map with limited axes
-        plot_europe_map(dataframe=gdf_merged, column='total_jobs', colormap='Reds', legend_bool=True, legend_label=f'Total Jobs, {techs.capitalize()}, {calculation_method}', year=year, nuts=nuts)
+        plot_europe_map(dataframe=gdf_merged, column='total_jobs', colormap='Greens', legend_bool=True, legend_label=f'Total Jobs, {techs.capitalize()}, {calc_method}', year=year, nuts=nuts)
 
-    def plot_jobs_change(self, carrier, techs, scenario=None, calculation_method='mean'):
+
+    def plot_jobs_change(self,  tech, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2):
         """load data from Excel and plot temporal change for specific tech for NUTS0 regions"""
 
         # Read in data from the Excel
 
-        job_ratio = job_ratio_results(tech=techs, calculation_method=calculation_method)
+        job_ratio = job_ratio_results(tech=tech, calc_method=calc_method)
 
         # get data from HSC modeling results
-        capacity = self.results.get_total("capacity", scenario=scenario, element_name=techs)
-        output_flow = self.results.get_total("output_flow", scenario=scenario, element_name=techs)
+        capacity = self.results.get_total("capacity", scenario=scenario, element_name=tech)
+        output_flow = self.results.get_total("output_flow", scenario=scenario, element_name=tech)
         check = output_flow.loc[carrier].groupby(["node"]).sum()
 
         # get the desired form of the data frame to plot
         total_jobs = capacity.droplevel(0) * job_ratio
-        # output_flow = output_flow.loc[carrier].groupby(["node"]).sum() * job_ratio  # total_number of jobs
         total_jobs[check == 0] = 0
-        # Extract the first two initials of each row label
-        initials = [label[:2] for label in total_jobs.index]
 
-        # Create a new DataFrame with the summed values grouped by the first two initials
-        tech_jobs = total_jobs.groupby(initials).sum()
-        tech_jobs.index.name = "NUTS0"
-        pivoted_data = tech_jobs.transpose()
+        if nuts==0:
+            # Extract the first two initials of each row label
+            initials = [label[:2] for label in total_jobs.index]
+
+            # Create a new DataFrame with the summed values grouped by the first two initials
+            total_jobs = total_jobs.groupby(initials).sum()
+            total_jobs.index.name = "NUTS0"
+
+        pivoted_data = total_jobs.transpose()
 
         # Create plot with temporal change
         pivoted_data.plot(figsize=(30, 20), cmap='gist_rainbow')
         plt.xlabel('Time')
-        plt.ylabel(f'Jobs in {techs}')
-        plt.title(f'{calculation_method}')
+        plt.ylabel(f'Jobs in {tech}')
+        plt.title(f'{calc_method}')
         plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int))
         plt.show()
 
-    def plot_jobs_total(self, techs, year=0, carrier='hydrogen', scenario=None, nuts=2):
+    def plot_jobs_total(self, techs, year=0, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2):
         """loop over all hydrogen producing technologies sum and plot total"""
+
         total_jobs = np.zeros_like(self.results.get_total("capacity", scenario=scenario, year=year, element_name='SMR').droplevel(0))
         for tech in techs:
-            job_ratio = job_ratio_results(tech)
+            job_ratio = job_ratio_results(tech, calc_method=calc_method)
             capacity = self.results.get_total("capacity", scenario=scenario, year=year, element_name=tech)
             output_flow = self.results.get_total("output_flow", scenario=scenario, year=year, element_name=tech)
             check = output_flow.loc[carrier].groupby(["node"]).sum()
@@ -164,13 +198,13 @@ class Visualization:
         gdf_merged = merge_nutsdata(total_jobs, nuts=nuts)
 
         # plot as a map with limited axes
-        plot_europe_map(dataframe=gdf_merged, column='total_jobs', colormap='Reds', legend_bool=True,
-                        legend_label='Total Jobs in Hydrogen', year=year, nuts=nuts)
+        plot_europe_map(dataframe=gdf_merged, column='total_jobs', colormap='Greens', legend_bool=True,
+                        legend_label=f'Total Jobs in Hydrogen, {calc_method}', year=year, nuts=nuts)
 
-    def plot_jobs_transport(self, tech, year, carrier='hydrogen', scenario=None, calculation_method='mean', nuts=2):
+    def plot_jobs_transport(self, tech, year, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2):
 
         # get job ratio from results Excel
-        job_ratio = job_ratio_results(tech, calculation_method=calculation_method)
+        job_ratio = job_ratio_results(tech, calc_method=calc_method)
 
         # get carrier flow results and distances between regions and combine
         carrier_flow = self.results.get_total("carrier_flow", scenario=scenario, year=year, element_name=tech)
@@ -188,25 +222,32 @@ class Visualization:
         gdf_merged = merge_nutsdata(tech_jobs, nuts=nuts)
 
         # plot as a map of Europe
-        plot_europe_map(dataframe=gdf_merged, column='tech_jobs', legend_bool=True, legend_label=f'Total Jobs, {tech.capitalize()}', year=year, nuts=nuts)
+        plot_europe_map(dataframe=gdf_merged, column='tech_jobs', legend_bool=True, legend_label=f'Total Jobs, {tech.capitalize()}, {calc_method}', year=year, nuts=nuts)
 
 
 
 if __name__ == "__main__":
     results_path = os.path.join("outputs", "HSC_NUTS2")
     scenario = "scenario_reference_bau"  # to load more than one scenario, pass a list
-    techs = ['SMR', 'SMR_CCS', 'gasification', 'gasification_CCS', 'electrolysis']
+    techs = ['SMR', 'gasification', 'electrolysis']
+    tr_techs = ['hydrogen_truck_liquid', 'hydrogen_truck_gas']
     years = [0, 5, 15]
+    nutss = [0, 2]
     vis = Visualization(results_path, scenario)
-    vis.plot_tech_jobs(scenario=scenario, techs='electrolysis', year=5, calculation_method='max', nuts=0)
-    vis.plot_jobs_transport('hydrogen_pipeline', year=10, scenario=scenario)
-    vis.plot_jobs_total(scenario=scenario, techs=techs, year=15)
-    # loop to plot all technologies:
-    for tech in techs:
-        vis.plot_jobs_change("hydrogen", scenario=scenario, techs=tech)
-        for year in years:
-            vis.plot_tech_jobs(scenario=scenario, techs=tech, year=year)
 
+    # Loop to plot all technologies for every year and nuts:
+    for nuts in nutss:
+        for year in years:
+            for tech in techs:
+                vis.plot_jobs_change(scenario=scenario, tech=tech, calc_method='median', nuts=nuts)
+                vis.plot_tech_jobs(scenario=scenario, techs=tech, year=year, nuts=nuts, calc_method='median')
+            for tech in tr_techs:
+                vis.plot_jobs_transport(tech=tech, year=year, scenario=scenario, calc_method='median')
+            vis.plot_demand("hydrogen", scenario=scenario, year=year, nuts=nuts)
+
+    vis.plot_tech_jobs(scenario=scenario, techs='SMR', year=5, calc_method='max', nuts=0)
+    vis.plot_demand("hydrogen", scenario=scenario, year=5, nuts=0)
+    vis.plot_jobs_total(scenario=scenario, techs=techs, year=15, calc_method='max', nuts=0)
     vis.plot_output_flows("hydrogen", scenario=scenario, techs="conversion", year=year)
     vis.plot_jobs_change("hydrogen", scenario=scenario, techs="electrolysis")
 
