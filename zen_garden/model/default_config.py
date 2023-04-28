@@ -4,7 +4,7 @@ Created:      October-2021
 Authors:      Alissa Ganter (aganter@ethz.ch)
 Organization: Laboratory of Reliability and Risk Engineering, ETH Zurich
 
-Description:  Default settings. Changes from the default values are specified in settings.py
+Description:  Default configuration. Changes from the default values are specified in config.py (folders data/tests) and system.py (individual datasets)
 ==========================================================================================================================================================================="""
 
 
@@ -33,7 +33,7 @@ class Config(object):
         self.solver = dict()
 
         ## System - dictionary declaration
-        # This dictionary defines the configuration of the system by selecting the subset of technologies ot be included into the analysis.
+        # This dictionary defines the configuration of the system by selecting the subset of technologies to be included into the analysis.
         self.system = dict()
 
         ## Scenarios - dictionary declaration
@@ -94,7 +94,7 @@ class Config(object):
                 "set_transport_technologies":"technology",
                 "set_storage_technologies":"technology",
                 "set_technologies":"technology",
-                "set_existing_technologies": "existing_technology",
+                "set_technologies_existing": "technology_existing",
                 "set_capacity_types":"capacity_type"}
         # time series aggregation
         self.analysis["time_series_aggregation"] = {
@@ -107,17 +107,16 @@ class Config(object):
             "resolution"            : 1,
             "segmentation"          : False,
             "noSegments"            : 12}
-
         self.analysis['postprocess'] = False
         self.analysis["folder_output"] = "./outputs/"
         self.analysis["overwrite_output"] = True
         # output format, can be h5, json or gzip
-        self.analysis["output_format"] = "gzip"
+        self.analysis["output_format"] = "h5"
         self.analysis["write_results_yml"] = False
         self.analysis["max_output_size_mb"] = 500
         # name of data folder for energy system specification
         self.analysis["folder_name_system_specification"] = "system_specification"
-        #earliest possible year of in input data, needed to differentiate between yearly and generic time indices
+        # earliest possible year of in input data, needed to differentiate between yearly and generic time indices
         self.analysis["earliest_year_of_data"] = 1900
         ## System - Items assignment
         # set of energy carriers
@@ -145,14 +144,8 @@ class Config(object):
         self.system["conduct_scenario_analysis"] = False
         # total hours per year
         self.system["total_hours_per_year"] = 8760
-        # unbounded market share for technology diffusion rate
-        self.system["unbounded_market_share"] = 0.01
         # rate at which the knowledge stock of existing capacities is depreciated annually
         self.system["knowledge_depreciation_rate"] = 0.1
-        # spillover rate of knowledge stock to another
-        self.system["knowledge_spillover_rate"] = 0.05
-        # social discount rate
-        self.system["social_discount_rate"] = 0
         # enforce selfish behavior
         self.system["enforce_selfish_behavior"] = False
 
@@ -172,6 +165,8 @@ class Config(object):
         self.solver["analyze_numerics"]   = False
         self.solver["immutable_unit"]     = []
         self.solver["range_unit_exponents"]    = {"min":-1,"max":1,"step_width":1}
+        # assumes "ton" to be metric ton, not imperial ton
+        self.solver["define_ton_as_metric_ton"] = True
         # round down to number of decimal points, for new capacity and unit multipliers
         self.solver["rounding_decimal_points"] = 5
         # round down to number of decimal points, for time series after TSA

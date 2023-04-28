@@ -63,7 +63,6 @@ def main(config, dataset_path=None):
     spec.loader.exec_module(module)
     system = module.system
     config.system.update(system)
-
     ### overwrite default system and scenario dictionaries
     if config.system["conduct_scenario_analysis"]:
         scenarios_path = os.path.abspath(os.path.join(config.analysis['dataset'], "scenarios.py"))
