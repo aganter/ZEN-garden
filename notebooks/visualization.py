@@ -105,7 +105,7 @@ class Visualization:
 
         demand = self.results.get_total("demand_carrier", scenario=scenario, year=year)
 
-        demand = demand.loc[carrier].groupby(["node"]).sum() # in GWh
+        demand = demand.loc[carrier].groupby(["node"]).sum()  # in GWh
 
         # Load geographical data and join with demand
         demand.name = "hydrogen_demand"
@@ -121,7 +121,7 @@ class Visualization:
         job_ratio = self.job_ratio_results(tech=techs, calc_method=calc_method)  # jobs per GW hydrogen
 
         # get data from HSC modeling results
-        capacity = self.results.get_total("capacity", scenario=scenario, year=year, element_name=techs)
+        capacity = self.results.get_total("capacity", scenario=scenario, year=year, element_name=techs)  # in GW
         output_flow = self.results.get_total("output_flow", scenario=scenario, year=year, element_name=techs)
         total_jobs = capacity.droplevel(0) * job_ratio
 
@@ -142,7 +142,7 @@ class Visualization:
         self.plot_europe_map(dataframe=gdf_merged, column=total_jobs.name, legend_bool=True, legend_label=f'Total Jobs, {techs.capitalize()}, {calc_method}', year=year, nuts=nuts)
 
 
-    def plot_jobs_change(self,  tech, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2):
+    def plot_jobs_change(self,  tech, carrier='hydrogen', scenario=None, calc_method='median', nuts=2):
         """load data from Excel and plot temporal change for specific tech for NUTS0 regions"""
 
         # Read in data from the Excel
@@ -174,8 +174,8 @@ class Visualization:
         pivoted_data = total_jobs.transpose()
 
         # Create plot with temporal change
-        color_dict = self.eth_colors.retrieve_colors_dict(pivoted_data.index.unique(), "country")
-        pivoted_data.plot(figsize=(30, 20), cmap='gist_rainbow')
+        color_dict = self.eth_colors.retrieve_colors_dict(pivoted_data.index.unique(), "country_max")
+        pivoted_data.plot(figsize=(30, 20), cmap=color_dict)
         plt.xlabel('Time', fontsize=16)
         plt.ylabel(f'Jobs in {tech}', fontsize=18)
         plt.xticks(fontsize=16)
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     years = [0, 5, 15]
     nutss = [0, 2]
     vis = Visualization(results_path, scenario)
-
+    vis.plot_jobs_change(carrier="hydrogen", scenario=scenario, tech="electrolysis", nuts = 0)
     # Loop to plot all technologies for every year and nuts:
     for nuts in nutss:
         for year in years:
@@ -288,5 +288,5 @@ if __name__ == "__main__":
     vis.plot_tech_jobs(scenario=scenario, techs='SMR', year=5, calc_method='max', nuts=0)
     vis.plot_demand("hydrogen", scenario=scenario, year=5, nuts=0)
     vis.plot_jobs_total(scenario=scenario, techs=techs, year=15, calc_method='max', nuts=0)
-    vis.plot_jobs_change("hydrogen", scenario=scenario, techs="electrolysis")
+    vis.plot_jobs_change("hydrogen", scenario=scenario, tech="electrolysis")
 
