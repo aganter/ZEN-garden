@@ -134,7 +134,7 @@ def main(config, dataset_path=None):
                 if not optimization_setup.optimality:
                     break
                 # add newly built_capacity of first year to existing capacity
-                optimization_setup.add_newly_built_capacity(step_horizon)
+                optimization_setup.add_new_capacity_addition(step_horizon)
                 # add cumulative carbon emissions to previous carbon emissions
                 optimization_setup.add_carbon_emission_cumulative(step_horizon)
                 # EVALUATE RESULTS

@@ -238,9 +238,10 @@ class CarrierRules:
         """ cost of importing and exporting carrier"""
         # get parameter object
         params = self.optimization_setup.parameters
-        if params.availability_carrier_import[carrier, node, time] != 0 or params.availability_carrier_export[carrier, node, time] != 0:
-            return (model.cost_carrier[carrier, node, time] == params.import_price_carrier[carrier, node, time] * model.import_carrier_flow[carrier, node, time] - params.export_price_carrier[
-            carrier, node, time] * model.export_carrier_flow[carrier, node, time])
+        if params.availability_import[carrier, node, time] != 0 or params.availability_export[carrier, node, time] != 0:
+            return (model.cost_carrier[carrier, node, time] ==
+                    params.price_import[carrier, node, time] * model.flow_import[carrier, node, time]
+                    - params.price_export[carrier, node, time] * model.flow_export[carrier, node, time])
         else:
             return (model.cost_carrier[carrier, node, time] == 0)
 
@@ -275,10 +276,10 @@ class CarrierRules:
         if params.availability_import[carrier, node, time] != 0 or params.availability_export[carrier, node, time] != 0:
             if carrier=="electricity":
                 return (model.carbon_emissions_carrier[carrier, node, time] ==
-                        params.carbon_intensity_carrier[carrier, node, yearly_time_step] * model.import_carrier_flow[carrier, node, time])
+                        params.carbon_intensity_carrier[carrier, node, yearly_time_step] * model.flow_import[carrier, node, time])
             else:
                 return (model.carbon_emissions_carrier[carrier, node, time] == params.carbon_intensity_carrier[carrier, node, yearly_time_step] * (
-                        model.availability_import[carrier, node, time] - model.export_flow[carrier, node, time]))
+                        model.flow_import[carrier, node, time] - model.flow_export[carrier, node, time]))
         else:
             return (model.carbon_emissions_carrier[carrier, node, time] == 0)
 

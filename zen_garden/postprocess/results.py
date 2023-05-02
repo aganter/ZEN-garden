@@ -132,6 +132,8 @@ class Results(object):
                 #create dict containing sets
                 self.results[scenario][mf]["sets"] = {}
                 sets = self.load_sets(current_path, lazy=True)
+                if not sets:
+                    sets = dict()
                 if not self.component_names["sets"]:
                     self.component_names["sets"] = list(sets.keys())
                 self._lazydicts.append([sets])

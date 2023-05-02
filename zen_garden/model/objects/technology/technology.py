@@ -625,9 +625,7 @@ class TechnologyRules:
         # get parameter object
         params = self.optimization_setup.parameters
         interval_between_years = self.optimization_setup.system["interval_between_years"]
-        unbounded_market_share = self.optimization_setup.system["unbounded_market_share"]
         knowledge_depreciation_rate = self.optimization_setup.system["knowledge_depreciation_rate"]
-        knowledge_spillover_rate = self.optimization_setup.system["knowledge_spillover_rate"]
         reference_carrier = model.set_reference_carriers[tech].at(1)
         if params.max_diffusion_rate[tech, time] != np.inf:
             if tech in model.set_transport_technologies:
