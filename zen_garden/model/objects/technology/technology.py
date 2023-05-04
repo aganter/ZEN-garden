@@ -621,7 +621,7 @@ class TechnologyRules:
 
     def constraint_technology_diffusion_limit_rule(self, model, tech, capacity_type, loc, time):
         """limited technology diffusion based on the existing capacity in the previous year """
-        # TODO implement technology diffusion only on countrly level?
+        # TODO implement technology diffusion only on country level?
         # get parameter object
         params = self.optimization_setup.parameters
         interval_between_years = self.optimization_setup.system["interval_between_years"]
