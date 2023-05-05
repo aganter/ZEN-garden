@@ -104,7 +104,7 @@ def main(config, dataset_path=None):
         else:
             base_scenario_list = config.scenarios.keys()
         for scenario in base_scenario_list:
-            base_scenarios[scenario] = {tech: ["existing_capacity"] for tech in config.system["set_technologies"]}
+            base_scenarios[scenario] = {tech: ["capacity_existing"] for tech in config.system["set_technologies"]}
 
     # update base scenario
     for base_scenario, elements in base_scenarios.items():
@@ -133,7 +133,7 @@ def main(config, dataset_path=None):
                 # break if infeasible
                 if not optimization_setup.optimality:
                     break
-                # add newly built_capacity of first year to existing capacity
+                # add newly built_capacity of first year to capacity existing
                 optimization_setup.add_new_capacity_addition(step_horizon)
                 # add cumulative carbon emissions to previous carbon emissions
                 optimization_setup.add_carbon_emission_cumulative(step_horizon)
