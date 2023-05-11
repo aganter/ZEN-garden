@@ -1,14 +1,23 @@
 import os
 
+
 from zen_garden.postprocess.results import Results
 from eth_colors import ETHColors
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+# Adjust font to LaTeX font
+font_params = {"ytick.color": "black",
+                       "xtick.color": "black",
+                       "axes.labelcolor": "black",
+                       "axes.edgecolor": "black",
+                       "text.usetex": True,
+                       "font.family": "serif",
+                       "font.serif": ["Computer Modern Serif"]}
 
+plt.rcParams.update(font_params)
 
 class Visualization:
 
@@ -41,11 +50,19 @@ class Visualization:
             "hydrogen_output": "red",
             "hydrogen_truck_gas": "blue",
             "hydrogen_truck_liquid": "petrol",
-            "export": ("blue", "red"),
+            "export": ("red", "blue"),
             "jobs": "green",
             "dry_biomass": "green",
             "biomethane_share": "green"
         }
+    def combine_to_nuts0(self, dataframe):
+        """combines from NUTS2 to NUTS0 level
+        :param dataframe: dataframe containing information on NUTS2 level"""
+
+        initials = [label[:2] for label in dataframe.index]
+        dataframe = dataframe.groupby(initials).sum()
+        dataframe.index.name = "NUTS0"
+        return dataframe
 
     def merge_nutsdata(self, dataframe, nuts=2):
         """takes dataframe and returns NUTS2 merged dataframe
@@ -57,12 +74,10 @@ class Visualization:
         gdf = gdf[["NUTS_ID", "geometry", "LEVL_CODE"]]
         # For NUTS0 calculations:
         if nuts == 0:
-            initials = [label[:2] for label in dataframe.index]
-            # Create a new DataFrame with the summed values grouped by the first two initials
-            dataframe = dataframe.groupby(initials).sum()
-            dataframe.index.name = "NUTS0"
+            dataframe = self.combine_to_nuts0(dataframe)
 
         gdf_merged = gdf.merge(dataframe, left_on="NUTS_ID", right_index=True, how='left')
+        gdf_merged = gdf_merged.set_index('NUTS_ID')
         return gdf_merged
 
     def job_ratio_results(self, tech, calc_method='mean'):
@@ -105,11 +120,9 @@ class Visualization:
         df = df[['geo', 'OBS_VALUE']]
 
         if nuts == 0:
-            initials = [label[:2] for label in df['geo']]
-            df = df.groupby(initials).sum()
-            df.index.name = "geo"
+            df = self.combine_to_nuts0(df)
 
-        gdf_merged = dataframe.merge(df, left_on='NUTS_ID', right_on='geo', how='left')
+        gdf_merged = dataframe.merge(df, left_on='NUTS_ID', right_on='NUTS0', how='left')
         gdf_merged['jobs'] = (gdf_merged['jobs'] / gdf_merged['OBS_VALUE']) * 100000
 
         return gdf_merged
@@ -209,15 +222,15 @@ class Visualization:
                 ["carrier", "node"]).mean().loc[carrier]
 
         # Calculate difference and merge with NUTS data
-        export = (production - demand)/1000 # in TWh
+        export = (production - demand)/1000  # in TWh
         export.name = 'export'
         gdf_merged = self.merge_nutsdata(export, nuts=nuts)
 
         # Plot as a map of Europe
-        self.plot_europe_map(dataframe=gdf_merged, column=export.name, legend_label=f'Difference Production and Demand, {carrier.capitalize()} [TWh/year]', year=year, nuts=nuts, diverging=diverging, title=False)
+        self.plot_europe_map(dataframe=gdf_merged, column=export.name, legend_label=f'Excess Production, {carrier.capitalize()} [TWh/year]', year=year, nuts=nuts, diverging=diverging, title=False)
 
 
-    def plot_tech_change(self, tech, carrier='hydrogen', scenario=None, calc_method='median', nuts=2, time=0):
+    def plot_tech_change(self, tech, carrier='hydrogen', scenario=None, calc_method='median', nuts=2, time=0, title=False):
         """load data from Excel and plot temporal change for specific tech for NUTS0/2 regions"""
 
         # Read in data from the Excel
@@ -239,12 +252,7 @@ class Visualization:
 
         # Summation over NUTS0 label for country
         if nuts == 0:
-            # Extract the first two initials of each row label
-            initials = [label[:2] for label in total_jobs.index]
-
-            # Create a new DataFrame with the summed values grouped by the first two initials
-            total_jobs = total_jobs.groupby(initials).sum()
-            total_jobs.index.name = "NUTS0"
+            total_jobs = self.combine_to_nuts0(total_jobs)
         # Hand-adjusted parameters:
         if tech == 'electrolysis':
             time = 15
@@ -275,40 +283,9 @@ class Visualization:
             else:
                 color_dict[region] = self.eth_colors.get_color('grey', 40)
 
-        pivoted_data = total_jobs.transpose()
+        self.plot_time_scale(dataframe=total_jobs, color_dict=color_dict, carrier=carrier, colorful=colorful, title=title)
 
-        # Change font to LateX font
-        font_params = {"ytick.color": "black",
-                       "xtick.color": "black",
-                       "axes.labelcolor": "black",
-                       "axes.edgecolor": "black",
-                       "text.usetex": True,
-                       "font.family": "serif",
-                       "font.serif": ["Computer Modern Serif"]}
-
-        plt.rcParams.update(font_params)
-        # Create plot with temporal change
-        ax = pivoted_data.plot(figsize=(30, 20), color=color_dict, linewidth=3)
-        # Plot interesting lines above
-        for region in colorful:
-            pivoted_data[region].plot(figsize=(30, 20), color=color_dict[region], linewidth=5, label='_nolegend_')
-        # Plot details
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.xlabel('Time', fontsize=30)
-        plt.ylabel(f'Jobs in {tech}', fontsize=30)
-        plt.xticks(fontsize=24)
-        plt.yticks(fontsize=24)
-        plt.legend(prop={'size': 20}, frameon=False)
-        plt.title(f'{tech.capitalize()}, {calc_method.capitalize()}', fontsize=40)
-        plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int))
-        plot_name = f'time_{tech}_{calc_method}_{nuts}.svg'
-        plt.savefig(plot_name, format='svg', dpi=600, transparent=True)
-        plt.show()
-
-        # Retrieve color dictionary from eth_colors
-        # color_dict = self.eth_colors.retrieve_colors_dict(pivoted_data.head(), "country_max")
-    def plot_total_change(self, techs, carrier='hydrogen', scenario=None, calc_method='median', nuts=0, time=0, title=False):
+    def plot_total_change(self, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=0, time=0, title=False):
         """Total jobs for every country for specified techs"""
         total_jobs = np.zeros_like(
             self.results.get_total("capacity", scenario=scenario, element_name='SMR').droplevel(0))
@@ -330,70 +307,28 @@ class Visualization:
 
             total_jobs += tech_jobs
 
-            # Summation over NUTS0 label for country
+        # Summation over NUTS0 label for country
         if nuts == 0:
-            # Extract the first two initials of each row label
-            initials = [label[:2] for label in total_jobs.index]
+            total_jobs = self.combine_to_nuts0(total_jobs)
 
-            # Create a new DataFrame with the summed values grouped by the first two initials
-            total_jobs = total_jobs.groupby(initials).sum()
-            total_jobs.index.name = "NUTS0"
-
-        # Pick max, median and min from chosen time
-        colorful = np.empty(3, dtype=object)
-        colorful[0] = total_jobs.iloc[:, time].idxmax()
-        max_val = total_jobs.iloc[:, time].max()
-        min_val = total_jobs.iloc[:, time].min()
-        median_value = (max_val + min_val) / 2
-        colorful[1] = (total_jobs.iloc[:, time] - median_value).abs().idxmin()
-        colorful[2] = total_jobs.iloc[:, time].idxmin()
+        # Produce color_dict
+        colorful = np.empty(0, dtype=object)
+        jobs_at_time = total_jobs.iloc[:, time]
+        colorful = np.concatenate([colorful, jobs_at_time.nlargest(3).index.values])
+        colorful = np.concatenate([colorful, jobs_at_time.nlargest(7).nsmallest(4).index.values])
+        colorful = np.concatenate([colorful, jobs_at_time.nsmallest(len(jobs_at_time) - 7).index.values])
 
         color_dict = {}
         for region in total_jobs.index:
-            if region in colorful:
-                if region == colorful[0]:
-                    color_dict[region] = self.eth_colors.get_color('bronze')
-                elif region == colorful[1]:
-                    color_dict[region] = self.eth_colors.get_color('purple')
-                else:
-                    color_dict[region] = self.eth_colors.get_color('blue')
+            if region in colorful[:3]:
+                color_dict[region] = self.eth_colors.get_color('bronze')
+            elif region in colorful[3:7]:
+                color_dict[region] = self.eth_colors.get_color('purple')
             else:
-                color_dict[region] = self.eth_colors.get_color('grey', 40)
+                color_dict[region] = self.eth_colors.get_color('blue')
 
-        pivoted_data = total_jobs.transpose()
-
-        # Set the font the LateX font
-        font_params = {"ytick.color": "black",
-                       "xtick.color": "black",
-                       "axes.labelcolor": "black",
-                       "axes.edgecolor": "black",
-                       "text.usetex": True,
-                       "font.family": "serif",
-                       "font.serif": ["Computer Modern Serif"]}
-
-        plt.rcParams.update(font_params)
-
-        # Create plot with temporal change
-        ax = pivoted_data.plot(figsize=(30, 20), color=color_dict, linewidth=3)
-        # Plot interesting lines above
-        for region in colorful:
-            pivoted_data[region].plot(figsize=(30, 20), color=color_dict[region], linewidth=5, label='_nolegend_')
-
-        # Plot details
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.xlabel('Time', fontsize=40, fontdict=dict(weight='bold'))
-        plt.ylabel('Total Jobs', fontsize=40, fontdict=dict(weight='bold'))
-        plt.xticks(fontsize=24)
-        plt.yticks(fontsize=24)
-        plt.legend(prop={'size': 20}, frameon=False)
-        if title:
-            plt.title(f'Total Jobs in {carrier.capitalize()}, {calc_method.capitalize()}', fontsize=40)
-        plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int))
-        plot_name = f'time_Total_{carrier}_{calc_method}_{nuts}'
-        plt.savefig(f'{plot_name}.svg', format='svg', dpi=600, transparent=True)
-        plt.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
-        plt.show()
+        # Print with timescale
+        self.plot_time_scale(dataframe=total_jobs, color_dict=color_dict, carrier=carrier, colorful=colorful, title=title)
 
     def country_jobs_change(self, country, techs, carrier='hydrogen', scenario=None, calc_method='median', nuts=0):
         """plot change of jobs for all technologies for a country or NUTS2 regions in country"""
@@ -407,7 +342,6 @@ class Visualization:
         job_ratios_df = pd.DataFrame({'technology': grouped_df.index, 'job_ratio': grouped_df.values})
         # get data from HSC modeling results
         fig, ax = plt.subplots(figsize=(30, 20))
-        font = 'Helvetica'
 
         for tech in techs:
             capacity = self.results.get_total("capacity", scenario=scenario, element_name=tech)
@@ -429,12 +363,7 @@ class Visualization:
                                                    scenario=scenario, country=country)
             # Sum over NUTS0
             if nuts == 0:
-                # Extract the first two initials of each row label
-                initials = [label[:2] for label in total_jobs.index]
-
-                # Create a new DataFrame with the summed values grouped by the first two initials
-                total_jobs = total_jobs.groupby(initials).sum()
-                total_jobs.index.name = "NUTS0"
+                total_jobs = self.combine_to_nuts0(total_jobs)
 
             pivoted_data = total_jobs.transpose()
             color = self.eth_colors.get_color(self.colormap_dict[tech])
@@ -443,17 +372,17 @@ class Visualization:
             pivoted_data.plot(ax=ax, color=color, linewidth=5, label=tech)
 
         # Plot details:
-        ax.set_ylabel(f'Jobs', fontsize=30, fontname=font)
+        ax.set_ylabel(f'Jobs', fontsize=30)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int), fontsize=24, fontname=font)
-        plt.yticks(fontsize=24, fontname=font)
+        plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int), fontsize=24)
+        plt.yticks(fontsize=24)
         plt.xlabel('Time', fontsize=30)
         if nuts == 0:
-            plt.legend(labels=techs, prop={'size': 40, 'family': font}, frameon=False)
+            plt.legend(labels=techs, prop={'size': 40}, frameon=False)
 
         # Plot title and save plot:
-        plt.title(f'{country.upper()}, {calc_method.capitalize()}', fontsize=40, fontname=font)
+        plt.title(f'{country.upper()}, {calc_method.capitalize()}', fontsize=40)
         plot_name = f'{country}_{calc_method}_{nuts}.svg'
         plt.savefig(plot_name, format='svg', dpi=600, transparent=True)
         plt.show()
@@ -463,6 +392,7 @@ class Visualization:
         """loop over all hydrogen producing technologies sum and plot total"""
 
         jobs = np.zeros_like(self.results.get_total("capacity", scenario=scenario, year=year, element_name='SMR').droplevel(0))
+        pie_data = []
         for tech in techs:
             job_ratio = self.job_ratio_results(tech, calc_method=calc_method)
             capacity = self.results.get_total("capacity", scenario=scenario, year=year, element_name=tech)
@@ -478,6 +408,13 @@ class Visualization:
                                                    scenario=scenario, year=year, time=True)
 
             jobs += tech_jobs
+            # Append a tuple containing the tech name and the total jobs to pie_data
+            pie_data.append((tech, tech_jobs.sum()))  # Append a tuple containing the tech name and the total jobs to pie_data
+
+        # Create a DataFrame from the list of tuples
+        if rel == False:
+            pie_dataframe = pd.DataFrame(pie_data, columns=['Technology', 'Total Jobs'])
+            self.plot_pie_chart(pie_dataframe, year=year)
 
         # merge with NUTS2 data:
         jobs.name = 'jobs'
@@ -564,18 +501,8 @@ class Visualization:
         :param diverging: for diverging cmap
         :param title: bool title"""
 
-        # Set the font the LateX font
-        font_params = {"ytick.color": "black",
-                       "xtick.color": "black",
-                       "axes.labelcolor": "black",
-                       "axes.edgecolor": "black",
-                       "text.usetex": True,
-                       "font.family": "serif",
-                       "font.serif": ["Computer Modern Serif"]}
-
-        plt.rcParams.update(font_params)
         min_val = 0
-        # Get colors for technologies
+        # Get colors for technologies (is there a better way?)
         if column == 'export' and nuts == 2:
             min_val = -7
             max_val = 7
@@ -587,7 +514,7 @@ class Visualization:
         elif column == 'jobs' and nuts == 0:
             max_val = 60
         elif column == 'jobs' and nuts == 2:
-            max_val = 130
+            max_val = 500
         elif column == 'dry_biomass' and nuts == 2:
             max_val = 100
         elif column == 'SMR':
@@ -610,13 +537,21 @@ class Visualization:
         norm = plt.Normalize(vmin=min_val, vmax=max_val)
         grey = self.eth_colors.get_color('grey', 40)
 
-        dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe['NUTS_ID'].str.startswith(('TR', 'IS'))), column] = \
-           dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe['NUTS_ID'].str.startswith(('TR', 'IS'))), column].fillna(-50000)
+        dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe.index.str.startswith(('TR', 'IS'))), column] = \
+           dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe.index.str.startswith(('TR', 'IS'))), column].fillna(-50000)
         colormap.set_under(color=grey)
 
         fig, ax = plt.subplots(figsize=(30, 20))
 
-        dataframe.plot(column=column, cmap=colormap, legend=False, edgecolor='black', ax=ax, norm=norm)
+        dataframe.plot(column=column, cmap=colormap, legend=False, edgecolor='black', linewidth=0.5, ax=ax, norm=norm)
+        if nuts == 2:
+            # Only take NUTS2 regions that have model values assigned
+            mask = dataframe[column].notnull()
+            # Get the first two characters of the index for rows where 'column' is not null
+            idx_values = dataframe[mask].index.str[:2]
+            # Filter the 'nuts0' dataframe based on the first two characters of the index and 'LEVL_CODE'
+            nuts0 = dataframe[(dataframe.index.isin(idx_values)) & (dataframe['LEVL_CODE'] == 0)]
+            nuts0.boundary.plot(edgecolor='black', linewidth=1, ax=ax)
 
         cbar = fig.colorbar(plt.cm.ScalarMappable(cmap=colormap, norm=norm), ax=ax)
         cbar.set_label(legend_label, size=50, labelpad=15)
@@ -636,18 +571,68 @@ class Visualization:
         fig.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
         plt.show()
 
+    def plot_time_scale(self, dataframe, color_dict, carrier, title=False, colorful=None):
+        """plots dataframe over time, with colordict"""
+
+        pivoted_data = dataframe.transpose()
+
+        # Create plot with temporal change
+        ax = pivoted_data.plot(figsize=(30, 20), color=color_dict, linewidth=3)
+        # Plot interesting lines above
+        for region in colorful:
+            pivoted_data[region].plot(figsize=(30, 20), color=color_dict[region], linewidth=5, label='_nolegend_')
+
+        # Plot details
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        plt.xlabel('Time', fontsize=40, fontdict=dict(weight='bold'))
+        plt.ylabel('Total Jobs', fontsize=40, fontdict=dict(weight='bold'))
+        plt.xticks(fontsize=24)
+        plt.yticks(fontsize=24)
+        plt.legend(prop={'size': 20}, frameon=False)
+        if title:
+            plt.title(f'Total Jobs in {carrier.capitalize()}', fontsize=40)
+        plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int))
+        plot_name = f'time_Total_{carrier}'
+        plt.savefig(f'{plot_name}.svg', format='svg', dpi=600, transparent=True)
+        plt.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
+        plt.show()
+
+    def plot_pie_chart(self, dataframe, year):
+        """make pie chart of dataframe"""
+        # Assign color to each tech from dict
+        colors = []
+        for tech in dataframe.iloc[:, 0]:
+            color = self.eth_colors.get_color(self.colormap_dict[tech])
+            colors.append(color)
+        # Plot with legend of all techs and total jobs in each tech
+        fig, ax = plt.subplots(figsize=(40, 20))
+        wedges = ax.pie(dataframe.iloc[:, 1], colors=colors)
+        ax.legend(wedges[0], [f"{tech.upper()}: {int(round(value))} Jobs" for tech, value in zip(dataframe.iloc[:, 0],
+                  dataframe.iloc[:, 1])], title="Technologies:", title_fontsize=60, prop={'size': 40}, frameon=False,
+                  loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+        for wedge in wedges[0]:
+            wedge.set_edgecolor('black')
+            wedge.set_linewidth(2)
+        plot_name = f'pie_chart_{year}'
+        fig.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
+        plt.show()
 
 
 if __name__ == "__main__":
     results_path = os.path.join("outputs", "HSC_NUTS2")
     scenario = "scenario_referenceBM_med"  # to load more than one scenario, pass a list
-    techs = ['SMR', 'gasification', 'electrolysis']
+    techs = ['SMR', 'gasification', 'electrolysis', 'anaerobic_digestion']
     tr_techs = ['hydrogen_truck_liquid', 'hydrogen_truck_gas']
     countries = ['DE', 'RO', 'FR', 'IT', 'UK']
     years = [0, 5, 15]
     nutss = [0, 2]
     vis = Visualization(results_path, scenario)
     # Loop to plot all technologies for every year and nuts:
+    vis.plot_total_change(techs=techs, scenario=scenario, time=15)
+    vis.plot_hydrogen_jobs(carrier='hydrogen', techs=techs, year=15, scenario=scenario)
+    vis.plot_demand(carrier='hydrogen', year=15, nuts=2, scenario=scenario)
+    vis.plot_jobs_transport(tech='hydrogen_train', year=15, scenario=scenario, calc_method='mean', nuts=2)
     vis.plot_tech_change(tech='electrolysis', scenario=scenario, nuts=0, time=15)
     for year in years:
         vis.plot_biomethane_share(year=year, scenario=scenario, nuts=2)
@@ -655,43 +640,14 @@ if __name__ == "__main__":
     for year in years:
         for tech in techs:
             vis.plot_tech_jobs(year=year, scenario=scenario, techs=tech)
-    vis.plot_demand(carrier='hydrogen', year=15, nuts=2, scenario=scenario)
-
-    for year in years:
-        vis.plot_carrier_usage(scenario=scenario, carrier='dry_biomass', year=year)
-    vis.plot_total_change(scenario=scenario, time=12, techs=techs)
-    for year in years:
-        vis.plot_biomethane_share(year=year, scenario=scenario, nuts=2)
-
-    vis.plot_hydrogen_jobs(scenario=scenario, techs=techs, year=15, rel=True, nuts=0)
-    vis.plot_total_change(scenario=scenario, techs=techs, calc_method='median', time=12)
-
-    for year in years:
-        vis.plot_jobs_total(scenario=scenario, techs=techs, year=year, calc_method='median', nuts=2)
-    for country in countries:
-        vis.country_jobs_change(carrier='hydrogen', techs=techs, scenario=scenario, country=country, nuts=0)
-    for tech in techs:
-        vis.plot_tech_change(carrier='hydrogen', scenario=scenario, tech=tech, nuts=0, time=15)
-    for nuts in nutss:
-        for year in years:
-            for tech in techs:
-                vis.plot_tech_jobs(scenario=scenario, techs=tech, year=year, nuts=nuts, calc_method='median')
-            # for tech in tr_techs:
-            #    vis.plot_jobs_transport(tech=tech, year=year, scenario=scenario, calc_method='median', nuts=nuts)
-            vis.plot_demand("hydrogen", scenario=scenario, year=year, nuts=nuts)
 
     # Test functions for plotting:
 
     vis.plot_output_flows(carrier='dry_biomass', year=15, scenario=scenario)
     vis.plot_export_potential(scenario=scenario, year=15)
-    vis.plot_tech_change(carrier='biomethane', tech='anaerobic_digestion', scenario=scenario, time=12, nuts=0)
     vis.country_jobs_change(carrier='hydrogen', techs=techs, scenario=scenario, country='DE', nuts=2)
     vis.plot_output_flows(carrier="hydrogen", scenario=scenario, techs="conversion", year=5)
-    vis.plot_tech_change(carrier="hydrogen", scenario=scenario, tech="electrolysis", nuts=2)
-    vis.plot_tech_change(carrier="hydrogen", scenario=scenario, tech="electrolysis", nuts=0)
     vis.plot_demand("hydrogen", scenario=scenario, year=5, nuts=0)
     vis.plot_demand("hydrogen", scenario=scenario, year=5, nuts=0)
     vis.plot_tech_jobs(scenario=scenario, techs='SMR', year=5, calc_method='max', nuts=0)
-    vis.plot_jobs_total(scenario=scenario, techs=techs, year=15, calc_method='max', nuts=0)
-    vis.plot_tech_change("hydrogen", scenario=scenario, tech="electrolysis")
 
