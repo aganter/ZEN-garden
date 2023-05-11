@@ -90,17 +90,17 @@ class ETHColors:
             "CH": self.get_color("bronze", 60),
             "CY": self.get_color("petrol", 20),
             "CZ": self.get_color("blue", 80),
-            "DE": self.get_color("blue", "dark"),
+            "DE": self.get_color("blue", 'dark'),
             "DK": self.get_color("purple", 20),
             "EE": self.get_color("green", 40),
             "EL": self.get_color("petrol", 60),
             "ES": self.get_color("petrol", 100),
             "FI": self.get_color("purple", 60),
-            "FR": self.get_color("bronze", "dark"),
+            "FR": self.get_color("bronze", 'dark'),
             "HR": self.get_color("green", 20),
             "HU": self.get_color("blue", 60),
             "IE": self.get_color("purple", 40),
-            "IT": self.get_color("petrol", "dark"),
+            "IT": self.get_color("petrol", 'dark'),
             "LT": self.get_color("green", 100),
             "LU": self.get_color("bronze", 20),
             "LV": self.get_color("green", 60),
@@ -109,11 +109,11 @@ class ETHColors:
             "NO": self.get_color("purple", 100),
             "PL": self.get_color("blue", 100),
             "PT": self.get_color("petrol", 80),
-            "RO": self.get_color("green", "dark"),
+            "RO": self.get_color("green", 'dark'),
             "SE": self.get_color("purple", 80),
             "SI": self.get_color("blue", 20),
             "SK": self.get_color("blue", 40),
-            "UK": self.get_color("purple", "dark")
+            "UK": self.get_color("purple", 'dark')
             }
 
     def set_colors_techs(self):

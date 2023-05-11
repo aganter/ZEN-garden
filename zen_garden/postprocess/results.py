@@ -1079,7 +1079,7 @@ class Results(object):
             component_name = component
             # only use the data from one scenario if specified
             if scenario is not None:
-                component_data = self.get_df(component,is_dual=is_dual)[scenario]
+                component_data = self.get_df(component,is_dual=is_dual, scenario=scenario)
             else:
                 component_data = self.get_df(component,is_dual=is_dual)
             if isinstance(component_data.index,pd.MultiIndex):
