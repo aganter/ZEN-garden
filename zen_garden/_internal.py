@@ -21,7 +21,7 @@ from .model.optimization_setup import OptimizationSetup
 from .postprocess.postprocess import Postprocess
 
 
-def main(config, dataset_path=None):
+def main(config, dataset_path=None, base_scenarios=None):
     """
     This function runs the compile.py script that was used in ZEN-Garden prior to the package build, it is executed
     in the __main__.py script
@@ -49,6 +49,8 @@ def main(config, dataset_path=None):
     if dataset_path is not None:
         # logging.info(f"Overwriting dataset to: {dataset_path}")
         config.analysis["dataset"] = dataset_path
+    if base_scenarios is not None:
+        config.system["base_scenarios"] = base_scenarios
     logging.info(f"Optimizing for dataset {config.analysis['dataset']}")
     # get the abs path to avoid working dir stuff
     config.analysis["dataset"] = os.path.abspath(config.analysis['dataset'])

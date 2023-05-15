@@ -45,7 +45,7 @@ def run_module(args=None):
     config = module.config
 
     ### run
-    main(config=config, dataset_path=args.dataset)
+    main(config=config, dataset_path=args.dataset, base_scenarios=args.base_scenarios)
 
 
 if __name__ == "__main__":
