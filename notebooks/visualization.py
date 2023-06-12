@@ -9,7 +9,6 @@ from matplotlib import patches as mpatches
 import networkx as nx
 import pandas as pd
 import numpy as np
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # Adjust font to LaTeX font
 font_params = {"ytick.color": "black",
@@ -58,7 +57,7 @@ class Visualization:
             "hydrogen_truck_liquid": "petrol",
             "export": ("blue", "red"),
             "gini": ("blue", "red"),
-            "jobs": "purple",
+            "jobs": "green",
             "dry_biomass": "green",
             "carbon": "red",
             "biomethane_share": ("blue", "green"),
@@ -91,6 +90,7 @@ class Visualization:
 
     def set_gdf(self):
         """set geodataframe"""
+        # Read in the geodataframe for Europe on NUTS2 resolution
         path_to_data = os.path.join("outputs", "NUTS_RG_01M_2016_3035", "NUTS_RG_01M_2016_3035.shp")
         gdf = gpd.read_file(path_to_data)
         gdf = gdf[["NUTS_ID", "geometry", "LEVL_CODE"]]
@@ -129,7 +129,7 @@ class Visualization:
         return job_ratio
 
     def combine_tech_CCS(self, total_jobs, tech, calc_method, scenario, year=0, carrier='hydrogen', time=False, country=None, capacity_only=False):
-        """If gasification or SMR additionally add the CCS jobs:"""
+        """If gasification or SMR additionally add the CCS capacity or jobs"""
 
         job_ratio_CCS = self.job_ratio_results(tech=f'{tech}_CCS', calc_method=calc_method)
         capacity_CCS = self.results.get_total("capacity", scenario=scenario, element_name=f'{tech}_CCS')
@@ -138,6 +138,7 @@ class Visualization:
         else:
             total_CCS_jobs = capacity_CCS.droplevel(0) * job_ratio_CCS
         output_flow_CCS = self.results.get_total("flow_conversion_output", scenario=scenario, element_name=f'{tech}_CCS')
+        # Check if capacity installed is used
         check_CCS = output_flow_CCS.loc[carrier].groupby(["node"]).sum()
         total_CCS_jobs[check_CCS == 0] = 0
         # For single point in time:
@@ -154,7 +155,11 @@ class Visualization:
         return total_jobs
 
     def calc_rel(self, dataframe, nuts, column):
-        """dataframe is divided by absolute value"""
+        """dataframe is divided by absolute value and returns relative value
+        :param dataframe: dataframe that contains data
+        :param nuts: specifies spatial resolution
+        :param column: specifies which column of dataframe"""
+
         # Get population dataframe
         df = self.population
         if nuts == 0:
@@ -313,15 +318,15 @@ class Visualization:
     def plot_tech_change(self, tech, carrier='hydrogen', scenario=None, calc_method='median', nuts=2, time=0, title=False):
         """load data from Excel and plot temporal change for specific tech for NUTS0/2 regions"""
 
-        # Read in data from the Excel
+        # Read in job ratio for specified tech from the Excel
         job_ratio = self.job_ratio_results(tech=tech, calc_method=calc_method)
 
-        # get data from HSC modeling results
+        # Get capacity and output flow from HSC modeling results
         capacity = self.results.get_total("capacity", scenario=scenario, element_name=tech)
         output_flow = self.results.get_total("flow_conversion_output", scenario=scenario, element_name=tech)
         check = output_flow.loc[carrier].groupby(["node"]).sum()
 
-        # get the desired form of the data frame to plot and check with output flow
+        # Get the desired form of the data frame to plot and check with output flow for active capacities
         total_jobs = capacity.droplevel(0) * job_ratio
         total_jobs[check == 0] = 0
 
@@ -363,12 +368,16 @@ class Visualization:
             else:
                 color_dict[region] = self.eth_colors.get_color('grey', 40)
 
+        # Plot with as a timescale
         self.plot_time_scale(dataframe=total_jobs, color_dict=color_dict, carrier=carrier, colorful=colorful, title=title)
 
     def plot_total_change(self, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=0, time=15, title=False):
         """Total jobs for every country for specified techs"""
+
+        # Create dataframe to fill in total jobs
         total_jobs = self.results.get_total("capacity", scenario=scenario, element_name='SMR').droplevel(0) * 0
 
+        # Loop over all specified techs and sum the total jobs
         for tech in techs:
             job_ratio = self.job_ratio_results(tech, calc_method=calc_method)
             capacity = self.results.get_total("capacity", scenario=scenario, element_name=tech)
@@ -390,7 +399,7 @@ class Visualization:
         if nuts == 0:
             total_jobs = self.combine_to_nuts0(total_jobs)
 
-        # Produce color_dict
+        # Produce color_dict for 'Leaders' and 'Followers'
         colorful = np.empty(0)
         jobs_at_time = total_jobs.iloc[:, time]
         colorful = np.concatenate([colorful, jobs_at_time.nlargest(3).index.values])
@@ -419,6 +428,7 @@ class Visualization:
         # get data from HSC modeling results
         fig, ax = plt.subplots(figsize=(30, 20))
 
+        # Loop over all techs and plot jobs over time
         for tech in techs:
             capacity = self.results.get_total("capacity", scenario=scenario, element_name=tech)
             mask = capacity.index.get_level_values(1).str.startswith(country)
@@ -469,7 +479,10 @@ class Visualization:
         # Loop over all hydrogen producing technologies and sum up jobs
         jobs = np.zeros_like(self.results.get_total("capacity", scenario=scenario, year=year, element_name='SMR').
                              droplevel(0))
+
+        # Create list for pie chart
         pie_data = []
+
         for tech in techs:
             job_ratio = self.job_ratio_results(tech, calc_method=calc_method)
             capacity = self.results.get_total("capacity", scenario=scenario, year=year, element_name=tech)
@@ -511,11 +524,13 @@ class Visualization:
         # Merge with NUTS2 data:
         jobs = self.merge_nutsdata(jobs, nuts=nuts)
         jobs.name = 'Jobs'
+
         # Make Europe plot
         if plot == 'europe':
             self.plot_europe_map(dataframe=jobs, column='jobs',
                         legend_label=f'{jobs.name.capitalize()} in Hydrogen, {unit}', year=year, nuts=nuts, title=False, max_val=max_val)
-            # compute percentage of non-zero and non-null values
+
+        # Compute percentage of non-zero and non-null values
         non_zero_non_null_pct = ((jobs['jobs'] != 0) & (~jobs['jobs'].isnull())).sum() / len(jobs) * 100
         print(f"Hydrogen produces jobs in {non_zero_non_null_pct:.2f}% of regions")
     def plot_jobs_transport(self, tech, year, scenario=None, calc_method='mean', nuts=2):
@@ -542,7 +557,7 @@ class Visualization:
                              legend_label=f'Total Jobs, {tech.capitalize()}, {calc_method}', year=year, nuts=nuts)
 
     def plot_biomethane_share(self, year, scenario=None, nuts=2):
-        """plot the share of biomethane as input in the SMR/SMRCCS plants"""
+        """plot the share of biomethane as input in the SMR/SMRCCS plants for a specific year"""
 
         # Get total conversion input data
         input_flow = self.results.get_total("flow_conversion_input", scenario=scenario, year=year)
@@ -564,8 +579,9 @@ class Visualization:
                     f'Biomethane share in percent', year=year, nuts=nuts, title=False, diverging=True)
 
     def plot_biomethane_shares(self, years, scenario=None, nuts=2):
-        """plot the share of biomethane as input in the SMR/SMRCCS plants"""
+        """plot the share of biomethane as input in the SMR/SMRCCS plants over specified years"""
 
+        # Loop over years and calculate biomethane shares
         for i, year in enumerate(years):
             input_flow = self.results.get_total("flow_conversion_input", scenario=scenario, year=year)
 
@@ -591,8 +607,9 @@ class Visualization:
                              diverging=True)
 
     def plot_renewables(self, year, scenario=None, nuts=2):
-        """plot renewables and share used for electrolysis"""
+        """plot renewables availability"""
 
+        # Technologies considered in model:
         techs = ["pv_ground", "wind_onshore"]
 
         renewable_tot = np.zeros_like(self.results.get_total("flow_conversion_output",scenario=scenario, year=year,
@@ -625,9 +642,6 @@ class Visualization:
         :param arrows: dataframe for arrow plotting"""
         min_val = 0
         # Adjust color-bar scale
-        if column == 'export':
-            min_val = -7
-            max_val = 7
         if max_val == 0:
             max_val = dataframe[column].max()
             min_val = dataframe[column].min()
@@ -641,8 +655,7 @@ class Visualization:
         gdf_quickfix = self.gdf.copy(deep=True)
         gdf_quickfix[column] = pd.NA
         conditions = (gdf_quickfix['LEVL_CODE'] == 2) & (
-            gdf_quickfix.index.str.startswith(('AL', 'ME', 'RS', 'MK'))
-        )
+            gdf_quickfix.index.str.startswith(('AL', 'ME', 'RS', 'MK')))
         gdf_quickfix.loc[conditions, column] = -50000.00000
         selected_rows = gdf_quickfix.loc[conditions].dropna(subset=[column])
         selected_rows[column] = pd.to_numeric(selected_rows[column])
@@ -662,7 +675,7 @@ class Visualization:
             nuts0 = gdf_quickfix[(gdf_quickfix.index.isin(idx_values)) & (gdf_quickfix['LEVL_CODE'] == 0)]
             nuts0.boundary.plot(edgecolor='black', linewidth=1, ax=ax)
 
-        # Modify colormap to extend up to 500
+        # Modify colormap and add frame and details to plot
         norm = plt.Normalize(vmin=min_val, vmax=max_val)
         cbar = fig.colorbar(plt.cm.ScalarMappable(cmap=colormap, norm=norm), ax=ax)
         cbar.set_label(legend_label, size=50, labelpad=15)
@@ -702,6 +715,7 @@ class Visualization:
 
         if title:
             plt.title(str(2020 + 2*year) + f', {legend_label}', fontsize=40)
+        # Save and display plot
         plot_name = f'europe_{nuts}_{column}_{year}'
         fig.savefig(f'{plot_name}.svg', format='svg', dpi=200, transparent=True)
         fig.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
@@ -714,7 +728,7 @@ class Visualization:
         color = self.eth_colors.get_color('grey')
         # Create plot with temporal change
         ax = pivoted_data.plot(figsize=(30, 20), color=color, linewidth=3, legend=False)
-        # Manual values for labelling the interesting lines
+        # Manual values for labelling the interesting lines in total jobs plot
         x_start = 15
         x_end = 15.5
         PAD = 0.1
@@ -805,6 +819,7 @@ class Visualization:
 
         fig, axs = plt.subplots(figsize=(33, 10), ncols=num_axes, nrows=1, squeeze=False)
 
+        # Loop over the dataframe and plot the interesting columns with correct plot details
         for i in range(0, num_axes):
             if i != 0:
                 dataframe.loc[conditions, f'{column}{i}'] = -50000.00000
@@ -831,6 +846,7 @@ class Visualization:
             axs[0, i].set_ylim([y_lower_limit, y_upper_limit])
             axs[0, i].set_axis_off()
 
+        # Add description and colorbar, save the plot
         axs[0, 0].set_title('2020', fontsize=50, fontdict=dict(weight='bold'))
         axs[0, 1].set_title('2030', fontsize=50, fontdict=dict(weight='bold'))
         axs[0, 2].set_title('2050', fontsize=50, fontdict=dict(weight='bold'))
@@ -841,7 +857,7 @@ class Visualization:
         if title:
             plt.title(str(2020 + 2*year) + f', {legend_label}', fontsize=40)
         plot_name = f'europecombo_{nuts}_{column}'
-        # fig.savefig(f'{plot_name}.svg', format='svg', dpi=600, transparent=True)
+        fig.savefig(f'{plot_name}.svg', format='svg', dpi=600, transparent=True)
         fig.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
         plt.show()
 
@@ -914,19 +930,20 @@ class Visualization:
         cumulative_percentage2 = np.cumsum(df_merged2[column]) / df_merged2[column].sum()
         cumulative_share2 = np.cumsum(df_merged2['OBS_VALUE']) / df_merged2['OBS_VALUE'].sum()
 
-        # Create Lorenz curve
+        # Get the colors for each Lorenz curve
         color2 = self.eth_colors.get_color('green')
         color0 = self.eth_colors.get_color('blue')
         grey = self.eth_colors.get_color('grey', 60)
 
+        # Create Lorenz curve
         fig, ax = plt.subplots(figsize=(20, 20))
         ax.plot(cumulative_share2, cumulative_percentage2, color=color2, linewidth=5)
         ax.plot(cumulative_share0, cumulative_percentage0, color=color0, linewidth=5)
-        plt.text(0.61, 0.4, 'NUTS0', size=40, rotation=60, color=color0,
-                        ha="center", va="center", bbox=dict(ec='1', fc='1'))
-        plt.text(0.8, 0.2, 'NUTS2', size=40, rotation=60, color=color2,
-                 ha="center", va="center", bbox=dict(ec='1', fc='1'))
-        plt.plot([0, 1], [0, 1], color=grey, linestyle='--', linewidth=5)
+        plt.text(0.62, 0.4, 'Countries', size=40, rotation=64, color=color0,
+                         ha="center", va="center", bbox=dict(ec='1', fc='1'))
+        plt.text(0.87, 0.4, 'Regions', size=40, rotation=75, color=color2,
+                         ha="center", va="center", bbox=dict(ec='1', fc='1'))
+        ax.plot([0, 1], [0, 1], color=grey, linestyle='--', linewidth=5)
         plt.xlabel('Cumulative proportion of population', fontsize=40, fontdict=dict(weight='bold'))
         plt.gca().yaxis.set_label_position("right")
         plt.gca().yaxis.tick_right()
@@ -949,15 +966,18 @@ class Visualization:
         # Get population data
         dataframe = pd.DataFrame(dataframe)
         population = self.population
+
         # Get initials for all NUTS0 regions
         initials = [label[:2] for label in dataframe.index]
+
         # Merge dataframes
         df_merged = dataframe.merge(population, left_index=True, right_index=True, how='left')
+
         # Only taking unique values
         unique_initials = set(initials)
+
         # Calculate the GINI coefficient for every country
         gini_df = pd.DataFrame(columns=['Gini Coefficient'])
-        # Calculate the GINI coefficient for every country
         for country in unique_initials:
             country_data = df_merged[df_merged.index.str.startswith(country)]
             # For countries with no jobs
@@ -975,14 +995,14 @@ class Visualization:
         gini_df.sort_values('Gini Coefficient', ascending=False, inplace=True)
         # Create the plot
         fig, ax = plt.subplots(figsize=(10, 15))
-        # Create diverging colormap
+        # Create diverging colormap with middle at Gini Europe
         cmap = self.eth_colors.get_custom_colormaps(self.colormap_dict['gini'], diverging=True)
         norm = colors.TwoSlopeNorm(vmin=gini_df['Gini Coefficient'].min(), vcenter=gini_europe,
                                       vmax=gini_df['Gini Coefficient'].max())
         # Iterate over the dataframe and plot each horizontal line separately
         for i, (country, gini_coefficient) in enumerate(gini_df.iterrows()):
-            color = cmap(norm(gini_coefficient))
-            plt.hlines(y=i / 2, xmin=gini_europe, xmax=gini_coefficient, colors=color, linewidth=25,
+             color = cmap(norm(gini_coefficient))
+             plt.hlines(y=i / 2, xmin=gini_europe, xmax=gini_coefficient, colors=color, linewidth=25,
                        path_effects=[mpe.withStroke(foreground='black', linewidth=28)])
 
         # Plot the Gini for Europe
@@ -1013,8 +1033,8 @@ if __name__ == "__main__":
     nutss = [0, 2]
     vis = Visualization(results_path, scenario)
     # Loop to plot all technologies for every year and nuts:
+    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='lorenz', nuts=2, max_val=2000)
     vis.plot_tech_jobs(techs='SMR', carrier='hydrogen', scenario=scenario, year=15, rel=True)
-    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='europe', nuts=2, rel=True)
     vis.plot_export_potential(scenario=scenario, year=15)
     vis.plot_tech_jobs(techs='SMR', carrier='hydrogen', scenario=scenario, year=15, max_val=300)
     vis.plot_biomethane_shares(years=years, scenario=scenario)
