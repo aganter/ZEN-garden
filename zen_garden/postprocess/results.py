@@ -765,7 +765,11 @@ class Results(object):
                         # elif pd.to_numeric(_varSeries.columns.droplevel(0), errors="coerce").equals(_varSeries.columns.droplevel(0)):
                         elif ts_type is not None:
                             if ts_type == "storage":
-                                techProxy = [k for k in self.results[scenario]["dict_sequence_time_steps"]["operation"].keys() if "storage_level" in k.lower()][0]
+                                techProxy = [k for k in self.results[scenario]["dict_sequence_time_steps"]["operation"].keys() if "storage_level" in k.lower()]
+                                if not techProxy:
+                                    _data[scenario] = pd.Series()
+                                    break
+                                techProxy = techProxy[0]
                             else:
                                 techProxy = [k for k in self.results[scenario]["dict_sequence_time_steps"]["operation"].keys() if "storage_level" not in k.lower()][0]
                             # get the timesteps

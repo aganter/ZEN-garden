@@ -106,7 +106,7 @@ def main(config, dataset_path=None, base_scenarios=None):
         else:
             base_scenario_list = config.scenarios.keys()
         for scenario in base_scenario_list:
-            base_scenarios[scenario] = {tech: ["capacity_existing"] for tech in config.system["set_technologies"]}
+            base_scenarios[scenario] = {tech: ["capacity_existing","capacity_limit_reduction"] for tech in config.system["set_technologies"]}
 
     # update base scenario
     for base_scenario, elements in base_scenarios.items():
@@ -115,7 +115,7 @@ def main(config, dataset_path=None, base_scenarios=None):
         # update input data
         for scenario, elements in config.scenarios.items():
             if len(config.scenarios.items()) > 1:
-                additional_scenario_string = f"for scenario {scenario} "
+                additional_scenario_string = f"for scenario {base_scenario}_{scenario} "
             else:
                 additional_scenario_string = ""
             optimization_setup.restore_base_configuration(scenario, elements)
@@ -123,9 +123,9 @@ def main(config, dataset_path=None, base_scenarios=None):
             # iterate through horizon steps
             for step_horizon in steps_optimization_horizon:
                 if len(steps_optimization_horizon) == 1:
-                    logging.info(f"\n--- Conduct optimization for perfect foresight {base_scenario}_{scenario}--- \n")
+                    logging.info(f"\n--- Conduct optimization for perfect foresight {additional_scenario_string}--- \n")
                 else:
-                    logging.info(f"\n--- Conduct optimization for rolling horizon step {step_horizon} of {max(steps_optimization_horizon)}--- \n")
+                    logging.info(f"\n--- Conduct optimization for rolling horizon step {step_horizon} of {max(steps_optimization_horizon)} {additional_scenario_string}--- \n")
                 # overwrite time indices
                 optimization_setup.overwrite_time_indices(step_horizon)
                 # create optimization problem

@@ -70,11 +70,11 @@ class OptimizationSetup(object):
         # The time series aggregation
         self.time_series_aggregation = None
 
-        # set base scenario
-        self.set_base_configuration()
-
         # add Elements to optimization
         self.add_elements()
+
+        # set base scenario
+        self.set_base_configuration()
 
     def add_elements(self):
         """This method sets up the parameters, variables and constraints of the carriers of the optimization problem.
@@ -272,16 +272,23 @@ class OptimizationSetup(object):
             self.initial_scenario = scenario
             self.initial_configuration = elements
 
+            if self.energy_system.system["use_rolling_horizon"]:
+                self.initial_params = {
+            #        "set_time_steps_yearly": self.energy_system.set_time_steps_yearly,
+                    "set_base_time_steps": self.energy_system.set_base_time_steps,}
+            #        "set_base_time_step_storage": self.energy_system.carbon_emissions_cumulative_existing}
+
     def set_base_configuration(self, scenario="", elements={}):
         """set base configuration
         :param scenario: name of base scenario
         :param elements: elements in base configuration """
         if not hasattr(self, "initial_scenario"):
             self.set_initial_scenario()
-        self.base_scenario = scenario
-        self.base_configuration = elements
-        self.overwrite_params(self.initial_scenario, self.initial_configuration)
-        self.overwrite_params(self.base_scenario, self.base_configuration)
+        else:
+            self.base_scenario = scenario
+            self.base_configuration = elements
+            self.overwrite_params(self.initial_scenario, self.initial_configuration)
+            self.overwrite_params(self.base_scenario, self.base_configuration)
 
     def restore_base_configuration(self, scenario, elements):
         """restore default configuration
@@ -289,6 +296,9 @@ class OptimizationSetup(object):
         :param elements: dictionary of scenario dependent elements and parameters"""
         if not scenario == self.base_scenario:
             # restore base configuration
+            #if self.energy_system.system["use_rolling_horizon"]:
+            #    for param, val in self.initial_params.items():
+            #        setattr(self.energy_system,param,val)
             self.overwrite_params(self.base_scenario, self.base_configuration)
             # continuously update base_configuration so all parameters are reset to their base value after being changed
             for element_name, params in elements.items():
@@ -314,6 +324,15 @@ class OptimizationSetup(object):
             scenario = "_" + scenario
         # list of parameters with raw_time_series
         conduct_tsa = False
+        if self.system["use_rolling_horizon"]:
+            _time_steps_yearly_entire_horizon = self.energy_system.set_time_steps_yearly_entire_horizon
+            _base_time_steps_horizon = self.energy_system.time_steps.decode_yearly_time_steps(
+                _time_steps_yearly_entire_horizon)
+            # overwrite time steps of each element
+            for element in self.get_all_elements(Element):
+                element.overwrite_time_steps(_base_time_steps_horizon)
+            self.energy_system.set_base_time_steps = self.initial_params["set_base_time_steps"]
+            self.energy_system.set_time_steps_yearly = _time_steps_yearly_entire_horizon
         # overwrite scenario dependent parameter values for all elements
         for element_name, params in elements.items():
             if element_name == "EnergySystem":
@@ -349,7 +368,7 @@ class OptimizationSetup(object):
                     if "time" in _index_names:
                         _time_steps = self.energy_system.set_base_time_steps_yearly
                     elif "year" in _index_names:
-                        _time_steps = self.energy_system.set_time_steps_yearly
+                        _time_steps = self.energy_system.set_time_steps_yearly_entire_horizon
                     _new_param = element.data_input.extract_input_data(file_name, index_sets=_index_sets, time_steps=_time_steps, scenario=scenario)
                     setattr(element, param, _new_param)
                     # if existing capacity is changed, capex_capacity_existing also has to be updated

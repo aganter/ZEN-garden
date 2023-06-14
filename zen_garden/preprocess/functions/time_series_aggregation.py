@@ -214,7 +214,7 @@ class TimeSeriesAggregation(object):
             if len(np.unique(_yearly_variation)) == 1:
                 ts = _ts.stack() * np.unique(_yearly_variation)[0]
             else:
-                for year in self.energy_system.set_time_steps_yearly:
+                for year in self.energy_system.set_time_steps_yearly_entire_horizon:
                     if not all(_yearly_variation[year] == 1):
                         _base_time_steps = self.energy_system.time_steps.decode_time_step(None, year, "yearly")
                         _element_time_steps = self.energy_system.time_steps.encode_time_step(element.name, _base_time_steps, yearly=True)
@@ -228,7 +228,7 @@ class TimeSeriesAggregation(object):
     def repeat_sequence_time_steps_for_all_years(self):
         """ this method repeats the operational time series for all years."""
         logging.info("Repeat the time series sequences for all years")
-        optimized_years = len(self.energy_system.set_time_steps_yearly)
+        optimized_years = len(self.energy_system.set_time_steps_yearly_entire_horizon)
         # concatenate the order of time steps for all elements and link with investment and yearly time steps
         for element in self.optimization_setup.get_all_elements(Element):
             # optimized_years = EnergySystem.get_system()["optimized_years"]
