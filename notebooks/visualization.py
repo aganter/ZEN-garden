@@ -59,7 +59,9 @@ class Visualization:
             "gini": ("blue", "red"),
             "jobs": "green",
             "dry_biomass": "green",
+            "wet_biomass": "green",
             "carbon": "red",
+            "hydrogen": "blue",
             "biomethane_share": ("blue", "green"),
             "biomethane_share2": ("blue", "green")
         }
@@ -212,7 +214,7 @@ class Visualization:
         output_flow = output_flow.loc[:, carrier].groupby(["node"]).sum()  # in GWh
 
         # Load NUTS2 data and joins with output_flow
-        output_flow.name = "output_flow"
+        output_flow.name = carrier
         gdf_merged = self.merge_nutsdata(output_flow, nuts=nuts)
 
         # Plot as a map of Europe:
@@ -232,13 +234,12 @@ class Visualization:
             potential_used = (carrier_used/carrier_available) * 100
         potential_used.name = carrier
         gdf_merged = self.merge_nutsdata(potential_used, nuts=nuts)
-
         # Plot as a map of Europe:
-        self.plot_europe_map(gdf_merged, column=potential_used.name, legend_label=f'{carrier.capitalize()}',
+        self.plot_europe_map(gdf_merged, column=potential_used.name, legend_label=f'Available {carrier.capitalize()} used in percent',
                              year=year, nuts=nuts, title=False)
 
     def plot_demand(self, carrier, year, scenario=None, nuts=2):
-        """plot hydrogen demand"""
+        """plot carrier demand"""
 
         demand = self.results.get_total("demand", scenario=scenario, year=year)
         demand = demand.loc[carrier].groupby(["node"]).sum()/1000  # in TWh
@@ -315,7 +316,7 @@ class Visualization:
         self.plot_europe_map(dataframe=gdf_merged, column=export.name, legend_label=
         f'Production - Demand, {carrier.capitalize()} [TWh/year]', year=year, nuts=nuts, diverging=diverging, title=title)
 
-    def plot_tech_change(self, tech, carrier='hydrogen', scenario=None, calc_method='median', nuts=2, time=0, title=False):
+    def plot_tech_change(self, tech, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2, time=0, title=False):
         """load data from Excel and plot temporal change for specific tech for NUTS0/2 regions"""
 
         # Read in job ratio for specified tech from the Excel
@@ -413,7 +414,7 @@ class Visualization:
                 color_dict[region] = self.eth_colors.get_color('blue')
 
         # Print with timescale
-        self.plot_time_scale(dataframe=total_jobs, color_dict=color_dict, carrier=carrier, colorful=colorful, title=title)
+        self.plot_time_scale(dataframe=total_jobs, color_dict=color_dict, carrier=carrier, colorful=colorful, title=title, total_jobs=True)
 
     def country_jobs_change(self, country, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=0):
         """plot change of jobs for all technologies for a country or NUTS2 regions in country"""
@@ -458,7 +459,7 @@ class Visualization:
             pivoted_data.plot(ax=ax, color=color, linewidth=5, label=tech)
 
         # Plot details:
-        ax.set_ylabel(f'Production [TWh]', fontsize=30)
+        ax.set_ylabel(f'Jobs [FTE]', fontsize=30)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int), fontsize=24)
@@ -468,7 +469,7 @@ class Visualization:
             plt.legend(labels=techs, prop={'size': 40}, frameon=False)
 
         # Plot title and save plot:
-        plt.title(f'{country.upper()}, {calc_method.capitalize()}', fontsize=40)
+        plt.title(f'{country.upper()}', fontsize=40)
         plot_name = f'{country}_{calc_method}_{nuts}.svg'
         plt.savefig(plot_name, format='svg', dpi=600, transparent=True)
         plt.show()
@@ -621,7 +622,7 @@ class Visualization:
             renewable_prod.name = tech
             gdf_merged = self.merge_nutsdata(dataframe=renewable_prod, nuts=nuts)
 
-            self.plot_europe_map(dataframe=gdf_merged, column=tech, legend_label=f'{tech.capitalize()}',
+            self.plot_europe_map(dataframe=gdf_merged, column=tech, legend_label=f'{tech.capitalize()} [TWh/year]',
                                  year=year, nuts=nuts)
             renewable_tot += renewable_prod
         renewable_tot.name = 'renew_tot'
@@ -661,7 +662,11 @@ class Visualization:
         selected_rows[column] = pd.to_numeric(selected_rows[column])
         dataframe = dataframe.append(selected_rows)
         colormap.set_under(color=grey)
-
+        # Quick fix to make nan values grey
+        dataframe.loc[(dataframe['LEVL_CODE'] == nuts) & ~(dataframe.index.str.startswith(('TR', 'IS'))),
+                      f'{column}'] = dataframe.loc[(dataframe['LEVL_CODE'] == nuts) &
+                                                      ~(dataframe.index.str.startswith(
+                                                          ('TR', 'IS'))), f'{column}'].fillna(-50000)
         # Plot figure, axis and the underlying data in a Europe map
         fig, ax = plt.subplots(figsize=(30, 20))
         dataframe.plot(column=column, cmap=colormap, legend=False, edgecolor='black', linewidth=0.5, ax=ax, vmin=min_val, vmax=max_val)
@@ -721,7 +726,7 @@ class Visualization:
         fig.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
         plt.show()
 
-    def plot_time_scale(self, dataframe, color_dict, carrier, title=False, colorful=None):
+    def plot_time_scale(self, dataframe, color_dict, carrier, title=False, colorful=None, total_jobs=False):
         """plots dataframe over time, with colordict"""
 
         pivoted_data = dataframe.transpose()
@@ -729,36 +734,37 @@ class Visualization:
         # Create plot with temporal change
         ax = pivoted_data.plot(figsize=(30, 20), color=color, linewidth=3, legend=False)
         # Manual values for labelling the interesting lines in total jobs plot
-        x_start = 15
-        x_end = 15.5
-        PAD = 0.1
-        end_point = pd.DataFrame([[12799, 8995, 8012, 1034, 1334, 1634, 1934, 2234, 2534, 2930, 3582, 3933]])
-        # Plot interesting lines above
-        for idx, region in enumerate(colorful):
-            if idx < 3:
-                pivoted_data[region].plot(color=color_dict[region], linewidth=5, zorder=3.5, ax=ax)
-            else:
-                pivoted_data[region].plot(color=color_dict[region], linewidth=5, zorder=2.5, ax=ax)
-            # Vertical start of line
-            y_start = pivoted_data[region].loc[15]
-            y_end = end_point.iloc[0, idx]
-            # Add line
-            ax.plot([x_start, (x_start + x_end - PAD) / 2, x_end - PAD], [y_start, y_end, y_end],
+        if(total_jobs):
+            x_start = 15
+            x_end = 15.5
+            PAD = 0.1
+            end_point = pd.DataFrame([[12799, 8995, 8012, 1034, 1334, 1634, 1934, 2234, 2534, 2930, 3582, 3933]])
+            # Plot interesting lines above
+            for idx, region in enumerate(colorful):
+                if idx < 3:
+                    pivoted_data[region].plot(color=color_dict[region], linewidth=5, zorder=3.5, ax=ax)
+                else:
+                    pivoted_data[region].plot(color=color_dict[region], linewidth=5, zorder=2.5, ax=ax)
+                # Vertical start of line
+                y_start = pivoted_data[region].loc[15]
+                y_end = end_point.iloc[0, idx]
+                # Add line
+                ax.plot([x_start, (x_start + x_end - PAD) / 2, x_end - PAD], [y_start, y_end, y_end],
                     color=color_dict[region], ls='dashed')
-            # Add text
-            ax.text(x_end, y_end, region, color='black', fontsize=25, weight='bold', va='center')
-        # Add shade between lines
-        ax.fill_between(pivoted_data.index, pivoted_data['IT'], pivoted_data['DE'], interpolate=True,
+                # Add text
+                ax.text(x_end, y_end, region, color='black', fontsize=25, weight='bold', va='center')
+            # Add shade between lines
+            ax.fill_between(pivoted_data.index, pivoted_data['IT'], pivoted_data['DE'], interpolate=True,
                        color=color_dict['DE'], alpha=0.2)
-        ax.fill_between(pivoted_data.index, pivoted_data['IT'], pivoted_data['ES'],
+            ax.fill_between(pivoted_data.index, pivoted_data['IT'], pivoted_data['ES'],
                         where=pivoted_data['IT'] > pivoted_data['ES'], interpolate=True, color=color_dict['DE'], alpha=0.2)
-        ax.fill_between(pivoted_data.index, pivoted_data['DE'], pivoted_data['ES'],
+            ax.fill_between(pivoted_data.index, pivoted_data['DE'], pivoted_data['ES'],
                         where=pivoted_data['ES'] > pivoted_data['DE'], interpolate=True, color=color_dict['DE'],
                         alpha=0.2)
-        ax.fill_between(pivoted_data.index, pivoted_data['PL'], pivoted_data['LT'],
+            ax.fill_between(pivoted_data.index, pivoted_data['PL'], pivoted_data['LT'],
                         where=pivoted_data['PL'] > pivoted_data['LT'], interpolate=True, color=color_dict['NL'],
                         alpha=0.2)
-        ax.fill_between(pivoted_data.index, pivoted_data['PL'], pivoted_data['NL'],
+            ax.fill_between(pivoted_data.index, pivoted_data['PL'], pivoted_data['NL'],
                         where=pivoted_data['NL'] > pivoted_data['PL'], interpolate=True, color=color_dict['NL'],
                         alpha=0.2)
         # Plot details
@@ -1027,17 +1033,54 @@ if __name__ == "__main__":
     results_path = os.path.join("outputs", "HSC_NUTS2")
     scenario = "scenario_referenceBM_med"  # to load more than one scenario, pass a list
     techs = ['SMR', 'gasification', 'electrolysis', 'anaerobic_digestion']
-    tr_techs = ['hydrogen_truck_liquid', 'hydrogen_truck_gas']
-    countries = ['DE', 'RO', 'FR', 'IT', 'UK']
     years = [0, 5, 15]
-    nutss = [0, 2]
     vis = Visualization(results_path, scenario)
-    # Loop to plot all technologies for every year and nuts:
-    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='lorenz', nuts=2, max_val=2000)
-    vis.plot_tech_jobs(techs='SMR', carrier='hydrogen', scenario=scenario, year=15, rel=True)
-    vis.plot_export_potential(scenario=scenario, year=15)
-    vis.plot_tech_jobs(techs='SMR', carrier='hydrogen', scenario=scenario, year=15, max_val=300)
-    vis.plot_biomethane_shares(years=years, scenario=scenario)
-    vis.plot_tech_jobs(techs='anaerobic_digestion', carrier='biomethane', scenario=scenario, year=15)
+
+    # Plot job distribution over time for all techs considered
     vis.plot_total_change(techs=techs, scenario=scenario, time=15)
-    vis.plot_carrier_usage(carrier='carbon', year=15, scenario=scenario)
+
+    # Plot the distribution of jobs for specified year as lorenz curve and gini distribution
+    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='lorenz')
+    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='gini')
+
+    # Plot total jobs in specified year as Europe map, can also be done with jobs/capita
+    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='europe', nuts=2, rel=False, max_val=2000)
+
+    #Plot jobs for technologies in specified year, can also be done with jobs/capita
+    vis.plot_tech_jobs(techs='anaerobic_digestion', carrier='biomethane', scenario=scenario, year=15, rel=False, max_val=1200)
+
+    vis.plot_tech_jobs(techs='electrolysis', carrier='hydrogen', scenario=scenario, year=15, rel=False, max_val=1200)
+
+    vis.plot_tech_jobs(techs='SMR', carrier='hydrogen', scenario=scenario, year=15, rel=False, max_val=300)
+
+    vis.plot_tech_jobs(techs='gasification', carrier='hydrogen', scenario=scenario, year=15, rel=False, max_val=300)
+
+    # Plot pie chart
+    vis.plot_hydrogen_jobs(techs=techs, scenario=scenario, year=15, plot='pie')
+
+    # Plot the production - demand
+    vis.plot_export_potential(scenario=scenario, year=15, nuts=2)
+
+    # Plot biomethane shares
+    vis.plot_biomethane_shares(years=years, scenario=scenario)
+
+    # Plot output flow for carrier
+    vis.plot_output_flows(carrier='hydrogen', scenario=scenario, year=15, nuts=2)
+
+    # Plot carrier demand in TWh as Europe map
+    vis.plot_demand(carrier='hydrogen', scenario=scenario, year=15, nuts=2)
+
+    # Plot change of singular hydrogen producing tech over time
+    vis.plot_tech_change(tech='SMR', scenario=scenario, nuts=0)
+
+    # Plot change of all techs over time for country
+    vis.country_jobs_change(country='DE', techs=techs, scenario=scenario)
+
+    # Plot jobs in transport for tech as Europe map
+    vis.plot_jobs_transport(tech='hydrogen_truck_liquid', scenario=scenario, year=15, nuts=2)
+
+    # Plot renewable electricity production for specific year as Europe map
+    vis.plot_renewables(year=15, scenario=scenario)
+
+    # Plot relative feedstock used (wet & dry biomass, electricity, biomethane, natural gas) as Europe map
+    vis.plot_conversion_input(carrier='dry_biomass', scenario=scenario, year=15, nuts=2)
