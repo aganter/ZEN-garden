@@ -55,9 +55,9 @@ class Visualization:
             "hydrogen_output": "red",
             "hydrogen_truck_gas": "blue",
             "hydrogen_truck_liquid": "petrol",
-            "export": ("blue", "red"),
+            "export": ("red", "blue"),
             "gini": ("blue", "red"),
-            "jobs": "green",
+            "jobs": "purple",
             "dry_biomass": "green",
             "wet_biomass": "green",
             "carbon": "red",
@@ -93,7 +93,7 @@ class Visualization:
     def set_gdf(self):
         """set geodataframe"""
         # Read in the geodataframe for Europe on NUTS2 resolution
-        path_to_data = os.path.join("outputs", "NUTS_RG_01M_2016_3035", "NUTS_RG_01M_2016_3035.shp")
+        path_to_data = os.path.join("outputs", "NUTS_RG_10M_2016_3035", "NUTS_RG_10M_2016_3035.shp")
         gdf = gpd.read_file(path_to_data)
         gdf = gdf[["NUTS_ID", "geometry", "LEVL_CODE"]]
         gdf = gdf.set_index("NUTS_ID")
@@ -211,7 +211,7 @@ class Visualization:
             output_flow = output_flow.loc[_techs]
         else:
             print(Warning, "Only conversion techs implemented")
-        output_flow = output_flow.loc[:, carrier].groupby(["node"]).sum()  # in GWh
+        output_flow = output_flow.loc[:, carrier].groupby(["node"]).sum() / 1000  # in TWh
 
         # Load NUTS2 data and joins with output_flow
         output_flow.name = carrier
@@ -219,7 +219,7 @@ class Visualization:
 
         # Plot as a map of Europe:
         self.plot_europe_map(gdf_merged, column=output_flow.name, legend_label=
-            f'{carrier.capitalize()} Production in [GWh]', year=year, nuts=nuts)
+            f'{carrier.capitalize()} Production in [TWh]', year=year, nuts=nuts)
 
     def plot_conversion_input(self, carrier, year, scenario=None, nuts=2):
         """plot conversion input for selected carrier"""
@@ -243,12 +243,13 @@ class Visualization:
 
         demand = self.results.get_total("demand", scenario=scenario, year=year)
         demand = demand.loc[carrier].groupby(["node"]).sum()/1000  # in TWh
+        print(f'Total hydrogen demand in Europe in the year {2020 + year*2} is {demand.sum()} TWh')
         # Load geographical data and join with demand
         demand.name = f"{carrier}_demand"
         gdf_merged = self.merge_nutsdata(demand, nuts=nuts)
 
         # Plot as a map of Europe
-        self.plot_europe_map(gdf_merged, column=demand.name, legend_label=f'{carrier.capitalize()} Demand in [TWh/year]'
+        self.plot_europe_map(gdf_merged, column=demand.name, legend_label=f'{carrier.capitalize()} Demand in [TWh]'
                              , year=year, nuts=nuts, title=False)
 
     def plot_tech_jobs(self, year, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2, rel=False, max_val=0):
@@ -314,7 +315,7 @@ class Visualization:
 
         # Plot as a map of Europe
         self.plot_europe_map(dataframe=gdf_merged, column=export.name, legend_label=
-        f'Production - Demand, {carrier.capitalize()} [TWh/year]', year=year, nuts=nuts, diverging=diverging, title=title)
+        f'Production - Demand, {carrier.capitalize()} [TWh]', year=year, nuts=nuts, diverging=diverging, title=title)
 
     def plot_tech_change(self, tech, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2, time=0, title=False):
         """load data from Excel and plot temporal change for specific tech for NUTS0/2 regions"""
@@ -413,7 +414,7 @@ class Visualization:
             elif region in colorful[3:12]:
                 color_dict[region] = self.eth_colors.get_color('blue')
 
-        # Print with timescale
+        # Plot with timescale
         self.plot_time_scale(dataframe=total_jobs, color_dict=color_dict, carrier=carrier, colorful=colorful, title=title, total_jobs=True)
 
     def country_jobs_change(self, country, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=0):
@@ -622,14 +623,14 @@ class Visualization:
             renewable_prod.name = tech
             gdf_merged = self.merge_nutsdata(dataframe=renewable_prod, nuts=nuts)
 
-            self.plot_europe_map(dataframe=gdf_merged, column=tech, legend_label=f'{tech.capitalize()} [TWh/year]',
+            self.plot_europe_map(dataframe=gdf_merged, column=tech, legend_label=f'{tech.capitalize()} [TWh]',
                                  year=year, nuts=nuts)
             renewable_tot += renewable_prod
         renewable_tot.name = 'renew_tot'
         gdf_merged = self.merge_nutsdata(renewable_tot, nuts=nuts)
 
         self.plot_europe_map(dataframe=gdf_merged, column=renewable_tot.name,
-                             legend_label=f'Renewable production [TWh/year]', year=year, nuts=nuts, title=False)
+                             legend_label=f'Renewable production [TWh]', year=year, nuts=nuts, title=False)
 
     def plot_europe_map(self, dataframe, column, legend_label=None, year=0, nuts=2, diverging=False, title=False, max_val=0, arrows=None):
         """plots map of europe with correct x and y-limits, axes names
@@ -642,6 +643,10 @@ class Visualization:
         :param max_val: maximum value for color-bar
         :param arrows: dataframe for arrow plotting"""
         min_val = 0
+        # Quickfix for diverging colormap in export potential plot:
+        if column == 'export':
+            max_val = 7
+            min_val = -7
         # Adjust color-bar scale
         if max_val == 0:
             max_val = dataframe[column].max()
@@ -693,6 +698,7 @@ class Visualization:
         ax.set_xlim([x_lower_limit, x_upper_limit])
         ax.set_ylim([y_lower_limit, y_upper_limit])
         ax.set_axis_off()
+        # Add arrows to display import/export (did not manage to implement in time)
         if arrows:
             linewidth = 2.5
             lwMin = 0.5
@@ -771,7 +777,7 @@ class Visualization:
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         plt.xlabel('Time', fontsize=40, fontdict=dict(weight='bold'))
-        plt.ylabel('Total Jobs', fontsize=40, fontdict=dict(weight='bold'))
+        plt.ylabel('Jobs [FTE]', fontsize=40, fontdict=dict(weight='bold'))
         plt.xticks(fontsize=24)
         plt.yticks(fontsize=24)
         if title:
@@ -883,7 +889,7 @@ class Visualization:
                 labels.append('Anaerobic digestion')
             else:
                 labels.append(f'{tech.capitalize()}')
-            numbers.append(int(row[1]))  # Get the total number for each tech and convert to integer
+            numbers.append(round(float(row[1]), 2))  # Get the total number for each tech and convert to 2 fig integer
         # Plot with legend of all techs and total jobs in each tech
         fig, ax = plt.subplots(figsize=(30, 20))
         wedges, _, _ = ax.pie(numbers, colors=colors, labels=labels, autopct='',
@@ -902,11 +908,11 @@ class Visualization:
             # Flip the orientation of upside-down numbers
             if 90 < angle <= 270:
 
-                ax.text(np.cos(np.deg2rad(180))*0.5, np.sin(np.deg2rad(180))*0.5, str(numbers[i]),
+                ax.text(np.cos(np.deg2rad(180))*0.5, np.sin(np.deg2rad(180))*0.5, '{:g}'.format(float('{:.2g}'.format(numbers[i]))),
                         ha='center', va='center', fontsize=50, fontdict=dict(weight='bold'))
             else:
-                ax.text(text_x, text_y, str(numbers[i]), ha='center', va='center', fontsize=50, rotation_mode='default',
-                        rotation=angle, fontdict=dict(weight='bold'))
+                ax.text(text_x, text_y, '{:g}'.format(float('{:.2g}'.format(numbers[i]))), ha='center', va='center', fontsize=50,
+                        rotation_mode='default', rotation=angle, fontdict=dict(weight='bold'))
         plot_name = f'pie_chart_{year}'
         fig.savefig(f'{plot_name}.png', format='png', dpi=200, transparent=True)
         fig.savefig(f'{plot_name}.svg', format='svg', dpi=200, transparent=True)
