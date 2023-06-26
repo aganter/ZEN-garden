@@ -100,13 +100,14 @@ def main(config, dataset_path=None, base_scenarios=None):
     if ("use_base_scenarios" in config.system.keys() and config.system["use_base_scenarios"]) and not base_scenarios==False:
         base_scenarios = dict()
         if "base_scenarios" in config.system.keys():
+            config.system["add_technology_diffusion"] = True
             base_scenario_list = config.system["base_scenarios"]
             if not isinstance(base_scenario_list,list):
                 base_scenario_list = [base_scenario_list]
         else:
             base_scenario_list = config.scenarios.keys()
         for scenario in base_scenario_list:
-            base_scenarios[scenario] = {tech: ["capacity_existing","capacity_limit_reduction"] for tech in config.system["set_technologies"]}
+            base_scenarios[scenario] = {tech: ["capacity_existing"] for tech in config.system["set_technologies"]}
 
     # update base scenario
     for base_scenario, elements in base_scenarios.items():
