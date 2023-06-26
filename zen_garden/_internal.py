@@ -97,7 +97,7 @@ def main(config, dataset_path=None, base_scenarios=None):
 
     # determine base scenarios
     base_scenarios = {"": {}}
-    if "use_base_scenarios" in config.system.keys() and config.system["use_base_scenarios"]:
+    if ("use_base_scenarios" in config.system.keys() and config.system["use_base_scenarios"]) and not base_scenarios==False:
         base_scenarios = dict()
         if "base_scenarios" in config.system.keys():
             base_scenario_list = config.system["base_scenarios"]
