@@ -219,7 +219,7 @@ class Visualization:
 
         # Plot as a map of Europe:
         self.plot_europe_map(gdf_merged, column=output_flow.name, legend_label=
-            f'{carrier.capitalize()} Production in [TWh]', year=year, nuts=nuts)
+            f'{carrier.capitalize()} production [TWh]', year=year, nuts=nuts)
 
     def plot_conversion_input(self, carrier, year, scenario=None, nuts=2):
         """plot conversion input for selected carrier"""
@@ -249,7 +249,7 @@ class Visualization:
         gdf_merged = self.merge_nutsdata(demand, nuts=nuts)
 
         # Plot as a map of Europe
-        self.plot_europe_map(gdf_merged, column=demand.name, legend_label=f'{carrier.capitalize()} Demand in [TWh]'
+        self.plot_europe_map(gdf_merged, column=demand.name, legend_label=f'{carrier.capitalize()} demand [TWh]'
                              , year=year, nuts=nuts, title=False)
 
     def plot_tech_jobs(self, year, techs, carrier='hydrogen', scenario=None, calc_method='mean', nuts=2, rel=False, max_val=0):
@@ -744,7 +744,7 @@ class Visualization:
             x_start = 15
             x_end = 15.5
             PAD = 0.1
-            end_point = pd.DataFrame([[12799, 8995, 8012, 1034, 1334, 1634, 1934, 2234, 2534, 2930, 3582, 3933]])
+            end_point = pd.DataFrame([[12799, 8995, 8012, 380, 830, 1280, 1730, 2180, 2630, 3081, 3532, 3983]])
             # Plot interesting lines above
             for idx, region in enumerate(colorful):
                 if idx < 3:
@@ -758,7 +758,7 @@ class Visualization:
                 ax.plot([x_start, (x_start + x_end - PAD) / 2, x_end - PAD], [y_start, y_end, y_end],
                     color=color_dict[region], ls='dashed')
                 # Add text
-                ax.text(x_end, y_end, region, color='black', fontsize=25, weight='bold', va='center')
+                ax.text(x_end, y_end, region, color='black', fontsize=40, weight='bold', va='center')
             # Add shade between lines
             ax.fill_between(pivoted_data.index, pivoted_data['IT'], pivoted_data['DE'], interpolate=True,
                        color=color_dict['DE'], alpha=0.2)
@@ -776,10 +776,10 @@ class Visualization:
         # Plot details
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        plt.xlabel('Time', fontsize=40, fontdict=dict(weight='bold'))
-        plt.ylabel('Jobs [FTE]', fontsize=40, fontdict=dict(weight='bold'))
-        plt.xticks(fontsize=24)
-        plt.yticks(fontsize=24)
+        plt.xlabel('Time', fontsize=50, fontdict=dict(weight='bold'))
+        plt.ylabel('Jobs [FTE]', fontsize=50, fontdict=dict(weight='bold'))
+        plt.xticks(fontsize=40)
+        plt.yticks(fontsize=40)
         if title:
             plt.title(f'Total Jobs in {carrier.capitalize()}', fontsize=40)
         plt.xticks(np.linspace(0, 15, 16, dtype=int), np.linspace(2020, 2050, 16, dtype=int))
