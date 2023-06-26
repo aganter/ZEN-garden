@@ -56,7 +56,6 @@ class Technology(Element):
         # non-time series input data
         self.opex_specific_fixed = self.data_input.extract_input_data("opex_specific_fixed", index_sets=[_set_location, "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
         self.capacity_limit = self.data_input.extract_input_data("capacity_limit", index_sets=[_set_location])
-        self.capacity_limit_reduction = self.data_input.extract_input_data("capacity_limit_reduction", index_sets=[_set_location])
         self.carbon_intensity_technology = self.data_input.extract_input_data("carbon_intensity", index_sets=[_set_location])
         # extract existing capacity
         self.set_technologies_existing = self.data_input.extract_set_technologies_existing()
@@ -358,9 +357,6 @@ class Technology(Element):
         optimization_setup.parameters.add_parameter(name="capacity_limit",
             data=optimization_setup.initialize_component(cls, "capacity_limit", index_names=["set_technologies", "set_capacity_types", "set_location"], capacity_types=True),
             doc='Parameter which specifies the capacity limit of technologies')
-        # capacity_limit_reduction of technologies
-        optimization_setup.parameters.add_parameter(name="capacity_limit_reduction", data=optimization_setup.initialize_component(cls, "capacity_limit_reduction", index_names=["set_technologies", "set_capacity_types", "set_location"], capacity_types=True),
-            doc='Parameter which specifies the reduction of the capacity limit of technologies')
         # minimum load relative to capacity
         optimization_setup.parameters.add_parameter(name="min_load",
             data=optimization_setup.initialize_component(cls, "min_load", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], capacity_types=True),
@@ -582,8 +578,8 @@ class TechnologyRules:
         params = self.optimization_setup.parameters
         if params.capacity_limit[tech, capacity_type, loc] != np.inf:
             capacities_existing = Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, time, type_existing_quantity="capacity")
-            if capacities_existing < params.capacity_limit[tech, capacity_type, loc]-params.capacity_limit_reduction[tech, capacity_type, loc]:
-                return (params.capacity_limit[tech, capacity_type, loc]-params.capacity_limit_reduction[tech, capacity_type, loc] >= model.capacity[tech, capacity_type, loc, time])
+            if capacities_existing < params.capacity_limit[tech, capacity_type, loc]:
+                return (params.capacity_limit[tech, capacity_type, loc] >= model.capacity[tech, capacity_type, loc, time])
             else:
                 return (model.capacity_addition[tech, capacity_type, loc, time] == 0)
         else:
