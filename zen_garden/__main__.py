@@ -36,6 +36,7 @@ def run_module(args=None):
                                                                                   "config.analysis['dataset'] attribute of the config file!")
     parser.add_argument("--base_scenarios", required=False, type=str, default=None, help="Selected base scenario. IMPORTANT: This will overwrite the "
                                                                                          "config.systen['base_scenarios'] attribute of the config file!")
+    parser.add_argument("--oos_scenario", required=False, type=str, default=None, help="Selected oos base scenario.")
     args = parser.parse_args(args)
 
     ### import the config

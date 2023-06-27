@@ -21,7 +21,7 @@ from .model.optimization_setup import OptimizationSetup
 from .postprocess.postprocess import Postprocess
 
 
-def main(config, dataset_path=None, base_scenarios=None):
+def main(config, dataset_path=None, base_scenarios=None, oos_scenario=None):
     """
     This function runs the compile.py script that was used in ZEN-Garden prior to the package build, it is executed
     in the __main__.py script
@@ -115,6 +115,8 @@ def main(config, dataset_path=None, base_scenarios=None):
 
         # update input data
         for scenario, elements in config.scenarios.items():
+            if oos_scenario and not scenario.startswith(oos_scenario):
+                continue
             if len(config.scenarios.items()) > 1:
                 additional_scenario_string = f"for scenario {base_scenario}_{scenario} "
             else:
