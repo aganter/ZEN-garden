@@ -326,8 +326,7 @@ class OptimizationSetup(object):
         conduct_tsa = False
         if self.system["use_rolling_horizon"]:
             _time_steps_yearly_entire_horizon = self.energy_system.set_time_steps_yearly_entire_horizon
-            _base_time_steps_horizon = self.energy_system.time_steps.decode_yearly_time_steps(
-                _time_steps_yearly_entire_horizon)
+            _base_time_steps_horizon = self.energy_system.time_steps.decode_yearly_time_steps(_time_steps_yearly_entire_horizon)
             # overwrite time steps of each element
             for element in self.get_all_elements(Element):
                 element.overwrite_time_steps(_base_time_steps_horizon)
@@ -348,6 +347,11 @@ class OptimizationSetup(object):
                     file_name = param
                 # get old param value
                 _old_param = getattr(element, param)
+                if isinstance(_old_param, float):
+                    _index_names = []
+                    _new_param = element.data_input.extract_input_data(file_name, index_sets = [], scenario=scenario)[0]
+                    setattr(element, param, _new_param)
+                    continue
                 _index_names = _old_param.index.names
                 _index_sets = [index_set for index_set, index_name in element.data_input.index_names.items() if index_name in _index_names]
                 _time_steps = None
