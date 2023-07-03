@@ -202,15 +202,9 @@ class Technology(Element):
 
         for id_capacity_existing in model.set_technologies_existing[tech]:
             t_start = cls.get_start_end_time_of_period(optimization_setup, tech, time_step_year, id_capacity_existing=id_capacity_existing, loc=loc)
-            # discount existing capex
-            if type_existing_quantity == "capex":
-                year_construction = max(0, time * system["interval_between_years"] - params.lifetime[tech] + params.lifetime_existing[tech, loc, id_capacity_existing])
-                discount_factor = (1 + discount_rate) ** (time * system["interval_between_years"] - year_construction)
-            else:
-                discount_factor = 1
             # if still available at first base time step, add to list
             if t_start == model.set_base_time_steps.at(1) or t_start == time_step_year:
-                existing_quantity += existing_variable[tech, capacity_type, loc, id_capacity_existing] * discount_factor
+                existing_quantity += existing_variable[tech, capacity_type, loc, id_capacity_existing]
         return existing_quantity
 
     @classmethod
@@ -698,8 +692,8 @@ class TechnologyRules:
                               if params.lifetime[tech] < params.lifetime_existing[tech, loc, existing_time] and params.lifetime[tech] >= params.lifetime_existing[tech, loc, existing_time] - delta_time)
                           for loc in set_country_locations))
 
-            _rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"])
-            if total_capacity_knowledge_existing <= _rounding_value:
+            rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"])
+            if total_capacity_knowledge_existing <= rounding_value:
                 total_capacity_knowledge_existing = 0
 
             total_capacity_knowledge_addition = sum(
@@ -710,8 +704,13 @@ class TechnologyRules:
 
             total_capacity_knowledge = total_capacity_knowledge_existing + total_capacity_knowledge_addition
 
-            total_capacity_all_techs = sum(sum((Technology.get_available_existing_quantity(self.optimization_setup,other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
-                                                + sum(model.capacity_addition[other_tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, end_time)))
+            if time != model.set_time_steps_yearly.at(1):
+                total_capacity_all_techs = sum(sum((Technology.get_available_existing_quantity(self.optimization_setup,other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
+                                                + model.capacity[other_tech, capacity_type, loc, time-1]) #capacit from previous time step
+                                               for other_tech in set_technology if model.set_reference_carriers[other_tech].at(1).startswith(reference_carrier))
+                                                for loc in set_country_locations)
+            else:
+                total_capacity_all_techs = sum(sum(Technology.get_available_existing_quantity(self.optimization_setup,other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
                                                for other_tech in set_technology if model.set_reference_carriers[other_tech].at(1).startswith(reference_carrier))
                                                 for loc in set_country_locations)
 
@@ -760,19 +759,22 @@ class TechnologyRules:
                 total_capacity_knowledge_existing = 0
 
             total_capacity_knowledge_addition = sum(
-                sum(
-                    model.capacity_addition[tech, capacity_type, loc, horizon_time]
+                sum(model.capacity_addition[tech, capacity_type, loc, horizon_time]
                     * (1 - knowledge_depreciation_rate) ** (interval_between_years * (end_time - horizon_time))
                     for horizon_time in range_time)
-                for loc in set_locations
-            )
+                for loc in set_locations)
+
             total_capacity_knowledge = total_capacity_knowledge_existing + total_capacity_knowledge_addition
-            total_capacity_all_techs = sum(
-                sum(
-                    (Technology.get_available_existing_quantity(self.optimization_setup, other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
-                + sum(model.capacity_addition[other_tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, end_time)))
-                for other_tech in set_technology if model.set_reference_carriers[other_tech].at(1) == reference_carrier)
-            for loc in set_locations)
+
+            if time != model.set_time_steps_yearly.at(1):
+                total_capacity_all_techs = sum(sum((Technology.get_available_existing_quantity(self.optimization_setup,other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
+                                                + model.capacity[other_tech, capacity_type, loc, time-1]) #capacit from previous time step
+                                               for other_tech in set_technology if model.set_reference_carriers[other_tech].at(1).startswith(reference_carrier))
+                                                for loc in set_locations)
+            else:
+                total_capacity_all_techs = sum(sum(Technology.get_available_existing_quantity(self.optimization_setup,other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
+                                                    for other_tech in set_technology if model.set_reference_carriers[other_tech].at(1).startswith(reference_carrier))
+                                                   for loc in set_locations)
 
             return (sum(model.capacity_investment[tech, capacity_type, loc, time] for loc in set_locations) <= (
                         (1 + params.max_diffusion_rate[tech, time]) ** interval_between_years - 1) * total_capacity_knowledge
