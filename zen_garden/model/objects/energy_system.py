@@ -339,7 +339,7 @@ class EnergySystemRules:
         # get parameter object
         params = self.optimization_setup.parameters
         if params.carbon_emissions_limit[year] != np.inf:
-            return (params.carbon_emissions_limit[year] >= model.carbon_emissions_total[year] - model.carbon_emissions_overshoot[year])
+            return (params.carbon_emissions_limit[year] *1e-2 >= model.carbon_emissions_total[year]*1e-2 - model.carbon_emissions_overshoot[year]*1e-2)
         else:
             return pe.Constraint.Skip
 

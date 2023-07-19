@@ -692,7 +692,7 @@ class TechnologyRules:
                               if params.lifetime[tech] < params.lifetime_existing[tech, loc, existing_time] and params.lifetime[tech] >= params.lifetime_existing[tech, loc, existing_time] - delta_time)
                           for loc in set_country_locations))
 
-            rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"])
+            rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"]+2)
             if total_capacity_knowledge_existing <= rounding_value:
                 total_capacity_knowledge_existing = 0
 
@@ -754,7 +754,7 @@ class TechnologyRules:
                 for loc in set_locations
             )
 
-            _rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"])
+            _rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"]+2)
             if total_capacity_knowledge_existing <= _rounding_value:
                 total_capacity_knowledge_existing = 0
 
