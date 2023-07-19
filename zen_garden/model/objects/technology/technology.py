@@ -750,9 +750,8 @@ class TechnologyRules:
                 sum(
                     params.capacity_existing[tech, capacity_type, loc, existing_time]
                     * (1 - knowledge_depreciation_rate) ** (delta_time + params.lifetime[tech] - params.lifetime_existing[tech, loc, existing_time])
-                    for existing_time in model.set_technologies_existing[tech])
-                for loc in set_locations
-            )
+                for existing_time in model.set_technologies_existing[tech] if params.lifetime[tech] >= params.lifetime_existing[tech, loc, existing_time])
+                for loc in set_locations)
 
             _rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"]+2)
             if total_capacity_knowledge_existing <= _rounding_value:
