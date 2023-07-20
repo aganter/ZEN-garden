@@ -498,8 +498,8 @@ class Technology(Element):
             index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_country_nodes", "set_time_steps_yearly"], optimization_setup), rule=rules.constraint_technology_diffusion_limit_rule,
             doc="Limits the newly built capacity by the existing knowledge stock")
         # limit diffusion rate
-        optimization_setup.constraints.add_constraint(model, name="constraint_technology_diffusion_limit_total", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
-            rule=rules.constraint_technology_diffusion_limit_total_rule, doc="Limits the newly built capacity by the existing knowledge stock")
+        # optimization_setup.constraints.add_constraint(model, name="constraint_technology_diffusion_limit_total", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+        #     rule=rules.constraint_technology_diffusion_limit_total_rule, doc="Limits the newly built capacity by the existing knowledge stock")
         # limit max load by installed capacity
         optimization_setup.constraints.add_constraint(model, name="constraint_capacity_factor", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], optimization_setup),
             rule=rules.constraint_capacity_factor_rule, doc='limit max load by installed capacity')
