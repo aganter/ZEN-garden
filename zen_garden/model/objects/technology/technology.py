@@ -747,11 +747,17 @@ class TechnologyRules:
             delta_time = interval_between_years * (end_time - model.set_time_steps_yearly.at(1))
             # sum up all existing capacities that ever existed and convert to knowledge stock
             total_capacity_knowledge_existing = sum(
+                # previously existing capacity
                 sum(
                     params.capacity_existing[tech, capacity_type, loc, existing_time]
                     * (1 - knowledge_depreciation_rate) ** (delta_time + params.lifetime[tech] - params.lifetime_existing[tech, loc, existing_time])
-                for existing_time in model.set_technologies_existing[tech] if params.lifetime[tech] >= params.lifetime_existing[tech, loc, existing_time])
-                for loc in set_locations)
+                        for existing_time in model.set_technologies_existing[tech] if params.lifetime[tech] >= params.lifetime_existing[tech, loc, existing_time])
+                # existing capacity that is installed at future point
+                + sum(params.capacity_existing[tech, capacity_type, loc, existing_time]
+                        for existing_time in model.set_technologies_existing[tech] if params.lifetime[tech] < params.lifetime_existing[tech, loc, existing_time]
+                      and params.lifetime[tech] >= params.lifetime_existing[tech, loc, existing_time] - delta_time)
+                      for loc in set_locations)
+
 
             _rounding_value = 10 ** (-self.optimization_setup.solver["rounding_decimal_points"]+2)
             if total_capacity_knowledge_existing <= _rounding_value:
@@ -767,7 +773,7 @@ class TechnologyRules:
 
             if time != model.set_time_steps_yearly.at(1):
                 total_capacity_all_techs = sum(sum((Technology.get_available_existing_quantity(self.optimization_setup,other_tech, capacity_type, loc, time, type_existing_quantity="capacity")
-                                                + model.capacity[other_tech, capacity_type, loc, time-1]) #capacit from previous time step
+                                                + model.capacity[other_tech, capacity_type, loc, time-1]) #capacity from previous time step
                                                for other_tech in set_technology if model.set_reference_carriers[other_tech].at(1).startswith(reference_carrier))
                                                 for loc in set_locations)
             else:
