@@ -1,0 +1,57 @@
+{
+  "reducedBM_min": {
+    "wet_biomass": [
+      "availability_import"
+    ],
+    "dry_biomass": [
+      "availability_import"
+    ],
+    "hydrogen": [
+      "demand"
+    ]
+  },
+  "reducedBM_low": {
+    "wet_biomass": [
+      "availability_import"
+    ],
+    "dry_biomass": [
+      "availability_import"
+    ],
+    "hydrogen": [
+      "demand"
+    ]
+  },
+  "reducedBM_med": {
+    "wet_biomass": [
+      "availability_import"
+    ],
+    "dry_biomass": [
+      "availability_import"
+    ],
+    "hydrogen": [
+      "demand"
+    ]
+  },
+  "reducedBM_high": {
+    "wet_biomass": [
+      "availability_import"
+    ],
+    "dry_biomass": [
+      "availability_import"
+    ],
+    "hydrogen": [
+      "demand"
+    ]
+  },
+  "reducedBM_max": {
+    "wet_biomass": [
+      "availability_import"
+    ],
+    "dry_biomass": [
+      "availability_import"
+    ],
+    "hydrogen": [
+      "demand"
+    ]
+  }
+}

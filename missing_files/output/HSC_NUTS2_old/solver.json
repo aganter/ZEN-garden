@@ -1,0 +1,27 @@
+{
+  "name": "gurobi_persistent",
+  "solver_options": {
+    "logfile": ".//outputs//logs//pyomoLogFile.log",
+    "MIPGap": null,
+    "TimeLimit": null,
+    "Method": 3,
+    "NumericFocus": 2,
+    "ScaleFlag": 2
+  },
+  "use_symbolic_labels": true,
+  "analyze_numerics": false,
+  "immutable_unit": [],
+  "range_unit_exponents": {
+    "min": -1,
+    "max": 1,
+    "step_width": 1
+  },
+  "rounding_decimal_points": 5,
+  "rounding_decimal_points_ts": 3,
+  "verbosity": true,
+  "add_duals": false,
+  "linear_regression_check": {
+    "eps_intercept": 0.1,
+    "epsRvalue": 0.99999
+  }
+}

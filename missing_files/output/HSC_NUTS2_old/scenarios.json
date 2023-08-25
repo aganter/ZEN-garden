@@ -1,0 +1,167 @@
+{
+  "noBM_min": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "noBM_bau": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "noBM_max": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "noBM_td": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "noBM_h2push": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "referenceEU_min": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "referenceEU_bau": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "referenceEU_max": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "referenceEU_td": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "referenceEU_h2push": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "reference_min": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "reference_bau": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "reference_max": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "reference_td": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  },
+  "reference_h2push": {
+    "wet_biomass": [
+      "availability_carrier_import"
+    ],
+    "dry_biomass": [
+      "availability_carrier_import"
+    ],
+    "hydrogen": [
+      "demand_carrier"
+    ]
+  }
+}

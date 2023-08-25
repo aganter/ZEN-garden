@@ -1,0 +1,65 @@
+{
+  "objective": "total_cost",
+  "sense": "minimize",
+  "discount_rate": 0.06,
+  "transport_distance": "Euclidean",
+  "subsets": {
+    "set_carriers": [
+      "set_conditioning_carriers"
+    ],
+    "set_technologies": [
+      "set_conversion_technologies",
+      "set_transport_technologies",
+      "set_storage_technologies"
+    ],
+    "set_conversion_technologies": [
+      "set_conditioning_technologies"
+    ]
+  },
+  "header_data_inputs": {
+    "set_nodes": "node",
+    "set_country_nodes": "country",
+    "set_edges": "edge",
+    "set_location": "location",
+    "set_time_steps": "time",
+    "set_time_steps_operation": "time_operation",
+    "set_time_steps_storage_level": "time_storage_level",
+    "set_time_steps_yearly": "year",
+    "set_time_steps_yearly_entire_horizon": "year_entire_horizon",
+    "set_carriers": "carrier",
+    "set_input_carriers": "carrier",
+    "set_output_carriers": "carrier",
+    "set_dependent_carriers": "carrier",
+    "set_conditioning_carriers": "carrier",
+    "set_conditioning_carrier_parents": "carrier",
+    "set_elements": "element",
+    "set_conversion_technologies": "technology",
+    "set_transport_technologies": "technology",
+    "set_storage_technologies": "technology",
+    "set_technologies": "technology",
+    "set_technologies_existing": "technology_existing",
+    "set_capacity_types": "capacity_type"
+  },
+  "time_series_aggregation": {
+    "clusterMethod": "hierarchical",
+    "solver": "gurobi",
+    "hoursPerPeriod": 1,
+    "extremePeriodMethod": "None",
+    "rescaleClusterPeriods": false,
+    "representationMethod": "durationRepresentation",
+    "resolution": 1,
+    "segmentation": false,
+    "noSegments": 1
+  },
+  "postprocess": false,
+  "folder_output": "/cluster/home/aganter/ZEN-garden/data/outputs",
+  "overwrite_output": true,
+  "output_format": "h5",
+  "write_results_yml": false,
+  "max_output_size_mb": 500,
+  "folder_name_system_specification": "system_specification",
+  "earliest_year_of_data": 1900,
+  "dataset": "/cluster/home/aganter/ZEN-garden/data/HSC_NUTS2_paper2",
+  "capacity_limit_country": false,
+  "use_capacities_existing": true
+}
