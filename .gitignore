@@ -181,3 +181,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+*.svg
+*.pdf
+*.csv

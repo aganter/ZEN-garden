@@ -45,6 +45,7 @@ class Visualization:
         self.set_gdf()
         self.set_pts()
         self.set_population()
+        self.set_job_ratios()
 
     def set_folder_figures(self, scenario):
         # create folder for figures
@@ -148,13 +149,17 @@ class Visualization:
         gdf_merged = gdf.merge(dataframe, left_index=True, right_index=True, how='right')
         return gdf_merged
 
+    def set_job_ratios(self, folder="employment_data", filename="job_ratio_results", type="om"):
+        """set job ratios"""
+        filename=filename+"_"+type+".xlsx"
+        path_to_data = os.path.join(folder, filename)
+        self.df_job_ratios = pd.read_excel(path_to_data)
+
     def get_job_ratio(self, tech, calc_method='mean', type="om"):
         """takes tech and returns corresponding job ratio in FTE/GW or FTE/(GW*km) with chosen calc method
         :param tech: name of technology
         :param calc_method: method of using employment data"""
-        if not hasattr(self,"df_job_ratios"):
-            path_to_data = os.path.join("employment_data", f"job_ratio_results_{type}.xlsx")
-            self.df_job_ratios = pd.read_excel(path_to_data)
+        self.set_job_ratios(type=type)
         if tech.endswith("CCS"):
             tech = tech.split("_")[0]
         filtered_df = self.df_job_ratios[self.df_job_ratios['tech_code'] == tech]
@@ -394,44 +399,49 @@ class Visualization:
 
     def compute_jobs_per_tech(self, scenario, per_capacity=False, per_technology=True, calc_method="mean", year=None,):
         """ compute jobs per tech"""
-        techs = self.system["set_conversion_technologies"]
-        jobs = self.get_total_jobs(scenario, techs, per_capacity, per_technology, calc_method, year)
-        # add jobs for renewables
-        renewables = [tech for tech in techs if "pv" in tech or "wind" in tech]
-        base = self.results.get_total("flow_conversion_output", scenario=scenario).stack() / 8760
-        base.index.names = base.index.names[:-1] + ["year"]
-        base = base.groupby(["carrier", "year", "node", "technology"]).sum()
-        base = base.loc["electricity"].groupby(["year", "node", "technology"]).sum().unstack("technology")
-        # compute total jobs per tech
-        renewables = [tech for tech in renewables if tech in base.columns]
-        base = base[renewables]
-        for tech in renewables:
-            job_ratio = self.get_job_ratio(tech, calc_method=calc_method)
-            base[tech] *= job_ratio  # total_number of jobs
-        jobs = jobs.join(base)
+        jobs = self.get_total_jobs(scenario, [], per_capacity, per_technology, calc_method, year)
         file_path = os.path.join(self.folder_figures, f"jobs_per_region_{calc_method}.csv")
         jobs.join(self.population, how='outer').to_csv(file_path, index=True)
+        # add country index
+        jobs["country"] = [idx[:2] for idx in jobs.index.get_level_values("node")]
+        jobs = jobs.set_index("country",append=True)
+        jobs["electrolysis"].groupby(["country", "year"]).sum().unstack("country").plot()
+        plt.show()
+        a=1
 
-    def get_total_jobs(self, scenario, techs, per_capacity=False, per_technology=True, calc_method="mean", year=None):
+    def get_total_jobs(self, scenario, techs = list(), per_capacity=False, per_technology=True, calc_method="mean", year=None):
         """ for a given sceanrio, get total jobs for each technology based on capacity or output flow"""
         if not isinstance(techs,list):
             techs = [techs]
+        if len(techs) == 0:
+            techs = self.df_job_ratios["tech_code"].unique()
         # get raw data
-        if per_capacity:
-            base = self.results.get_total("capacity", scenario=scenario).stack()
-            base.index.names = base.index.names[:-1] + ["year"]
-            base = base.rename(index={"location":"node"})
-            #TODO drop edges!!!
-            base = base.groupby(["location", "year", "technology", ]).sum().unstack("technology")
-        else: 
-            base = self.results.get_total("flow_conversion_output", scenario=scenario).stack() / 8760
-            base.index.names = base.index.names[:-1] + ["year"]
-            base = base.groupby(["carrier", "year", "node","technology"]).sum()
-            carriers=["hydrogen"]
-            if "biomethane" in base.index.unique("carrier"):
-                carriers.append("biomethane")
-            base = base.loc[carriers].groupby(["year", "node","technology"]).sum().unstack("technology")
+        round = 2
+        base = (self.results.get_total("capacity", scenario=scenario).stack()).round(round)
+        base.index.names = base.index.names[:-1] + ["year"]
+        base = base.groupby(["year", "location", "technology"]).sum()
+        base.index.names = ["year", "node", "technology"]
+        if not per_capacity:
+            output = (self.results.get_total("flow_conversion_output", scenario=scenario).stack() / 8760).round(round)
+            output.index.names = output.index.names[:-1] + ["year"]
+            output = output.groupby(["technology","carrier", "year", "node"]).sum()
+            reference_carriers=self.results._to_df(self.results.results[scenario][None]["sets"]["set_reference_carriers"]["dataframe"])
+            for tech in output.index.unique("technology"):
+                c = [c for c in output.loc[tech].index.unique("carrier") if c != reference_carriers.loc[tech].value]
+                output.loc[tech, c] = 0
+            output = output.groupby(["year", "node","technology"]).sum().round(4)
+            transport = (self.results.get_total("flow_transport", scenario=scenario).stack() / 8760).round(round)
+            transport.index.names = transport.index.names[:-1] + ["year"]
+            transport = transport.groupby(["year", "edge", "technology"]).sum()
+            transport.index.names = ["year", "node", "technology"]
+            flows = pd.concat([output,transport]) #.round(3)
+            base = flows
+            base = base.loc[flows.index][flows>0]
         # compute total jobs per tech
+        # base = base.to_frame()
+        # base["country"] = [idx[:2] for idx in base.index.get_level_values("node")]
+        # base = base.set_index("country",append=True)
+        base = base.unstack("technology").fillna(0)
         techs = [tech for tech in techs if tech in base.columns]
         base = base[techs]
         for tech in techs:
@@ -519,7 +529,7 @@ class Visualization:
         plt.title(f'{country.upper()}', fontsize=40)
         plot_name = f'{self.folder_figures}/{country}_{calc_method}_{nuts}.svg'
         plt.savefig(plot_name, format='svg', dpi=600, transparent=True)
-        plt.show()
+        # plt.show()
 
     def plot_hydrogen_jobs(self, techs, year=0, scenario=None, calc_method='mean', nuts=2, rel=False, plot='all', max_val=0):
         """loop over all hydrogen producing technologies sum and plot total"""
@@ -622,7 +632,7 @@ class Visualization:
             #         ax.scatter(x, dataframe.iloc[i][_s], s=dataframe.iloc[i][column], c="none", ec="k")
             plt.savefig(os.path.join(self.folder_figures,f"bubble_plot_quantile_{q}_{calc_method}.pdf"), transparent=True)
             plt.savefig(os.path.join(self.folder_figures, f"bubble_plot_quantile_{q}_{calc_method}.pdf"), transparent=True)
-            plt.show()
+            # plt.show()
 
 
     def plot_jobs_transport(self, tech, year, scenario=None, calc_method='mean', nuts=2):
@@ -824,7 +834,7 @@ class Visualization:
         plot_name = f'{self.folder_figures}/europe_{nuts}_{column}_{year}_{calc_method}'
         fig.savefig(f'{plot_name}.svg', format='svg', dpi=200, transparent=True)
         fig.savefig(f'{plot_name}.pdf', format='pdf', dpi=200, transparent=True)
-        plt.show()
+        # plt.show()
 
     def plot_time_scale(self, dataframe, color_dict, carrier, title=False, total_jobs=False, calc_method=""):
         """plots dataframe over time, with colordict"""
@@ -880,9 +890,11 @@ class Visualization:
         plt.ylabel("Jobs [FTE]")
         max_jobs = pivoted_data.max().max()
         if len(str(int(max_jobs)))>3:
-            digits = 3
+            digits = -3
         else:
-            digits = len(str(int(max_jobs)))
+            digits = -len(str(int(max_jobs)))-1
+        scale = 10 ** digits
+        max_jobs = np.ceil(max_jobs*scale)/scale
         ax.set_ylim(0,max_jobs.round(-digits))
         ax.set_xlim(2022,2050)
         if title:
@@ -891,7 +903,7 @@ class Visualization:
         plot_name = f'{self.folder_figures}/time_total_{carrier}_{calc_method}'
         plt.savefig(f'{plot_name}.svg', transparent=True)
         plt.savefig(f'{plot_name}.pdf', transparent=True)
-        plt.show()
+        # plt.show()
 
     def plot_europe_maps(self, dataframe, column, legend_label=None, year=0, nuts=2, diverging=False,
                          title=True, max_val=0, calc_method=""):
@@ -978,7 +990,7 @@ class Visualization:
         plot_name = f'{self.folder_figures}/europecombo_{nuts}_{column}_{calc_method}'
         fig.savefig(f'{plot_name}.svg', format='svg', dpi=600, transparent=True)
         fig.savefig(f'{plot_name}.pdf', format='pdf', dpi=200, transparent=True)
-        plt.show()
+        # plt.show()
 
     def plot_pie_chart(self, dataframe, year, calc_method=""):
         """Make pie chart of dataframe"""
@@ -1024,7 +1036,7 @@ class Visualization:
         plot_name = f'{self.folder_figures}/pie_chart_{year}_{calc_method}'
         fig.savefig(f'{plot_name}.pdf', format='pdf', dpi=200, transparent=True)
         fig.savefig(f'{plot_name}.svg', format='svg', dpi=200, transparent=True)
-        plt.show()
+        # plt.show()
 
     def lorenz_plot(self, dataframe, column, year, title=False, calc_method=""):
         """Lorenz curve plot of dataframe"""
@@ -1078,7 +1090,7 @@ class Visualization:
         plt.gca().spines['left'].set_visible(False)
         plt.savefig(f'{self.folder_figures}/lorenz_{year}_{calc_method}.pdf', format='pdf', dpi=200, transparent=True)
         plt.savefig(f'{self.folder_figures}/lorenz_{year}_{calc_method}.svg', format='svg', dpi=200, transparent=True)
-        plt.show()
+        # plt.show()
 
     def gini_plot(self, dataframe, column, year, calc_method=""):
         """plot gini coefficient for all NUTS0 regions"""
@@ -1134,12 +1146,12 @@ class Visualization:
         plt.gca().spines['right'].set_visible(False)
         plt.savefig(f'{self.folder_figures}/gini_{year}_{calc_method}.pdf', format='pdf', dpi=200, transparent=True)
         plt.savefig(f'{self.folder_figures}/gini_{year}_{calc_method}.svg', format='svg', dpi=200, transparent=True)
-        plt.show()
+        # plt.show()
 
 
 if __name__ == "__main__":
     datasets = ["HSC_NUTS2_electrolysis"]
-    scenarios = ["scenario_referenceBM_med","scenario_referenceBM_high","scenario_referenceBM_low", ]  # to load more than one scenario, pass a list
+    scenarios = [f"scenario_{h}" for h in ["med", "low", "high", "min", "max",]] #"scenario_referenceBM_low",  # to load more than one scenario, pass a list
     techs = ['electrolysis', ] #'SMR', 'gasification', 'anaerobic_digestion','SMR_CCS', 'gasification_CCS'
     years = [0, 4, 14]
 
