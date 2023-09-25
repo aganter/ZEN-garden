@@ -37,11 +37,13 @@ class ConversionTechnology(Technology):
         """ retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes """
         # get attributes from class <Technology>
         super().store_input_data()
+        # time steps
+        set_time_steps_yearly = self.energy_system.set_time_steps_yearly
         # define input and output carrier
         self.input_carrier = self.data_input.extract_conversion_carriers()["input_carrier"]
         self.output_carrier = self.data_input.extract_conversion_carriers()["output_carrier"]
         self.energy_system.set_technology_of_carrier(self.name, self.input_carrier + self.output_carrier)
-        self.capacity_limit_country = self.data_input.extract_input_data("capacity_limit_country", index_sets=["set_country_nodes","set_time_steps_yearly"])
+        self.capacity_limit_country = self.data_input.extract_input_data("capacity_limit_country", index_sets=["set_country_nodes","set_time_steps_yearly"], time_steps=set_time_steps_yearly)
         # check if reference carrier in input and output carriers and set technology to correspondent carrier
         assert self.reference_carrier[0] in (self.input_carrier + self.output_carrier), \
             f"reference carrier {self.reference_carrier} of technology {self.name} not in input and output carriers {self.input_carrier + self.output_carrier}"
