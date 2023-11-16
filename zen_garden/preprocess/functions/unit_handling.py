@@ -104,7 +104,8 @@ class UnitHandling:
         dim_vector = pd.Series(index=self.dim_matrix.index, data=0)
         _missing_dim = set(dim_input.keys()).difference(dim_vector.keys())
         assert len(_missing_dim) == 0, f"No base unit defined for dimensionalities <{_missing_dim}>"
-        dim_vector[list(dim_input.keys())] = list(dim_input.values())
+        if not list(dim_input.values()) == []:
+            dim_vector[list(dim_input.keys())] = list(dim_input.values())
         # calculate dimensionless combined unit (e.g., tons and kilotons)
         combined_unit = self.ureg(input_unit).units
         # if unit (with a different multiplier) is already in base units

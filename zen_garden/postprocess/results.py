@@ -20,6 +20,7 @@ import os
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
+from io import StringIO
 
 from zen_garden import utils
 from zen_garden.model.objects.time_steps import TimeStepsDicts
@@ -243,7 +244,7 @@ class Results(object):
         else:
             json_dump = json.dumps(string)
 
-        return pd.read_json(json_dump, orient="table")
+        return pd.read_json(StringIO(json_dump), orient="table")
 
     @classmethod
     def load_sets(cls, path, lazy=False):

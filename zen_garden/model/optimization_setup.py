@@ -20,7 +20,8 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pe
 from pyomo.opt import TerminationCondition
-from pyomo.core.expr.current import decompose_term
+# from pyomo.core.expr.current import decompose_term
+from pyomo.core.expr import decompose_term
 
 from .objects.element import Element
 from .objects.energy_system import EnergySystem

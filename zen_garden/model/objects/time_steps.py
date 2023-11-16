@@ -155,7 +155,8 @@ class TimeStepsDicts(object):
     def set_time_steps_operation2year_both_dir(self,element_name,sequence_operation,sequence_yearly):
         """ calculates the conversion of operational time steps to invest/yearly time steps """
         # time_steps_combi = np.unique(np.vstack([sequence_operation, sequence_yearly]), axis=1)
-        time_steps_combi = np.vstack(pd.unique(list(zip(sequence_operation, sequence_yearly)))).T
+        #time_steps_combi = np.vstack(pd.unique(list(zip(sequence_operation, sequence_yearly)))).T
+        time_steps_combi = np.vstack(list(dict.fromkeys(list(zip(sequence_operation, sequence_yearly))))).T
         time_steps_operation2year = {key: val for key, val in zip(time_steps_combi[0, :], time_steps_combi[1, :])}
         self.set_time_steps_operation2year(element_name, time_steps_operation2year)
         # calculate year2operation

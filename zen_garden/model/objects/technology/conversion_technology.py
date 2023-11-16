@@ -283,6 +283,14 @@ class ConversionTechnology(Technology):
         optimization_setup.constraints.add_constraint(model, name="constraint_dependent_flow_coupling",
             index_sets=cls.create_custom_set(["set_conversion_technologies", "set_no_on_off", "set_dependent_carriers", "set_location", "set_time_steps_operation"], optimization_setup),
             rule=rules.constraint_dependent_flow_coupling_rule, doc="couples the real dependent flow variables with the approximated variables")
+        # retrofiting
+        if "set_retrofitting_technologies" in optimization_setup.system.keys():
+            optimization_setup.constraints.add_constraint(model, name="constraint_retrofitting_flow_coupling", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_location","set_time_steps_operation"], optimization_setup),
+                                                          rule=rules.constraint_retrofitting_flow_coupling_rule, doc="couples the real dependent flow variables with the approximated variables")
+            optimization_setup.constraints.add_constraint(model, name="constraint_technology_capacity_limit_retrofitting", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], optimization_setup),
+                                                          rule=rules.constraint_technology_capacity_limit_retrofitting_rule, doc="couples the real dependent flow variables with the approximated variables")
+
+
         # country-specific capacity limit for conversion technologies
         if optimization_setup.analysis["capacity_limit_country"]:
             optimization_setup.constraints.add_constraint(model, name="constraint_capacity_limit_country",
@@ -402,6 +410,67 @@ class ConversionTechnologyRules:
             return (model.flow_conversion_input[tech, reference_carrier, node, time] == model.flow_approximation_reference[tech, dependent_carrier, node, time])
         else:
             return (model.flow_conversion_output[tech, reference_carrier, node, time] == model.flow_approximation_reference[tech, dependent_carrier, node, time])
+
+    def constraint_retrofitting_flow_coupling_rule(self, model, tech_add, node, time):
+        """ couples reference flow variables when retrofitting technologies
+        tech_add: tech coupled with technology that is retrofitted (e.g. carbon_capture unit)
+        tech_retrofit: existing technology capacity that is retrofitted (e.g. SMR)
+        tech_ref: reference technology (e.g. SMR-CCS)"""
+        params = self.optimization_setup.parameters
+        if tech_add in self.optimization_setup.system["set_retrofitting_technologies"].keys():
+            tech_retrofit = self.optimization_setup.system["set_retrofitting_technologies"][tech_add]["retrofit"]
+            tech_ref = self.optimization_setup.system["set_retrofitting_technologies"][tech_add]["reference"]
+            # get reference carriers
+            reference_carrier_tech_add = model.set_reference_carriers[tech_add].at(1)
+            reference_carrier_retrofit = model.set_reference_carriers[tech_retrofit].at(1) #SMR
+            reference_carrier_ref_tech = model.set_reference_carriers[tech_ref].at(1) #SMR_CCS
+            # get conversion factor
+            assert reference_carrier_ref_tech==reference_carrier_retrofit, "reference carrier of retrofitting technology must be the same as the reference carrier of the retrofitted technology"
+            conversion_factor = params.conversion_factor[tech_ref, reference_carrier_tech_add, node, time]
+            # flow conversion for ref_tech
+            if reference_carrier_ref_tech in model.set_input_carriers[tech_retrofit]:
+                flow_conversion_retrofit = model.flow_conversion_input[tech_retrofit, reference_carrier_ref_tech, node, time]
+            else:
+                flow_conversion_retrofit = model.flow_conversion_output[tech_retrofit, reference_carrier_ref_tech, node, time]
+            # flow conversion for tech_add
+            if reference_carrier_tech_add in model.set_input_carriers[tech_add]:
+                flow_conversion_add = model.flow_conversion_input[tech_add, reference_carrier_tech_add, node, time]
+            else:
+                flow_conversion_add = model.flow_conversion_output[tech_add, reference_carrier_tech_add, node, time]
+
+                return (flow_conversion_retrofit * conversion_factor >= flow_conversion_add)
+        return pe.Constraint.Skip
+
+
+
+    def constraint_technology_capacity_limit_retrofitting_rule(self, model, tech_add, capacity_type, node, time):
+        """limited reference carrier flow of retrofit_technology to technologies that can be retrofitted"""
+        # get parameter object
+        params = self.optimization_setup.parameters
+        if tech_add in self.optimization_setup.system["set_retrofitting_technologies"]:
+            tech_retrofit = self.optimization_setup.system["set_retrofitting_technologies"][tech_add]["retrofit"]
+            tech_ref = self.optimization_setup.system["set_retrofitting_technologies"][tech_add]["reference"]
+            # get reference carriers
+            reference_carrier_tech_add = model.set_reference_carriers[tech_add].at(1)
+            reference_carrier_retrofit = model.set_reference_carriers[tech_retrofit].at(1)  # SMR
+            reference_carrier_ref_tech = model.set_reference_carriers[tech_ref].at(1)  # SMR_CCS
+            # get conversion factor
+            assert reference_carrier_ref_tech == reference_carrier_retrofit, "reference carrier of retrofitting technology must be the same as the reference carrier of the retrofitted technology"
+            conversion_factor = params.conversion_factor[tech_ref, reference_carrier_tech_add, node, time]
+            # get invest time step and determine existing capacities
+            time_step_year = self.optimization_setup.energy_system.time_steps.convert_time_step_operation2year(tech_retrofit, time)
+            capacities_existing = Technology.get_available_existing_quantity(self.optimization_setup, tech_retrofit, capacity_type, node, time_step_year, type_existing_quantity="capacity")
+            # get max load
+            max_load = params.max_load[tech_retrofit, capacity_type, node, time]
+            # flow conversion for tech
+            if reference_carrier_tech_add in model.set_input_carriers[tech_add]:
+                flow_conversion_add = model.flow_conversion_input[tech_add, reference_carrier_tech_add, node, time]
+            else:
+                flow_conversion_add = model.flow_conversion_output[tech_add, reference_carrier_tech_add, node, time]
+            return (capacities_existing * max_load * conversion_factor  >= flow_conversion_add)
+        else:
+            return pe.Constraint.Skip
+
 
     def constraint_dependent_flow_coupling_rule(self, disjunct, tech, dependent_carrier, node, time):
         """ couples dependent flow variables based on modeling technique"""

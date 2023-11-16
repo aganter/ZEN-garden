@@ -49,7 +49,7 @@ class Postprocess:
         self.constraints = model.constraints
 
         # get name or directory
-        self.model_name = model_name
+        self.model_name = model_name+model.analysis["results_folder"]
         self.name_dir = pathlib.Path(self.analysis["folder_output"]).joinpath(self.model_name)
 
         # deal with the subfolder
