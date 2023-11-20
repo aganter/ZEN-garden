@@ -109,6 +109,11 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[])
 
+        # anyaxie
+        # segments for pwa of cumulative cost
+        # todo: Remove hardcode
+        self.set_pwa_segments =[0,1]
+
     def calculate_edges_from_nodes(self):
         """ calculates set_nodes_on_edges from set_nodes
 
@@ -195,6 +200,12 @@ class EnergySystem:
         # yearly time steps of entire optimization horizon
         self.optimization_setup.sets.add_set(name="set_time_steps_yearly_entire_horizon", data=self.set_time_steps_yearly_entire_horizon, doc="Set of yearly time-steps of entire optimization horizon")
 
+        # anyaxie
+        # segments for pwa of cumulative cost
+        # todo: Remove hardcode with 3 segements, use user input and write function to create this self attribute of segments
+        self.optimization_setup.sets.add_set(name="set_pwa_segments", data=self.set_pwa_segments, doc="Set of segments for pwa of cumulative cost")
+
+
     def construct_params(self):
         """ constructs the pe.Params of the class <EnergySystem> """
 
@@ -278,6 +289,7 @@ class EnergySystem:
         constraints.add_constraint_block(model, name="constraint_cost_total", constraint=self.rules.constraint_cost_total_block(), doc="total cost of energy system")
         # net_present_cost
         constraints.add_constraint_rule(model, name="constraint_net_present_cost", index_sets=sets["set_time_steps_yearly"], rule=self.rules.constraint_net_present_cost_rule, doc="net_present_cost of energy system")
+
 
     def construct_objective(self):
         """ constructs the pe.Objective of the class <EnergySystem> """
@@ -605,3 +617,4 @@ class EnergySystemRules(GenericRule):
         """
         # TODO implement objective functions for risk
         return None
+

@@ -494,6 +494,28 @@ class Technology(Element):
         variables.add_variable(model, name="carbon_emissions_technology_total", index_sets=sets["set_time_steps_yearly"],
             doc="total carbon emissions for operating technology at location l and time t")
 
+        # anyaxie
+        # todo: Add set_capacity_types
+        # sum of capacities over all nodes
+        variables.add_variable(model, name="capacity_all_nodes", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="capacity of technology at all nodes")
+        # sum of yearly capex over all nodes
+        variables.add_variable(model, name="capex_yearly_all_nodes", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="yearly capex of technology at all nodes")
+        # sum of yearly cumulative cost over all nodes
+        variables.add_variable(model, name="cumulative_cost_yearly_all_nodes", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="yearly cumulative cost of technology at all nodes")
+
+        # segement selection binary variables
+        variables.add_variable(model, name="segment_selection", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_pwa_segments"], optimization_setup),
+            binary=True, doc="segment selection binary variable")
+        # segment capacity
+        # todo: Set this as the same upper bound as technology capacity of all nodes
+        variables.add_variable(model, name="segment_capacity", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_pwa_segments"], optimization_setup),
+            bounds = (0,np.inf), doc="capacity of technology in each segment")
+
+
+
         # install technology
         # Note: binary variables are written into the lp file by linopy even if they are not relevant for the optimization,
         # which makes all problems MIPs. Therefore, we only add binary variables, if really necessary. Gurobi can handle this
@@ -574,6 +596,22 @@ class Technology(Element):
         # total carbon emissions of technologies
         constraints.add_constraint_block(model, name="constraint_carbon_emissions_technology_total", constraint=rules.constraint_carbon_emissions_technology_total_block(),
                                          doc="total carbon emissions for each technology at each location and time step")
+
+
+        # anyaxie
+        # pwa approximation for total cumulative cost
+        constraints.add_constraint_block(model, name="constraint_cumulative_cost_yearly",
+                                         constraint=rules.constraint_approximate_total_cumulative_cost_block(),
+                                         doc="pwa approximation for total cumulative cost")
+        # sum of capacities as difference of total cumulative cost over all nodes
+        constraints.add_constraint_block(model, name="constraint_capex_yearly_all_nodes",
+                                         constraint=rules.constraint_capex_yearly_all_nodes_block(),
+                                         doc="yearly capex of technology at all nodes")
+        # segment selection
+        constraints.add_constraint_block(model, name="constraint_segment_selection",
+                                         constraint=rules.constraint_segment_selection_block(),
+                                         doc="segment selection binary variable")
+
 
         # disjunct if technology is on
         # the disjunction variables
@@ -1521,3 +1559,123 @@ class TechnologyRules(GenericRule):
                                                   model=self.model,
                                                   index_values=index.get_unique(["set_technologies"]),
                                                   index_names=["set_technologies"])
+
+    # anyaxie
+    def constraint_approximate_total_cumulative_cost_block(self):
+        """Approximate total cumulative cost for each technology.
+
+        .. math::
+            TC_{n,y} = \sum_{i\in\mathcal{I}}\sum_{l=1}^L a_{i,l} Z_{i,n,y,l} + b_{i,l} X_{i,n,y,l}
+
+
+        :return: List of constraints
+        """
+
+        # todo: Implement parameters a and b
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_time_steps_yearly", "set_pwa_segments"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we oop over all technologies and timesteps for the conditions and vectorize over the rest
+
+        # Initialize an empty list to store the constraints
+        constraints = []
+
+        # Iterate over technologies
+        for tech in index.get_unique(["set_technologies"]):
+            # Iterate over time steps
+            for timestep in index.get_unique(["set_time_steps_yearly"]):
+                # Get the unique segments for the current technology
+                segments = self.sets["set_pwa_segments"]
+                a = [1,0.5]
+                b = [0.6, 0.7]
+
+                # todo: what if only one segment?
+                # Calculate the linear combination for Z and X using parameters a and b
+                term_Z = sum(
+                    a_val * self.variables['segment_selection'].loc[tech, timestep, segment]
+                    for a_val, segment in zip(a, segments))
+
+                term_X = sum(
+                    b_val * self.variables['segment_capacity'].loc[tech, timestep, segment]
+                    for b_val, segment in zip(b, segments))
+
+                # Formulate the constraint
+                lhs = (self.variables['cumulative_cost_yearly_all_nodes'].loc[tech, timestep]
+                    - term_Z
+                    - term_X)
+                rhs = 0
+
+                # Append the constraint to the list
+                constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return constraints
+
+    def constraint_capex_yearly_all_nodes_block(self):
+        """Calculate the capex for all nodes from the total cumulative cost
+
+        . math::
+            CAPEX_{n,t} = TC(Q_{n,t}) - TC(Q_{n,t-1})
+
+        :return: List of constraints
+        """
+
+        # Initialize an empty list to store the constraints
+        constraints = []
+        # todo: Implement that first step or initial total cumulative cost
+        # Iterate over nodes
+        for tech in self.sets["set_technologies"]:
+            # Iterate over time steps (starting from the second time step)
+            for timestep in self.sets["set_time_steps_yearly"][1:]:
+                # Calculate the CAPEX as the difference in total cumulative cost
+                capex = self.variables['cumulative_cost_yearly_all_nodes'].loc[tech, timestep] - \
+                        self.variables['cumulative_cost_yearly_all_nodes'].loc[tech, timestep - 1]
+
+                # Formulate the constraint
+                lhs = capex
+                rhs = self.variables['capex_yearly_all_nodes'].loc[tech, timestep]
+
+                # Append the constraint to the list
+                constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return constraints
+
+    def constraint_segment_selection_block(self):
+        """Ensure that for each technology and each year, the sum over segments of Z equals 1.
+
+        . math::
+            \sum_{l=1}^{L} Z_{h,y,l} = 1
+
+        :return: List of constraints
+        """
+
+        # Initialize an empty list to store the constraints
+        constraints = []
+
+        # Iterate over technologies
+        for tech in self.sets["set_technologies"]:
+            # Iterate over years
+            for year in self.sets["set_time_steps_yearly"]:
+                # Get the unique segments for the current technology
+                segments = self.sets["set_pwa_segments"][tech]
+
+                # Sum up all binary variables for the segment selection for each timestep and each technology
+                sum_segments_z = sum(self.variables['segment_selection'].loc[tech, year, segment] for segment in segments)
+
+                # Formulate the constraint
+                lhs = sum_segments_z
+                rhs = 1
+
+                # Append the constraint to the list
+                constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return constraints
+
