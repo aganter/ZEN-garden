@@ -483,8 +483,11 @@ class ConversionTechnologyRules:
     def constraint_capacity_limit_country_rule(self, model,tech,capacity_type,country,year):
         """country specific capacity limit"""
         params = self.optimization_setup.parameters
-        if params.capacity_limit_country[tech,capacity_type,country,year] == np.inf:
+        capacity_limit_country = params.capacity_limit_country[tech,capacity_type,country,year]
+        capacities_existing = sum(Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, node, year, type_existing_quantity="capacity") for node in model.set_nodes if node.startswith(country))
+        if capacity_limit_country ==np.inf:
             return pe.Constraint.Skip
         else:
-            return(sum(model.capacity[tech,capacity_type, node, year] for node in model.set_nodes if node.startswith(country))
-                   <= params.capacity_limit_country[tech,capacity_type,country,year])
+            if capacities_existing > capacity_limit_country:
+                capacity_limit_country = capacities_existing
+            return(sum(model.capacity[tech,capacity_type, node, year] for node in model.set_nodes if node.startswith(country)) <= capacity_limit_country)
