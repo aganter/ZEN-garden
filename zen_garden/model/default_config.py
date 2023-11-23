@@ -152,8 +152,6 @@ class Config(object):
         self.solver["name"]      = "glpk"
         # gurobi options
         self.solver["solver_options"] = {
-            "logfile":      ".//outputs//logs//GurobiLogFile.log",
-            "MIPGap":       None,
             "TimeLimit":    None,
             "Method":       None
         }

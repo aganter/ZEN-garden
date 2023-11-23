@@ -364,85 +364,6 @@ class OptimizationSetup(object):
         self.base_scenario = scenario
         self.base_configuration = elements
 
-    def restore_base_configuration(self, scenario, elements):
-        """restore default configuration
-
-        :param scenario: scenario name
-        :param elements: dictionary of scenario dependent elements and parameters"""
-        if not scenario == self.base_scenario:
-            # restore base configuration
-            self.overwrite_params(self.base_scenario, self.base_configuration)
-            # continuously update base_configuration so all parameters are reset to their base value after being changed
-            for element_name, params in elements.items():
-                if element_name not in self.base_configuration.keys():
-                    self.base_configuration[element_name] = params
-                else:
-                    for param in params:
-                        if param not in self.base_configuration[element_name]:
-                            self.base_configuration[element_name].append(param)
-
-    def overwrite_params(self, scenario, elements):
-        """overwrite scenario dependent parameters
-
-        :param scenario: scenario name
-        :param elements: dictionary of scenario dependent elements and parameters"""
-        if scenario != "":
-            scenario = "_" + scenario
-        # list of parameters with raw_time_series
-        conduct_tsa = False
-        # overwrite scenario dependent parameter values for all elements
-        for element_name, params in elements.items():
-            if element_name == "EnergySystem":
-                element = self.energy_system
-            else:
-                element = self.get_element(Element, element_name)
-            if element is None:
-                logging.warning(f"Cannot update params {params} of element {element_name} because element does not exist. Skipped.")
-                continue
-            # overwrite scenario dependent parameters
-            for param in params:
-                assert "pwa" not in param, "Scenarios are not implemented for piece-wise affine parameters."
-                file_name = param
-                if "yearly_variation" in param:
-                    param = param.replace("_yearly_variation", "")
-                    file_name = param
-                # get old param value
-                _old_param = getattr(element, param)
-                _index_names = _old_param.index.names
-                _index_sets = [index_set for index_set, index_name in element.data_input.index_names.items() if index_name in _index_names]
-                _time_steps = None
-                # if existing capacity is changed, set_technologies_existing, existing lifetime, and capexExistingCapacity have to be updated as well
-                if "set_technologies_existing" in _index_sets:
-                    # update set_technologies_existing and lifetime_existing
-                    _technologies_existing = element.data_input.extract_set_technologies_existing(scenario=scenario)
-                    setattr(element, "set_technologies_existing", _technologies_existing)
-                    _lifetime_existing = element.data_input.extract_lifetime_existing(param, index_sets=_index_sets, scenario=scenario)
-                    setattr(element, "lifetime_existing", _lifetime_existing)
-                # set new parameter value
-                if hasattr(element, "raw_time_series") and param in element.raw_time_series.keys():
-                    conduct_tsa = True
-                    _time_steps = self.energy_system.set_base_time_steps_yearly
-                    element.raw_time_series[param] = element.data_input.extract_input_data(file_name, index_sets=_index_sets, time_steps=_time_steps, scenario=scenario)
-                else:
-                    assert isinstance(_old_param, pd.Series) or isinstance(_old_param, pd.DataFrame), f"Param values of '{param}' have to be a pd.DataFrame or pd.Series."
-                    if "time" in _index_names:
-                        _time_steps = self.energy_system.set_base_time_steps_yearly
-                    elif "year" in _index_names:
-                        _time_steps = self.energy_system.set_time_steps_yearly_entire_horizon
-                    _new_param = element.data_input.extract_input_data(file_name, index_sets=_index_sets, time_steps=_time_steps, scenario=scenario)
-                    setattr(element, param, _new_param)
-                    # if existing capacity is changed, capex_capacity_existing also has to be updated
-                    if "capacity_existing" in param:
-                        storage_energy = False
-                        if element in self.energy_system.system["set_storage_technologies"]:
-                            storage_energy = True
-                        _capex_capacities_existing = element.calculate_capex_of_capacities_existing(storage_energy=storage_energy)
-                        setattr(element, "capex_capacity_existing", _capex_capacities_existing)
-        # if scenario contains timeSeries dependent params conduct tsa
-        if conduct_tsa:
-            # we need to reset the Aggregation because the energy system might have changed
-            self.time_series_aggregation = TimeSeriesAggregation(energy_system=self.energy_system)
-
     def overwrite_time_indices(self, step_horizon):
         """ select subset of time indices, matching the step horizon
 
@@ -535,32 +456,21 @@ class OptimizationSetup(object):
             logging.info(
                 f"Numeric Range Statistics:\nLargest Matrix Coefficient: {largest_coeff[1]} in {largest_coeff[0]}\nSmallest Matrix Coefficient: {smallest_coeff[1]} in {smallest_coeff[0]}\nLargest RHS: {largest_rhs[1]} in {largest_rhs[0]}\nSmallest RHS: {smallest_rhs[1]} in {smallest_rhs[0]}")
 
-    def solve(self, solver):
-        """Create model instance by assigning parameter values and instantiating the sets
-
-        :param solver: dictionary containing the solver settings """
-        solver_name = solver["name"]
+    def solve(self):
+        """Create model instance by assigning parameter values and instantiating the sets """
+        solver_name = self.solver["name"]
         # remove options that are None
-        solver_options = {key: solver["solver_options"][key] for key in solver["solver_options"] if solver["solver_options"][key] is not None}
+        solver_options = {key: self.solver["solver_options"][key] for key in self.solver["solver_options"] if self.solver["solver_options"][key] is not None}
 
         logging.info(f"\n--- Solve model instance using {solver_name} ---\n")
         # disable logger temporarily
         logging.disable(logging.WARNING)
 
         if solver_name == "gurobi":
-            ilp_file = f"{os.path.dirname(solver['solver_options']['logfile'])}//infeasible_model_IIS.ilp"
             self.model.solve(solver_name=solver_name, io_api=self.solver["io_api"],
                              keep_files=self.solver["keep_files"], sanitize_zeros=True,
                              # remaining kwargs are passed to the solver
                              **solver_options)
-            # write an ILP file to print the IIS if infeasible
-            if self.model.termination_condition == 'infeasible':
-                logging.info("The optimization is infeasible")
-                parser = IISConstraintParser(ilp_file, self.model)
-                fname, _ = os.path.splitext(ilp_file)
-                outfile = fname + "_linopy.ilp"
-                logging.info(f"Writing parsed IIS to {outfile}")
-                parser.write_parsed_output(outfile)
         else:
             self.model.solve(solver_name=solver_name, io_api=self.solver["io_api"],
                              keep_files=self.solver["keep_files"], sanitize_zeros=True)
@@ -572,13 +482,35 @@ class OptimizationSetup(object):
         elif self.model.termination_condition == "suboptimal":
             logging.info("The optimization is suboptimal")
             self.optimality = True
+        elif self.model.termination_condition == "infeasible":
+            logging.info("The optimization is infeasible")
+            self.optimality = False
         else:
             logging.info("The optimization is infeasible or unbounded, or finished with an error")
             self.optimality = False
 
+    def write_IIS(self):
+        """ write an ILP file to print the IIS if infeasible. Only possible for gurobi """
+        if self.model.termination_condition == 'infeasible' and self.solver["name"] == "gurobi":
+            logging.info("The optimization is infeasible")
+            # ilp_file = f"{os.path.dirname(solver['solver_options']['logfile'])}//infeasible_model_IIS.ilp"
+            ilp_file = f"//infeasible_model_IIS.ilp"
+            parser = IISConstraintParser(ilp_file, self.model)
+            fname, _ = os.path.splitext(ilp_file)
+            outfile = fname + "_linopy.ilp"
+            logging.info(f"Writing parsed IIS to {outfile}")
+            parser.write_parsed_output(outfile)
+
+    def add_results_of_optimization_step(self, step_horizon):
+        """ adds the new capacity additions and the cumulative carbon emissions for next
+        :param step_horizon: step of the rolling horizon """
+        # add newly capacity_addition of first year to existing capacity
+        self.add_new_capacity_addition(step_horizon)
+        # add cumulative carbon emissions to previous carbon emissions
+        self.add_carbon_emission_cumulative(step_horizon)
+
     def add_new_capacity_addition(self, step_horizon):
         """ adds the newly built capacity to the existing capacity
-
         :param step_horizon: step of the rolling horizon """
         if self.system["use_rolling_horizon"]:
             if step_horizon != self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
