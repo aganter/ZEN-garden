@@ -285,9 +285,6 @@ class Element:
                                 list_sets.append(system["set_capacity_types"])
                             else:
                                 list_sets.append([system["set_capacity_types"][0]])
-                        # anyaxie
-                        elif index == "set_pwa_segments":
-                            list_sets.append(sets["set_pwa_segments"])
                         else:
                             raise NotImplementedError(f"Index <{index}> not known")
                     # append indices to custom_set if element is supposed to be appended

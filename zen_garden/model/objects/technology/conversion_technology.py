@@ -173,6 +173,7 @@ class ConversionTechnology(Technology):
                                         doc="set of carriers that are an output to a specific conversion technology.\n\t Dimensions: set_conversion_technologies",
                                         index_set="set_conversion_technologies")
 
+
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
             if np.size(optimization_setup.system[subclass.label]):

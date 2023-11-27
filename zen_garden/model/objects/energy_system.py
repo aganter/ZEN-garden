@@ -109,10 +109,6 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[])
 
-        # anyaxie
-        # segments for pwa of cumulative cost
-        # todo: Remove hardcode
-        self.set_pwa_segments =[0,1]
 
     def calculate_edges_from_nodes(self):
         """ calculates set_nodes_on_edges from set_nodes
@@ -200,10 +196,6 @@ class EnergySystem:
         # yearly time steps of entire optimization horizon
         self.optimization_setup.sets.add_set(name="set_time_steps_yearly_entire_horizon", data=self.set_time_steps_yearly_entire_horizon, doc="Set of yearly time-steps of entire optimization horizon")
 
-        # anyaxie
-        # segments for pwa of cumulative cost
-        # todo: Remove hardcode with 3 segements, use user input and write function to create this self attribute of segments
-        self.optimization_setup.sets.add_set(name="set_pwa_segments", data=self.set_pwa_segments, doc="Set of segments for pwa of cumulative cost")
 
 
     def construct_params(self):

@@ -75,6 +75,11 @@ class Technology(Element):
         self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing", index_sets=[set_location, "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
         self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
 
+        # anyaxie
+        # segments for pwa of cumulative cost for each technology
+        # todo: Remove hardcode
+        self.set_total_cost_pwa_segments =[0,1]
+
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
 
@@ -329,6 +334,13 @@ class Technology(Element):
         optimization_setup.sets.add_set(name="set_reference_carriers", data=optimization_setup.get_attribute_of_all_elements(cls, "reference_carrier"),
                                         doc="set of all reference carriers correspondent to a technology. Dimensions: set_technologies",
                                         index_set="set_technologies")
+        # anyaxie
+        # segments for pwa of cumulative cost
+        optimization_setup.sets.add_set(name="set_total_cost_pwa_segments", data=optimization_setup.get_attribute_of_all_elements(cls, "set_total_cost_pwa_segments"),
+                                        doc="Set of segments for pwa of total cost function",
+                                        index_set="set_technologies")
+
+
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
             subclass.construct_sets(optimization_setup)
@@ -496,24 +508,31 @@ class Technology(Element):
 
         # anyaxie
         # todo: Add set_capacity_types
-        # sum of capacities over all nodes
-        variables.add_variable(model, name="capacity_all_nodes", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="capacity of technology at all nodes")
         # sum of yearly capex over all nodes
-        variables.add_variable(model, name="capex_yearly_all_nodes", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="yearly capex of technology at all nodes")
-        # sum of yearly cumulative cost over all nodes
-        variables.add_variable(model, name="cumulative_cost_yearly_all_nodes", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="yearly cumulative cost of technology at all nodes")
-
+        variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="yearly capex of technology h over all positions")
+        # investment cost of technology h in period y
+        variables.add_variable(model, name="investment_cost_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="investment cost of technology h over all positions in year y")
+        # investment cost of existing technology h in period y
+        variables.add_variable(model, name="investment_cost_existing_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="investment cost of existing technology h over all positions in year y")
+        # total cost of technology h in period y
+        variables.add_variable(model, name="total_cost_capex_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="total cost of technology h in period y")
         # segement selection binary variables
-        variables.add_variable(model, name="segment_selection", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_pwa_segments"], optimization_setup),
+        variables.add_variable(model, name="total_cost_pwa_segment_selection", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], optimization_setup),
             binary=True, doc="segment selection binary variable")
-        # segment capacity
+        # segment position
         # todo: Set this as the same upper bound as technology capacity of all nodes
-        variables.add_variable(model, name="segment_capacity", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_pwa_segments"], optimization_setup),
+        variables.add_variable(model, name="total_cost_pwa_segment_position", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], optimization_setup),
             bounds = (0,np.inf), doc="capacity of technology in each segment")
-
+        # learning-inducing capacity of technology h in period y
+        variables.add_variable(model, name="capacity_learning", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="learning-inducing capacity of technology h in period y")
+        # existing learning-inducing capacity of technology h in period y"
+        variables.add_variable(model, name="capacity_learning_existing", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+            bounds = (0,np.inf), doc="existing learning-inducing capacity of technology h in period y")
 
 
         # install technology
@@ -602,15 +621,36 @@ class Technology(Element):
         # pwa approximation for total cumulative cost
         constraints.add_constraint_block(model, name="constraint_cumulative_cost_yearly",
                                          constraint=rules.constraint_approximate_total_cumulative_cost_block(),
-                                         doc="pwa approximation for total cumulative cost")
+                                         doc="approximation of cumulative cost with pwa")
         # sum of capacities as difference of total cumulative cost over all nodes
-        constraints.add_constraint_block(model, name="constraint_capex_yearly_all_nodes",
-                                         constraint=rules.constraint_capex_yearly_all_nodes_block(),
-                                         doc="yearly capex of technology at all nodes")
+        constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
+                                         constraint=rules.constraint_capex_yearly_all_positions_block(),
+                                         doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
         # segment selection
         constraints.add_constraint_block(model, name="constraint_segment_selection",
                                          constraint=rules.constraint_segment_selection_block(),
-                                         doc="segment selection binary variable")
+                                         doc="segment selection with binary variable for pwa of cumulative cost")
+
+        # segment capacity upper bounds
+        constraints.add_constraint_block(model, name="constraint_segment_capacity_upper_bounds",
+                                         constraint=rules.constraint_segment_capacity_upper_bounds_block(),
+                                         doc="segment capacity upper bounds for pwa of cumulative cost")
+
+        # segment capacity lower bounds
+        constraints.add_constraint_block(model, name="constraint_segment_capacity_lower_bounds",
+                                         constraint=rules.constraint_segment_capacity_lower_bounds_block(),
+                                            doc="segment capacity lower bounds for pwa of cumulative cost")
+
+        # segment capacity sum
+        constraints.add_constraint_block(model, name="constraint_segment_capacity_sum",
+                                         constraint=rules.constraint_segment_capacity_sum_block(),
+                                            doc="segment capacity sum for pwa of cumulative cost")
+
+        # cumulative capacity as sum of capacity (active) over all nodes
+
+
+
+
 
 
         # disjunct if technology is on
@@ -1574,7 +1614,7 @@ class TechnologyRules(GenericRule):
         # todo: Implement parameters a and b
         ### index sets
         index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_time_steps_yearly", "set_pwa_segments"], self.optimization_setup)
+            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
 
         ### masks
@@ -1591,22 +1631,22 @@ class TechnologyRules(GenericRule):
             # Iterate over time steps
             for timestep in index.get_unique(["set_time_steps_yearly"]):
                 # Get the unique segments for the current technology
-                segments = self.sets["set_pwa_segments"]
-                a = [1,0.5]
-                b = [0.6, 0.7]
+                segments = self.sets["set_total_cost_pwa_segments"]
+                pwa_intersect = [1,0.5]
+                pwa_slope = [0.6, 0.7]
 
                 # todo: what if only one segment?
                 # Calculate the linear combination for Z and X using parameters a and b
                 term_Z = sum(
-                    a_val * self.variables['segment_selection'].loc[tech, timestep, segment]
-                    for a_val, segment in zip(a, segments))
+                    intersect_val * self.variables['segment_selection'].loc[tech, timestep, segment]
+                    for intersect_val, segment in zip(pwa_intersect, segments))
 
                 term_X = sum(
-                    b_val * self.variables['segment_capacity'].loc[tech, timestep, segment]
-                    for b_val, segment in zip(b, segments))
+                    slope_val * self.variables['segment_capacity'].loc[tech, timestep, segment]
+                    for slope_val, segment in zip(pwa_slope, segments))
 
                 # Formulate the constraint
-                lhs = (self.variables['cumulative_cost_yearly_all_nodes'].loc[tech, timestep]
+                lhs = (self.variables['cumulative_cost_yearly_all_positions'].loc[tech, timestep]
                     - term_Z
                     - term_X)
                 rhs = 0
@@ -1617,7 +1657,7 @@ class TechnologyRules(GenericRule):
         # Return the list of constraints
         return constraints
 
-    def constraint_capex_yearly_all_nodes_block(self):
+    def constraint_capex_yearly_all_positions_block(self):
         """Calculate the capex for all nodes from the total cumulative cost
 
         . math::
@@ -1626,24 +1666,37 @@ class TechnologyRules(GenericRule):
         :return: List of constraints
         """
 
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_time_steps_yearly"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we oop over all technologies and timesteps for the conditions and vectorize over the rest
         # Initialize an empty list to store the constraints
         constraints = []
-        # todo: Implement that first step or initial total cumulative cost
+        # todo: Implement that first step or initial total cumulative cost of each technology
         # Iterate over nodes
-        for tech in self.sets["set_technologies"]:
+        for tech in index.get_unique(["set_technologies"]):
             # Iterate over time steps (starting from the second time step)
-            for timestep in self.sets["set_time_steps_yearly"][1:]:
-                # Calculate the CAPEX as the difference in total cumulative cost
-                capex = self.variables['cumulative_cost_yearly_all_nodes'].loc[tech, timestep] - \
-                        self.variables['cumulative_cost_yearly_all_nodes'].loc[tech, timestep - 1]
+            for timestep in index.get_unique(["set_time_steps_yearly"]):
+                if timestep == 0:
+                    capex = 0
+                else:
+                    ### auxiliary calculations
+                    # Calculate the CAPEX as the difference in total cumulative cost
+                    capex = self.variables['cumulative_cost_yearly_all_positions'].loc[tech, timestep] - \
+                        self.variables['cumulative_cost_yearly_all_positions'].loc[tech, timestep - 1]
 
-                # Formulate the constraint
+                ### formulate constraint
                 lhs = capex
-                rhs = self.variables['capex_yearly_all_nodes'].loc[tech, timestep]
+                rhs = self.variables['capex_yearly_all_positions'].loc[tech, timestep]
 
                 # Append the constraint to the list
                 constraints.append(lhs == rhs)
-
         # Return the list of constraints
         return constraints
 
@@ -1656,6 +1709,15 @@ class TechnologyRules(GenericRule):
         :return: List of constraints
         """
 
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
         # Initialize an empty list to store the constraints
         constraints = []
 
@@ -1664,7 +1726,7 @@ class TechnologyRules(GenericRule):
             # Iterate over years
             for year in self.sets["set_time_steps_yearly"]:
                 # Get the unique segments for the current technology
-                segments = self.sets["set_pwa_segments"][tech]
+                segments = self.sets["set_total_cost_pwa_segments"]
 
                 # Sum up all binary variables for the segment selection for each timestep and each technology
                 sum_segments_z = sum(self.variables['segment_selection'].loc[tech, year, segment] for segment in segments)
@@ -1679,3 +1741,116 @@ class TechnologyRules(GenericRule):
         # Return the list of constraints
         return constraints
 
+
+    def constraint_segment_capacity_upper_bounds_block(self):
+        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+
+        . math::
+            U_{h,t,l} \leq \overline{s}_{h,l} \cdot Z_{h,t,l}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # Initialize an empty list to store the constraints
+        # todo: Add parameter for upper bound
+        upper_bound = 10
+        constraints = []
+        for tech in self.sets["set_technologies"]:
+            for year in self.sets["set_time_steps_yearly"]:
+                # Get the unique segments for the current technology
+                segments = self.sets["set_total_cost_pwa_segments"]
+
+                # Iterate over the segments
+                for segment in segments:
+                    # Formulate the constraint
+                    lhs = (self.variables['segment_capacity'].loc[tech, year, segment]
+                        - upper_bound * self.variables['segment_selection'].loc[tech, year, segment])
+                    rhs = 0
+
+                    # Append the constraint to the list
+                    constraints.append(lhs <= rhs)
+        # Return the list of constraints
+        return constraints
+
+
+    def constraint_segment_capacity_lower_bounds_block(self):
+        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+
+        . math::
+            {s}_{h,l-1} \cdot Z_{h,t,l} \leq U_{h,t,l}
+
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # Initialize an empty list to store the constraints
+        # todo: Add parameter for upper bound
+        lower_bound = 5
+        constraints = []
+        for tech in self.sets["set_technologies"]:
+            for year in self.sets["set_time_steps_yearly"]:
+                # Get the unique segments for the current technology
+                segments = self.sets["set_total_cost_pwa_segments"]
+
+                # Iterate over the segments
+                for segment in segments:
+                    # Formulate the constraint
+                    lhs = (lower_bound * self.variables['segment_selection'].loc[tech, year, segment]
+                        - self.variables['segment_capacity'].loc[tech, year, segment])
+                    rhs = 0
+
+                    # Append the constraint to the list
+                    constraints.append(lhs >= rhs)
+
+        # Return the list of constraints
+        return constraints
+
+
+    def constraint_segment_capacity_sum_block(self):
+        """Ensures that the sum of all segment capacities is the capacity installed in that year. Needed for PWA
+
+        . math::
+            S_{h,y} = \sum_{l = 1}^L U_{h,y,l}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        constraints = []
+        for tech in self.sets["set_technologies"]:
+            for year in self.sets["set_time_steps_yearly"]:
+                # Get the unique segments for the current technology
+                segments = self.sets["set_total_cost_pwa_segments"]
+
+                # Iterate over the segments
+                lhs = (self.variables['cumulative_capacity_all_positions'].loc[tech, year]
+                       - sum(self.variables['segment_capacity'].loc[tech, year, segment] for segment in segments))
+                rhs = 0
+
+                constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return constraints
