@@ -774,6 +774,3 @@ class DataInput:
                     index = list(range(len(values)))
                 df_output.loc[location, index] = values
         return df_output
-
-
-    # anyaxie:

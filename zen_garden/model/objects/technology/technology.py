@@ -414,6 +414,10 @@ class Technology(Element):
         optimization_setup.parameters.add_parameter(name="carbon_intensity_technology", data=optimization_setup.initialize_component(cls, "carbon_intensity_technology", index_names=["set_technologies", "set_location"]),
             doc='Parameter which specifies the carbon intensity of each technology')
 
+        #anyaxie
+        optimization_setup.parameters.add_parameter(name="learning_rate", data=optimization_setup.initialize_component(cls, "learning_rate", index_names=["set_technologies"]),
+            doc='Parameter which specifies the learning rate of the technology')
+
         # Helper params
         t0 = time.perf_counter()
         optimization_setup.parameters.add_helper_parameter(name="existing_capacities", data=cls.get_existing_quantity(optimization_setup, type_existing_quantity="capacity"))
