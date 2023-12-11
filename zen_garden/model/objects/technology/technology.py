@@ -77,8 +77,8 @@ class Technology(Element):
 
         # anyaxie
         # segments for pwa of cumulative cost for each technology
-        # todo: Remove hardcode
-        self.set_total_cost_pwa_segments = self.data_input.extract_attribute("num_pwa_segments")["value"]
+        # todo: Remove list of range of int ... not very elegant
+        self.set_total_cost_pwa_segments = list(range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
         self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
