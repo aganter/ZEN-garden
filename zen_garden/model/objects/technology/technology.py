@@ -513,31 +513,18 @@ class Technology(Element):
 
         # anyaxie
         # todo: Add set_capacity_types
-        # sum of yearly capex over all nodes
-        variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+        # yearly capex as sum over all nodes
+        variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
             bounds = (0,np.inf), doc="yearly capex of technology h over all positions")
-        # investment cost of technology h in period y
-        variables.add_variable(model, name="investment_cost_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="investment cost of technology h over all positions in year y")
-        # investment cost of existing technology h in period y
-        variables.add_variable(model, name="investment_cost_existing_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="investment cost of existing technology h over all positions in year y")
-        # total cost of technology h in period y
-        variables.add_variable(model, name="total_cost_capex_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="total cost of technology h in period y")
-        # segement selection binary variables
-        variables.add_variable(model, name="total_cost_pwa_segment_selection", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], optimization_setup),
+        # segement selection for pwa total cost binary variables
+        variables.add_variable(model, name="total_cost_pwa_segment_selection", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"], optimization_setup),
             binary=True, doc="segment selection binary variable")
-        # segment position
-        # todo: Set this as the same upper bound as technology capacity of all nodes
-        variables.add_variable(model, name="total_cost_pwa_segment_position", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], optimization_setup),
+        # segment position variable for cumulative global capacity
+        variables.add_variable(model, name="total_cost_pwa_cum_capacity_segment_position", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"], optimization_setup),
             bounds = (0,np.inf), doc="capacity of technology in each segment")
-        # learning-inducing capacity of technology h in period y
-        variables.add_variable(model, name="capacity_learning", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
+        # global cumulative capacity
+        variables.add_variable(model, name="global_cumulative_capacity", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
             bounds = (0,np.inf), doc="learning-inducing capacity of technology h in period y")
-        # existing learning-inducing capacity of technology h in period y"
-        variables.add_variable(model, name="capacity_learning_existing", index_sets=cls.create_custom_set(["set_technologies", "set_time_steps_yearly"], optimization_setup),
-            bounds = (0,np.inf), doc="existing learning-inducing capacity of technology h in period y")
 
 
         # install technology
