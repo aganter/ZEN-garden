@@ -213,6 +213,155 @@ class Technology(Element):
                 _capacity_investment_existing[step_horizon] = _new_capacity_investment.loc[type_capacity]
                 setattr(self, "capacity_investment_existing" + _energy_string, _capacity_investment_existing.stack())
 
+    # anyaxie
+    @classmethod
+    def perform_total_cost_pwa(cls, optimization_setup, type_pwa_param):
+        """
+        perform pwa approximation for total cost
+        :return: slope and intersect of each segment, interpolation points
+        """
+        # todo: don't run this everytime for each technology, just run it once
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], optimization_setup)
+        index = ZenIndex(index_values, index_names)
+        # get all the capacities
+        index_arrs = IndexSet.tuple_to_arr(index_values, index_names)
+        coords = [optimization_setup.sets.get_coord(data, name) for data, name in zip(index_arrs, index_names)]
+        pwa_lower_bound = xr.DataArray(np.nan, coords=coords, dims=index_names)
+        pwa_upper_bound = xr.DataArray(np.nan, coords=coords, dims=index_names)
+        pwa_intersect = xr.DataArray(np.nan, coords=coords, dims=index_names)
+        pwa_slope = xr.DataArray(np.nan, coords=coords, dims=index_names)
+
+        def fun_total_cost(u, c_initial: float, q_initial: float,
+                           learning_rate: float) -> object:  # u is a vector
+            """
+            Total cumulative Cost for Learning Curve
+            :param u: Cumulative Capacity
+            :param c_initial: Initial Cost
+            :param q_initial: Initital Capacity
+            :param learning_rate: Learning Rate
+            :return: Total cumulative cot
+            """
+            alpha = c_initial / np.power(q_initial, learning_rate)
+            exp = 1 + learning_rate
+            v = alpha / exp * np.power(u, exp)
+            return v
+
+        def linear_interpolation(x_values, y_function, num_interpolation_points):
+            """
+            Linear interpolation of a function based on interpolation points.
+
+            Parameters:
+            - x_values: List or array of x-values of the interpolation points.
+            - y_function: Function that takes x as input and returns y.
+            - num_interpolation_points: Number of points for the linearized function.
+
+            Returns:
+            - interpolated_x: X-values of the interpolated points.
+            - interpolated_y: Y-values of the interpolated points.
+            - coefficients: List of tuples (a, b) representing the coefficients of each linear segment.
+            """
+            # Create a linear space for the interpolation
+            interpolated_x = np.linspace(min(x_values), max(x_values), num_interpolation_points)
+
+            # Initialize lists to store coefficients and y values
+            intersect = []
+            slope = []
+            y_values = []
+
+            # Calculate y values using the provided function
+            for x in interpolated_x:
+                y_values.append(y_function(x))
+
+            # Perform linear interpolation and calculate coefficients
+            for i in range(len(interpolated_x) - 1):
+                x_segment = interpolated_x[i:i + 2]
+                y_segment = y_values[i:i + 2]
+
+                b = (y_segment[1] - y_segment[0]) / (x_segment[1] - x_segment[0])
+                a = y_segment[0] - b * x_segment[0]
+
+                intersect.append(a)
+                slope.append(b)
+
+            return interpolated_x, y_values, intersect, slope
+
+        for tech, capacity_type in index.get_unique(["set_technologies", "set_capacity_types"]):
+            ### auxiliary calculations
+            # pwa
+            learning_rate = cls.get_learning_rate(optimization_setup, tech)
+            # initial_capacity = self.capacities_existing(optimization_setup, tech, capacity_type)
+            initial_capacity = 30
+
+            # todo: make this dynamic
+            # todo: find initial cost parameter
+            # todo: find lower and upper bound for global cumulative capacity
+            # Lower and Upper bound for global cumulative capacity
+            lb = 0
+            ub = 180
+            npts = 101
+            initial_cost = 10
+
+            q_values = np.linspace(lb, ub, npts)
+
+            segments = optimization_setup.sets["set_total_cost_pwa_segments"][tech]
+            num_interpolation_points = len(segments) + 1
+
+            function = lambda u: fun_total_cost(u, initial_cost, initial_capacity, learning_rate)
+
+            interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
+                                                                                     num_interpolation_points)
+            pwa_lower_bound.loc[tech, capacity_type, :] = interpolated_q[:-1]
+            pwa_upper_bound.loc[tech, capacity_type, :] = interpolated_q[1:]
+            pwa_intersect.loc[tech, capacity_type, :] = intersect
+            pwa_slope.loc[tech, capacity_type, :] = slope
+
+        if type_pwa_param == "pwa_points_lower_bound":
+            return pwa_lower_bound
+        elif type_pwa_param == "pwa_points_upper_bound":
+            return pwa_upper_bound
+        elif type_pwa_param == "pwa_slope":
+            return pwa_slope
+        elif type_pwa_param == "pwa_intersect":
+            return pwa_intersect
+        else:
+            raise ValueError("type_pwa_param must be either pwa_points or pwa_coefficients")
+
+    @classmethod
+    def get_learning_rate(cls, optimization_setup, tech):
+        """ returns learning_rate of technology.
+        :param optimization_setup: OptimizationSetup the technology is part of
+        :param tech: name of the technology
+        :return: learning rate of technology
+        """
+        # get model and system
+        params = optimization_setup.parameters.dict_parameters
+        # get the learning rate
+        learning_rate_tech = params.learning_rate[tech]
+
+        return learning_rate_tech
+
+    @classmethod
+    def get_capacity_existing(cls, optimization_setup, tech, capacity_type):
+        """ returns the existing capacity of a technology over all positions
+        """
+        # get model and system
+        params = optimization_setup.parameters.dict_parameters
+
+        # Initialize a variable to store the sum
+        sum_for_specific_tech_cap_type = 0.0
+
+        # Iterate over the dictionary keys
+        for key, value in params.capacity_existing.items():
+            technology, capacity_type, _, _ = key  # Extract relevant components from the key
+
+            # Check if the key matches the target technology and capacity type
+            if technology == tech and capacity_type == capacity_type:
+                # Update the sum for the specific technology and capacity type
+                sum_for_specific_tech_cap_type += value
+
+        return sum_for_specific_tech_cap_type
+
     ### --- classmethods
     @classmethod
     def get_lifetime_range(cls, optimization_setup, tech, time, time_step_type: str = None):
@@ -342,6 +491,8 @@ class Technology(Element):
         energy_system.time_steps.encode_time_step(tech, start_base_time_step, time_step_type="yearly", yearly=True)[0]
 
         return start_time_step_year, end_time_step_year
+
+
 
     ### --- classmethods to construct sets, parameters, variables, and constraints, that correspond to Technology --- ###
     @classmethod
@@ -555,6 +706,21 @@ class Technology(Element):
                                                            data=cls.get_existing_quantity(optimization_setup,
                                                                                           type_existing_quantity="cost_capex",
                                                                                           time_step_type="yearly"))
+        #anyaxie
+        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+                                                           data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                           type_pwa_param="pwa_points_lower_bound"))
+        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_upper_bound",
+                                                           data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                           type_pwa_param="pwa_points_upper_bound"))
+        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_slope",
+                                                            data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                             type_pwa_param="pwa_slope"))
+        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_intersect",
+                                                           data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                           type_pwa_param="pwa_intersect"))
+
+
         t1 = time.perf_counter()
         logging.debug(f"Helper Params took {t1 - t0:.4f} seconds")
 
@@ -775,8 +941,20 @@ class Technology(Element):
                                          constraint=rules.constraint_pwa_total_cost_global_cum_capacity_segment_block(),
                                             doc="segment capacity sum for pwa of cumulative cost")
 
+
+
+        # # segment capacity upper bounds
+        # constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound",
+        #                                  constraint=rules.constraint_pwa_total_cost_cum_capacity_upper_bound_block(),
+        #                                  doc="segment capacity upper bounds for pwa of cumulative cost")
         #
-        #
+        # # segment capacity lower bounds
+        # constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
+        #                                  constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_block(),
+        #                                     doc="segment capacity lower bounds for pwa of cumulative cost")
+
+
+
         # # pwa approximation for total cumulative cost
         # constraints.add_constraint_block(model, name="constraint_cumulative_cost_yearly",
         #                                  constraint=rules.constraint_approximate_total_cumulative_cost_block(),
@@ -790,15 +968,6 @@ class Technology(Element):
         #                                  constraint=rules.constraint_segment_selection_block(),
         #                                  doc="segment selection with binary variable for pwa of cumulative cost")
         #
-        # # segment capacity upper bounds
-        # constraints.add_constraint_block(model, name="constraint_segment_capacity_upper_bounds",
-        #                                  constraint=rules.constraint_segment_capacity_upper_bounds_block(),
-        #                                  doc="segment capacity upper bounds for pwa of cumulative cost")
-        #
-        # # segment capacity lower bounds
-        # constraints.add_constraint_block(model, name="constraint_segment_capacity_lower_bounds",
-        #                                  constraint=rules.constraint_segment_capacity_lower_bounds_block(),
-        #                                     doc="segment capacity lower bounds for pwa of cumulative cost")
         #
 
         # cumulative capacity as sum of capacity (active) over all nodes
@@ -904,6 +1073,9 @@ class Technology(Element):
                                                                    time_step_type=time_step_type)
         existing_quantities.loc[index_arrs] = values
         return existing_quantities
+
+
+
 
 
 class TechnologyRules(GenericRule):
@@ -2015,83 +2187,171 @@ class TechnologyRules(GenericRule):
         # Return the list of constraints
         return constraints
 
-    def constraint_segment_capacity_upper_bounds_block(self):
-        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+    # anyaxie
+    # Function to do PWA
+    # todo: Put this in the right spot of the code
+    # def linear_interpolation(self, x_values, y_function, num_interpolation_points):
+    #     """
+    #     Linear interpolation of a function based on interpolation points.
+    #
+    #     Parameters:
+    #     - x_values: List or array of x-values of the interpolation points.
+    #     - y_function: Function that takes x as input and returns y.
+    #     - num_interpolation_points: Number of points for the linearized function.
+    #
+    #     Returns:
+    #     - interpolated_x: X-values of the interpolated points.
+    #     - interpolated_y: Y-values of the interpolated points.
+    #     - coefficients: List of tuples (a, b) representing the coefficients of each linear segment.
+    #     """
+    #     # Create a linear space for the interpolation
+    #     interpolated_x = np.linspace(min(x_values), max(x_values), num_interpolation_points)
+    #
+    #     # Initialize lists to store coefficients and y values
+    #     coefficients = []
+    #     y_values = []
+    #
+    #     # Calculate y values using the provided function
+    #     for x in interpolated_x:
+    #         y_values.append(y_function(x))
+    #
+    #     # Perform linear interpolation and calculate coefficients
+    #     for i in range(len(interpolated_x) - 1):
+    #         x_segment = interpolated_x[i:i + 2]
+    #         y_segment = y_values[i:i + 2]
+    #
+    #         b = (y_segment[1] - y_segment[0]) / (x_segment[1] - x_segment[0])
+    #         a = y_segment[0] - b * x_segment[0]
+    #
+    #         coefficients.append((a, b))
+    #
+    #     return interpolated_x, y_values, coefficients
+    #
+    # def f(self, u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
+    #     """
+    #     Exponential regression for Learning Curve
+    #     Input: Cumulative Capacity u
+    #     Parameters: c_initial, q_initial, learning_rate
+    #     Output: Unit cost of technology
+    #     """
+    #     alpha = c_initial / np.power(q_initial, learning_rate)
+    #     v = alpha * np.power(u, learning_rate)
+    #
+    #     return v
+    #
+    # def F(self, u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
+    #     """
+    #     Total cumulative Cost for Learning Curve
+    #     :param u: Cumulative Capacity
+    #     :param c_initial: Initial Cost
+    #     :param q_initial: Initital Capacity
+    #     :param learning_rate: Learning Rate
+    #     :return: Total cumulative cot
+    #     """
+    #     alpha = c_initial / np.power(q_initial, learning_rate)
+    #     exp = 1 + learning_rate
+    #     v = alpha / exp * np.power(u, exp)
+    #     return v
 
-        . math::
-            U_{h,t,l} \leq \overline{s}_{h,l} \cdot Z_{h,t,l}
+    # def constraint_pwa_total_cost_cum_capacity_upper_bound_block(self):
+    #     """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+    #
+    #     . math::
+    #         \overline{s}_{h,w}^{\mathrm{glo}}\cdot Z_{h,y,w}
+    #
+    #     :return: List of constraints
+    #     """
+    #     ### index sets
+    #     index_values, index_names = Element.create_custom_set(
+    #         ["set_technologies","set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+    #     index = ZenIndex(index_values, index_names)
+    #
+    #     ### masks
+    #     # not necessary
+    #
+    #
+    #     ### index loop
+    #     # Initialize an empty list to store the constraints
+    #     constraints = []
+    #
+    #     # todo: Add parameter for upper bound
+    #     upper_bound = 10
+    #     for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types", "set_time_steps_yearly"]):
+    #         ### auxiliary calculations
+    #         locs = index.get_values([tech], "set_location", unique=True)
+    #         # pwa
+    #         learning_rate = self.parameters["learning_rate"][tech]
+    #         initial_cost = 10
+    #         initial_capacity = self.parameters.existing_capacities.loc[tech, capacity_type, locs].sum()
+    #
+    #
+    #
+    #         # Get the unique segments for the current technology
+    #         segments = self.sets["set_total_cost_pwa_segments"][tech]
+    #
+    #         lb = 0
+    #         ub = 180
+    #         npts = 101
+    #
+    #         q_values = np.linspace(lb, ub, npts)
+    #
+    #         function_x = lambda u: F(u, initial_cost, initial_capacity, learning_rate)
+    #
+    #         interpolated_q_x, interpolated_TC_x, coefficients_x = linear_interpolation(q_values, function_x,
+    #                                                                                    num_interpolation_points)
+    #
+    #         # Iterate over the segments
+    #         for segment in segments:
+    #             # Formulate the constraint
+    #             lhs = (self.variables['segment_capacity'].loc[tech, year, segment]
+    #                    - upper_bound * self.variables['segment_selection'].loc[tech, year, segment])
+    #             rhs = 0
+    #
+    #             # Append the constraint to the list
+    #             constraints.append(lhs <= rhs)
+    #
+    #     # Return the list of constraints
+    #     return constraints
 
-        :return: List of constraints
-        """
-        ### index sets
-        index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
-        index = ZenIndex(index_values, index_names)
-
-        ### masks
-        # not necessary
-
-        ### index loop
-        # Initialize an empty list to store the constraints
-        # todo: Add parameter for upper bound
-        upper_bound = 10
-        constraints = []
-        for tech in self.sets["set_technologies"]:
-            for year in self.sets["set_time_steps_yearly"]:
-                # Get the unique segments for the current technology
-                segments = self.sets["set_total_cost_pwa_segments"]
-
-                # Iterate over the segments
-                for segment in segments:
-                    # Formulate the constraint
-                    lhs = (self.variables['segment_capacity'].loc[tech, year, segment]
-                           - upper_bound * self.variables['segment_selection'].loc[tech, year, segment])
-                    rhs = 0
-
-                    # Append the constraint to the list
-                    constraints.append(lhs <= rhs)
-        # Return the list of constraints
-        return constraints
-
-    def constraint_segment_capacity_lower_bounds_block(self):
-        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
-
-        . math::
-            {s}_{h,l-1} \cdot Z_{h,t,l} \leq U_{h,t,l}
-
-
-        :return: List of constraints
-        """
-        ### index sets
-        index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
-        index = ZenIndex(index_values, index_names)
-
-        ### masks
-        # not necessary
-
-        ### index loop
-        # Initialize an empty list to store the constraints
-        # todo: Add parameter for upper bound
-        lower_bound = 5
-        constraints = []
-        for tech in self.sets["set_technologies"]:
-            for year in self.sets["set_time_steps_yearly"]:
-                # Get the unique segments for the current technology
-                segments = self.sets["set_total_cost_pwa_segments"]
-
-                # Iterate over the segments
-                for segment in segments:
-                    # Formulate the constraint
-                    lhs = (lower_bound * self.variables['segment_selection'].loc[tech, year, segment]
-                           - self.variables['segment_capacity'].loc[tech, year, segment])
-                    rhs = 0
-
-                    # Append the constraint to the list
-                    constraints.append(lhs >= rhs)
-
-        # Return the list of constraints
-        return constraints
+    # def constraint_pwa_total_cost_cum_capacity_lower_bound_block(self):
+    #     """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+    #
+    #     . math::
+    #         \underline{s}_{h,w}^{\mathrm{glo}}\cdot Z_{h,y,w} \leq &S^{\mathrm{seg}}_{h,y,w}
+    #
+    #
+    #     :return: List of constraints
+    #     """
+    #     ### index sets
+    #     index_values, index_names = Element.create_custom_set(
+    #         ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+    #     index = ZenIndex(index_values, index_names)
+    #
+    #     ### masks
+    #     # not necessary
+    #
+    #     ### index loop
+    #     # Initialize an empty list to store the constraints
+    #     # todo: Add parameter for upper bound
+    #     lower_bound = 5
+    #     constraints = []
+    #     for tech in self.sets["set_technologies"]:
+    #         for year in self.sets["set_time_steps_yearly"]:
+    #             # Get the unique segments for the current technology
+    #             segments = self.sets["set_total_cost_pwa_segments"]
+    #
+    #             # Iterate over the segments
+    #             for segment in segments:
+    #                 # Formulate the constraint
+    #                 lhs = (lower_bound * self.variables['segment_selection'].loc[tech, year, segment]
+    #                        - self.variables['segment_capacity'].loc[tech, year, segment])
+    #                 rhs = 0
+    #
+    #                 # Append the constraint to the list
+    #                 constraints.append(lhs >= rhs)
+    #
+    #     # Return the list of constraints
+    #     return constraints
 
     def constraint_pwa_total_cost_global_cum_capacity_segment_block(self):
         """Ensures that the sum of all segment capacities is the capacity installed in that year. Needed for PWA
@@ -2160,7 +2420,7 @@ class TechnologyRules(GenericRule):
                 summed_capacity_additions.append(self.variables["capacity_addition"].loc[
                                                      tech, locs].sum())
                 # todo: add for energy-rated technologies -> capacity_ecisting_energy
-                summed_existing_capacities = self.parameters.existing.sum(dim=['set_location', 'set_technologies_existing'])
+                summed_existing_capacities = self.parameters.existing_capacities.sum(dim=['set_location', 'set_technologies_existing'])
 
                 # todo: Introduce global share factor
                 cum_global_capacity = summed_capacity_additions + summed_existing_capacities
@@ -2173,3 +2433,7 @@ class TechnologyRules(GenericRule):
 
         # Return the list of constraints
         return constraints
+
+
+
+
