@@ -962,6 +962,12 @@ class Technology(Element):
                                             doc="segment capacity lower bounds for pwa of cumulative cost")
 
 
+        # segment selection pwa of total cost
+        constraints.add_constraint_block(model, name="constraint_pwa_total_cost_segment_selection",
+                                         constraint=rules.constraint_pwa_total_cost_segment_selection_block(),
+                                         doc="segment selection with binary variable for pwa of cumulative cost")
+
+
         # # pwa approximation for total cumulative cost
         # constraints.add_constraint_block(model, name="constraint_cumulative_cost_yearly",
         #                                  constraint=rules.constraint_approximate_total_cumulative_cost_block(),
@@ -970,10 +976,6 @@ class Technology(Element):
         # constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
         #                                  constraint=rules.constraint_capex_yearly_all_positions_block(),
         #                                  doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
-        # # segment selection
-        # constraints.add_constraint_block(model, name="constraint_segment_selection",
-        #                                  constraint=rules.constraint_segment_selection_block(),
-        #                                  doc="segment selection with binary variable for pwa of cumulative cost")
         #
         #
 
@@ -2152,18 +2154,18 @@ class TechnologyRules(GenericRule):
         # Return the list of constraints
         return constraints
 
-    def constraint_segment_selection_block(self):
+    def constraint_pwa_total_cost_segment_selection_block(self):
         """Ensure that for each technology and each year, the sum over segments of Z equals 1.
 
         . math::
-            \sum_{l=1}^{L} Z_{h,y,l} = 1
+            \sum_{w\in\mathcal{W}}&Z_{h,y,w} = 1
 
         :return: List of constraints
         """
 
         ### index sets
-        index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types",
+                                       "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
 
         ### masks
@@ -2174,22 +2176,21 @@ class TechnologyRules(GenericRule):
         constraints = []
 
         # Iterate over technologies
-        for tech in self.sets["set_technologies"]:
-            # Iterate over years
-            for year in self.sets["set_time_steps_yearly"]:
-                # Get the unique segments for the current technology
-                segments = self.sets["set_total_cost_pwa_segments"]
+        for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types",
+                                                                    "set_time_steps_yearly"]):
+            # Get the unique segments for the current technology
+            segments = index.get_unique(["set_total_cost_pwa_segments"])
 
-                # Sum up all binary variables for the segment selection for each timestep and each technology
-                sum_segments_z = sum(
-                    self.variables['segment_selection'].loc[tech, year, segment] for segment in segments)
+            # Sum up all binary variables for the segment selection for each timestep and each technology
+            sum_segments_z = sum(self.variables['total_cost_pwa_segment_selection']
+                                 .loc[tech, capacity_type, year, segment] for segment in segments)
 
-                # Formulate the constraint
-                lhs = sum_segments_z
-                rhs = 1
+            # Formulate the constraint
+            lhs = sum_segments_z
+            rhs = 1
 
-                # Append the constraint to the list
-                constraints.append(lhs == rhs)
+            # Append the constraint to the list
+            constraints.append(lhs == rhs)
 
         # Return the list of constraints
         return constraints
