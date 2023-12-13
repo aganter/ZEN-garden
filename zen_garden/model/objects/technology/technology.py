@@ -99,6 +99,7 @@ class Technology(Element):
         self.set_total_cost_pwa_segments = list(
             range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
         self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
+        self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -696,6 +697,11 @@ class Technology(Element):
                                                                                                  index_names=[
                                                                                                      "set_technologies"]),
                                                     doc='Parameter which specifies the learning rate of the technology')
+        optimization_setup.parameters.add_parameter(name="global_share_factor",
+                                                    data=optimization_setup.initialize_component(cls, "global_share_factor",
+                                                                                                    index_names=[
+                                                                                                        "set_technologies"]),
+                                                    doc='Parameter which specifies the global share factor of the technology')
 
         # Helper params
         t0 = time.perf_counter()
