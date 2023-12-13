@@ -955,12 +955,11 @@ class Technology(Element):
         constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound",
                                          constraint=rules.constraint_pwa_total_cost_cum_capacity_upper_bound_block(),
                                          doc="segment capacity upper bounds for pwa of cumulative cost")
-        #
-        # # segment capacity lower bounds
-        # constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
-        #                                  constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_block(),
-        #                                     doc="segment capacity lower bounds for pwa of cumulative cost")
 
+        # segment capacity lower bounds
+        constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
+                                         constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_block(),
+                                            doc="segment capacity lower bounds for pwa of cumulative cost")
 
 
         # # pwa approximation for total cumulative cost
@@ -2295,45 +2294,39 @@ class TechnologyRules(GenericRule):
         # Return the list of constraints
         return constraints
 
-    # def constraint_pwa_total_cost_cum_capacity_lower_bound_block(self):
-    #     """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
-    #
-    #     . math::
-    #         \underline{s}_{h,w}^{\mathrm{glo}}\cdot Z_{h,y,w} \leq &S^{\mathrm{seg}}_{h,y,w}
-    #
-    #
-    #     :return: List of constraints
-    #     """
-    #     ### index sets
-    #     index_values, index_names = Element.create_custom_set(
-    #         ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
-    #     index = ZenIndex(index_values, index_names)
-    #
-    #     ### masks
-    #     # not necessary
-    #
-    #     ### index loop
-    #     # Initialize an empty list to store the constraints
-    #     # todo: Add parameter for upper bound
-    #     lower_bound = 5
-    #     constraints = []
-    #     for tech in self.sets["set_technologies"]:
-    #         for year in self.sets["set_time_steps_yearly"]:
-    #             # Get the unique segments for the current technology
-    #             segments = self.sets["set_total_cost_pwa_segments"]
-    #
-    #             # Iterate over the segments
-    #             for segment in segments:
-    #                 # Formulate the constraint
-    #                 lhs = (lower_bound * self.variables['segment_selection'].loc[tech, year, segment]
-    #                        - self.variables['segment_capacity'].loc[tech, year, segment])
-    #                 rhs = 0
-    #
-    #                 # Append the constraint to the list
-    #                 constraints.append(lhs >= rhs)
-    #
-    #     # Return the list of constraints
-    #     return constraints
+    def constraint_pwa_total_cost_cum_capacity_lower_bound_block(self):
+        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+
+        . math::
+            {s}_{h,w}^{\mathrm{glo}}\cdot Z_{h,y,w} \leq S^{\mathrm{seg}}_{h,y,w}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # Initialize an empty list to store the constraints
+        constraints = []
+        for tech, capacity_type, year, segment in index.get_unique(["set_technologies", "set_capacity_types",
+                                                                    "set_time_steps_yearly",
+                                                                    "set_total_cost_pwa_segments"]):
+            lhs = (self.parameters.total_cost_pwa_points_lower_bound.loc[tech, capacity_type, segment]
+                   * self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment]
+                   - self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment])
+            rhs = 0
+
+            # Append the constraint to the list
+            constraints.append(lhs <= rhs)
+
+        # Return the list of constraints
+        return constraints
 
     def constraint_pwa_total_cost_global_cum_capacity_segment_block(self):
         """Ensures that the sum of all segment capacities is the capacity installed in that year. Needed for PWA
