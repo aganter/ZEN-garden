@@ -941,11 +941,6 @@ class Technology(Element):
                                          doc="total carbon emissions for each technology at each location and time step")
 
         # anyaxie
-        # constraint for cumulative global capacity
-        # constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
-        #                                  constraint=rules.constraint_cum_capacity_block(),
-        #                                  doc="constraint for cumulative global capacity")
-
         # segment capacity sum
         constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
                                          constraint=rules.constraint_pwa_total_cost_global_cum_capacity_segment_block(),
@@ -973,6 +968,11 @@ class Technology(Element):
                                          constraint=rules.constraint_approximate_total_global_cost_block(),
                                          doc="approximation of cumulative cost with pwa")
 
+        # constraint for cumulative global capacity
+        constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
+                                         constraint=rules.constraint_global_cum_capacity_block(),
+                                         doc="constraint for cumulative global capacity")
+
         # # sum of capacities as difference of total cumulative cost over all nodes
         # constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
         #                                  constraint=rules.constraint_capex_yearly_all_positions_block(),
@@ -980,7 +980,6 @@ class Technology(Element):
         #
         #
 
-        # cumulative capacity as sum of capacity (active) over all nodes
 
         # disjunct if technology is on
         # the disjunction variables
@@ -2060,8 +2059,8 @@ class TechnologyRules(GenericRule):
         """Approximate total cumulative cost for each technology.
 
         .. math::
-            \tilde{TC}_{h,y} = \sum_{w\in \mathcal{W}} \kappa_{h,w} \cdot Z_{h,y,w} + \sigma_{h,w} \cdot
-            S^{\mathrm{seg}}_{h,y,w}
+            \\tilde{TC}_{h,y} = \\sum_{w\\in \\mathcal{W}} \\kappa_{h,w} \\cdot Z_{h,y,w} + \\sigma_{h,w} \\cdot
+            S^{\\mathrm{seg}}_{h,y,w}
 
         :return: List of constraints
         """
@@ -2074,7 +2073,7 @@ class TechnologyRules(GenericRule):
         # not necessary
 
         ### index loop
-        # we oop over all technologies and timesteps for the conditions and vectorize over the rest
+        # we loop over all technologies and timesteps for the conditions and vectorize over the rest
 
         # Initialize an empty list to store the constraints
         constraints = []
@@ -2104,50 +2103,11 @@ class TechnologyRules(GenericRule):
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
-        return constraints
-
-    def constraint_capex_yearly_all_positions_block(self):
-        """Calculate the capex for all nodes from the total cumulative cost
-
-        . math::
-            CAPEX_{n,t} = TC(Q_{n,t}) - TC(Q_{n,t-1})
-
-        :return: List of constraints
-        """
-
-        ### index sets
-        index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_time_steps_yearly"], self.optimization_setup)
-        index = ZenIndex(index_values, index_names)
-
-        ### masks
-        # not necessary
-
-        ### index loop
-        # we oop over all technologies and timesteps for the conditions and vectorize over the rest
-        # Initialize an empty list to store the constraints
-        constraints = []
-        # todo: Implement that first step or initial total cumulative cost of each technology
-        # Iterate over nodes
-        for tech in index.get_unique(["set_technologies"]):
-            # Iterate over time steps (starting from the second time step)
-            for timestep in index.get_unique(["set_time_steps_yearly"]):
-                if timestep == 0:
-                    capex = 0
-                else:
-                    ### auxiliary calculations
-                    # Calculate the CAPEX as the difference in total cumulative cost
-                    capex = self.variables['cumulative_cost_yearly_all_positions'].loc[tech, timestep] - \
-                            self.variables['cumulative_cost_yearly_all_positions'].loc[tech, timestep - 1]
-
-                ### formulate constraint
-                lhs = capex
-                rhs = self.variables['capex_yearly_all_positions'].loc[tech, timestep]
-
-                # Append the constraint to the list
-                constraints.append(lhs == rhs)
-        # Return the list of constraints
-        return constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
 
     def constraint_pwa_total_cost_segment_selection_block(self):
         """Ensure that for each technology and each year, the sum over segments of Z equals 1.
@@ -2188,73 +2148,12 @@ class TechnologyRules(GenericRule):
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
-        return constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
 
-    # anyaxie
-    # Function to do PWA
-    # todo: Put this in the right spot of the code
-    # def linear_interpolation(self, x_values, y_function, num_interpolation_points):
-    #     """
-    #     Linear interpolation of a function based on interpolation points.
-    #
-    #     Parameters:
-    #     - x_values: List or array of x-values of the interpolation points.
-    #     - y_function: Function that takes x as input and returns y.
-    #     - num_interpolation_points: Number of points for the linearized function.
-    #
-    #     Returns:
-    #     - interpolated_x: X-values of the interpolated points.
-    #     - interpolated_y: Y-values of the interpolated points.
-    #     - coefficients: List of tuples (a, b) representing the coefficients of each linear segment.
-    #     """
-    #     # Create a linear space for the interpolation
-    #     interpolated_x = np.linspace(min(x_values), max(x_values), num_interpolation_points)
-    #
-    #     # Initialize lists to store coefficients and y values
-    #     coefficients = []
-    #     y_values = []
-    #
-    #     # Calculate y values using the provided function
-    #     for x in interpolated_x:
-    #         y_values.append(y_function(x))
-    #
-    #     # Perform linear interpolation and calculate coefficients
-    #     for i in range(len(interpolated_x) - 1):
-    #         x_segment = interpolated_x[i:i + 2]
-    #         y_segment = y_values[i:i + 2]
-    #
-    #         b = (y_segment[1] - y_segment[0]) / (x_segment[1] - x_segment[0])
-    #         a = y_segment[0] - b * x_segment[0]
-    #
-    #         coefficients.append((a, b))
-    #
-    #     return interpolated_x, y_values, coefficients
-    #
-    # def f(self, u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
-    #     """
-    #     Exponential regression for Learning Curve
-    #     Input: Cumulative Capacity u
-    #     Parameters: c_initial, q_initial, learning_rate
-    #     Output: Unit cost of technology
-    #     """
-    #     alpha = c_initial / np.power(q_initial, learning_rate)
-    #     v = alpha * np.power(u, learning_rate)
-    #
-    #     return v
-    #
-    # def F(self, u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
-    #     """
-    #     Total cumulative Cost for Learning Curve
-    #     :param u: Cumulative Capacity
-    #     :param c_initial: Initial Cost
-    #     :param q_initial: Initital Capacity
-    #     :param learning_rate: Learning Rate
-    #     :return: Total cumulative cot
-    #     """
-    #     alpha = c_initial / np.power(q_initial, learning_rate)
-    #     exp = 1 + learning_rate
-    #     v = alpha / exp * np.power(u, exp)
-    #     return v
 
     def constraint_pwa_total_cost_cum_capacity_upper_bound_block(self):
         """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
@@ -2288,8 +2187,11 @@ class TechnologyRules(GenericRule):
             constraints.append(lhs <= rhs)
 
         # Return the list of constraints
-        return constraints
-
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
     def constraint_pwa_total_cost_cum_capacity_lower_bound_block(self):
         """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
 
@@ -2322,7 +2224,11 @@ class TechnologyRules(GenericRule):
             constraints.append(lhs <= rhs)
 
         # Return the list of constraints
-        return constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
 
     def constraint_pwa_total_cost_global_cum_capacity_segment_block(self):
         """Ensures that the sum of all segment capacities is the capacity installed in that year. Needed for PWA
@@ -2355,9 +2261,13 @@ class TechnologyRules(GenericRule):
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
-        return constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
 
-    def constraint_cum_capacity_block(self):
+    def constraint_global_cum_capacity_block(self):
         """Calculates the cumulative global capacity for each technology in each year
 
                . math::
@@ -2370,41 +2280,37 @@ class TechnologyRules(GenericRule):
        """
 
         ### index sets
-        years = self.sets["set_time_steps_yearly"]
-        # this index is just for the sums in the auxiliary calculations
-        index_values, index_names = Element.create_custom_set(["set_technologies", "set_location"],
-                                                              self.optimization_setup)
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_location", "set_capacity_types", "set_time_steps_yearly"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
 
         ### masks
-        # not necessary
+        # this mask is just to make sure we only get constraints where we want them, no if-condition
+        mask = self.variables["capacity"].mask
 
         ### index loop
-        # we cycle over the years, because the sum of the operational time steps depends on the year
+        # we loop over technologies and time steps, because we need to cycle over the lifetime range of the technology
+        # which requires the technology and the year, we vectorize over capacity types and locations
         constraints = []
-        for year in years:
+        for tech, time in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             ### auxiliary calculations
-            summed_capacity_additions = []
-            for tech in index.get_unique(["set_technologies"]):
-                locs = index.get_values([tech], "set_location", unique=True)
-                summed_capacity_additions.append(self.variables["capacity_addition"].loc[
-                                                     tech, locs].sum())
-                # todo: add for energy-rated technologies -> capacity_ecisting_energy
-                summed_existing_capacities = self.parameters.existing_capacities.sum(dim=['set_location', 'set_technologies_existing'])
-
-                # todo: Introduce global share factor
-                cum_global_capacity = summed_capacity_additions + summed_existing_capacities
-
+            term_neg_previous_capacity_additions = []
+            # sum up over all previous years and all nodes
+            for previous_time in range(time+1):
+                term_neg_previous_capacity_additions.append(
+                    -1.0 * self.variables["capacity_addition"].loc[tech, :, :, previous_time].sum(dims="set_location"))
+            # todo: wrong capacity term
             ### formulate constraint
-            lhs = self.variables["global_cumulative_capacity"].loc[
-                      year] - cum_global_capacity
-            rhs = 0
+            lhs = lp_sum([1.0 * self.variables["global_cumulative_capacity"].loc[tech, :, time],
+                          *term_neg_previous_capacity_additions])
+            rhs = self.parameters.capacity_existing.loc[tech, :, :, :].sum(dim=["set_location", "set_technologies_existing"])
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
-        return constraints
-
-
-
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
 
