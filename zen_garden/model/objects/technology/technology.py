@@ -232,6 +232,7 @@ class Technology(Element):
         pwa_upper_bound = xr.DataArray(np.nan, coords=coords, dims=index_names)
         pwa_intersect = xr.DataArray(np.nan, coords=coords, dims=index_names)
         pwa_slope = xr.DataArray(np.nan, coords=coords, dims=index_names)
+        pwa_initial_total_global_cost = xr.DataArray(np.nan, coords=coords[:2], dims=index_names[:2])
 
         def fun_total_cost(u, c_initial: float, q_initial: float,
                            learning_rate: float) -> object:  # u is a vector
@@ -317,6 +318,8 @@ class Technology(Element):
             pwa_intersect.loc[tech, capacity_type, :] = intersect
             pwa_slope.loc[tech, capacity_type, :] = slope
 
+            pwa_initial_total_global_cost.loc[tech, capacity_type] = intersect[0] + slope[0] * initial_capacity
+
         if type_pwa_param == "pwa_points_lower_bound":
             return pwa_lower_bound
         elif type_pwa_param == "pwa_points_upper_bound":
@@ -325,6 +328,8 @@ class Technology(Element):
             return pwa_slope
         elif type_pwa_param == "pwa_intersect":
             return pwa_intersect
+        elif type_pwa_param == "pwa_initial_total_global_cost":
+            return pwa_initial_total_global_cost
         else:
             raise ValueError("type_pwa_param must be either pwa_points or pwa_coefficients")
 
@@ -725,6 +730,9 @@ class Technology(Element):
         optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_intersect",
                                                            data=cls.perform_total_cost_pwa(optimization_setup,
                                                                                            type_pwa_param="pwa_intersect"))
+        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_initial_total_global_cost",
+                                                           data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                           type_pwa_param="pwa_initial_total_global_cost"))
 
 
         t1 = time.perf_counter()
@@ -831,7 +839,7 @@ class Technology(Element):
         # anyaxie
         # todo: Add set_capacity_types
         # yearly capex as sum over all nodes
-        variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(
+        variables.add_variable(model, name="cost_capex_all_positions", index_sets=cls.create_custom_set(
             ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
                                bounds=(0, np.inf), doc="yearly capex of technology h over all positions")
         # global cumulative capacity
@@ -973,12 +981,12 @@ class Technology(Element):
                                          constraint=rules.constraint_global_cum_capacity_block(),
                                          doc="constraint for cumulative global capacity")
 
-        # # sum of capacities as difference of total cumulative cost over all nodes
-        # constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
-        #                                  constraint=rules.constraint_capex_yearly_all_positions_block(),
-        #                                  doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
-        #
-        #
+        # sum of capacities as difference of total cumulative cost over all nodes
+        constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
+                                         constraint=rules.constraint_capex_yearly_all_positions_block(),
+                                         doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
+
+
 
 
         # disjunct if technology is on
@@ -2077,6 +2085,9 @@ class TechnologyRules(GenericRule):
 
         # Initialize an empty list to store the constraints
         constraints = []
+        # Might need to be added as extra constraint
+        # todo: Add this constraint
+        # self.variables["cost_capex_all_positions"].loc[:,:,:] = self.variables["cost_capex"].loc[:, :, :, :].sum("set_location")
 
         # Iterate over technologies
         for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types", "set_time_steps_yearly"]):
@@ -2314,3 +2325,70 @@ class TechnologyRules(GenericRule):
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
 
+    def constraint_capex_yearly_all_positions_block(self):
+        """ aggregates the capex of built capacity and of existing capacity
+
+        .. math::
+            A_{h,y} = f_h \left(\sum_{\tilde{y}=\max\left(y_0,y-\left\lceil\nicefrac{l_h}{\Delta^\mathrm{y}}\right
+            \rceil+1\right)}^y g_h \left( TC_{h,y} - TC_{h,y-1} \right)\right.\nonumber+ \left.\sum_{\hat{y}=\psi\left(
+            y-\left\lceil\nicefrac{l_h}{\Delta^\mathrm{y}}\right\rceil+1\right)}^{\psi(y_0-1)}
+             \sum_{p\in\mathcal{P}}\alpha_{h,y_0}\Delta s^\mathrm{ex}_{h,p,\hat{y}} \right)
+
+        :return:
+        """
+
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
+        # we vectorize over capacities and locations
+        constraints = []
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+
+            ### auxiliary calculations
+            # todo: remove hardcode
+            # todo: change the way initital total cost is defined
+            discount_rate = self.parameters.discount_rate
+            lifetime = self.parameters.lifetime.loc[tech].item()
+            global_share_factor = self.parameters.global_share_factor.loc[tech].item()
+            initial_total_global_cost = self.parameters.total_cost_pwa_initial_total_global_cost.loc[tech]
+
+            if discount_rate != 0:
+                annuity = ((1 + discount_rate) ** lifetime * discount_rate) / ((1 + discount_rate) ** lifetime - 1)
+            else:
+                annuity = 1 / lifetime
+            # todo: change this term for new investments
+            # todo: change hardcode
+            # todo:
+            term_neg_annuity_cost_capex_previous = []
+            for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year,
+                                                               time_step_type="yearly"):
+                if previous_year == 0:
+                    # todo: substract the initial total cost
+                    # Mistake here with the previous years
+                    term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
+                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]))
+                else:
+                    term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
+                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year] -
+                                                         self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1]))
+
+            ### formulate constraint
+            lhs = lp_sum([1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year],
+                          *term_neg_annuity_cost_capex_previous])
+            rhs = annuity * self.parameters.existing_capex.loc[tech, :, :, year].sum(dim=["set_location"])
+            constraints.append(lhs == rhs)
+
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
