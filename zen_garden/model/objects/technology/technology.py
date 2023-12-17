@@ -986,6 +986,11 @@ class Technology(Element):
                                          constraint=rules.constraint_capex_yearly_all_positions_block(),
                                          doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
 
+        # # sum of capacities as difference of total cumulative cost over all nodes
+        # constraints.add_constraint_block(model, name="constraint_cost_capex_yearly_all_positions",
+        #                                  constraint=rules.constraint_cost_capex_yearly_all_positions_rule(),
+        #                                  doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
+
 
 
 
@@ -1158,7 +1163,8 @@ class TechnologyRules(GenericRule):
         :param year: #TODO describe parameter/return
         :return: #TODO describe parameter/return
         """
-
+        # todo: remove hardcode for flag
+        flag_endogenous = True
         ### index sets
         # skipped because rule-based constraint
 
@@ -1169,7 +1175,10 @@ class TechnologyRules(GenericRule):
         # skipped because rule-based constraint
 
         ### auxiliary calculations
-        term_sum_yearly = self.variables["capex_yearly"].loc[..., year].sum()
+        if flag_endogenous:
+            term_sum_yearly = self.variables["cost_capex_all_positions"].loc[..., year].sum()
+        else:
+            term_sum_yearly = self.variables["capex_yearly"].loc[..., year].sum()
 
         ### formulate constraint
         lhs = (self.variables["cost_capex_total"].loc[year]
@@ -2392,3 +2401,5 @@ class TechnologyRules(GenericRule):
                                                   index_values=index.get_unique(
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
+
+
