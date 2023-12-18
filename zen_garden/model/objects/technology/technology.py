@@ -918,9 +918,10 @@ class Technology(Element):
                                          constraint=rules.constraint_capacity_factor_block(),
                                          doc='limit max load by installed capacity')
         # annual capex of having capacity
-        constraints.add_constraint_block(model, name="constraint_capex_yearly",
-                                         constraint=rules.constraint_capex_yearly_block(),
-                                         doc='annual capex of having capacity of technology.')
+        if not optimization_setup.system["use_endogenous_learning"]:
+            constraints.add_constraint_block(model, name="constraint_capex_yearly",
+                                             constraint=rules.constraint_capex_yearly_block(),
+                                             doc='annual capex of having capacity of technology.')
         # total capex of all technologies
         constraints.add_constraint_rule(model, name="constraint_cost_capex_total",
                                         index_sets=sets["set_time_steps_yearly"],
@@ -949,49 +950,43 @@ class Technology(Element):
                                          doc="total carbon emissions for each technology at each location and time step")
 
         # anyaxie
-        # segment capacity sum
-        constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
-                                         constraint=rules.constraint_pwa_total_cost_global_cum_capacity_segment_block(),
-                                            doc="segment capacity sum for pwa of cumulative cost")
+        if optimization_setup.system["use_endogenous_learning"]:
+            # segment capacity sum
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
+                                             constraint=rules.constraint_pwa_total_cost_global_cum_capacity_segment_block(),
+                                                doc="segment capacity sum for pwa of cumulative cost")
 
-        # segment capacity upper bounds
-        constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound",
-                                         constraint=rules.constraint_pwa_total_cost_cum_capacity_upper_bound_block(),
-                                         doc="segment capacity upper bounds for pwa of cumulative cost")
+            # segment capacity upper bounds
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound",
+                                             constraint=rules.constraint_pwa_total_cost_cum_capacity_upper_bound_block(),
+                                             doc="segment capacity upper bounds for pwa of cumulative cost")
 
-        # segment capacity lower bounds
-        constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
-                                         constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_block(),
-                                            doc="segment capacity lower bounds for pwa of cumulative cost")
-
-
-        # segment selection pwa of total cost
-        constraints.add_constraint_block(model, name="constraint_pwa_total_cost_segment_selection",
-                                         constraint=rules.constraint_pwa_total_cost_segment_selection_block(),
-                                         doc="segment selection with binary variable for pwa of cumulative cost")
+            # segment capacity lower bounds
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
+                                             constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_block(),
+                                                doc="segment capacity lower bounds for pwa of cumulative cost")
 
 
-        # pwa approximation for total cumulative cost
-        constraints.add_constraint_block(model, name="constraint_total_global_cost",
-                                         constraint=rules.constraint_approximate_total_global_cost_block(),
-                                         doc="approximation of cumulative cost with pwa")
-
-        # constraint for cumulative global capacity
-        constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
-                                         constraint=rules.constraint_global_cum_capacity_block(),
-                                         doc="constraint for cumulative global capacity")
-
-        # sum of capacities as difference of total cumulative cost over all nodes
-        constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
-                                         constraint=rules.constraint_capex_yearly_all_positions_block(),
-                                         doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
-
-        # # sum of capacities as difference of total cumulative cost over all nodes
-        # constraints.add_constraint_block(model, name="constraint_cost_capex_yearly_all_positions",
-        #                                  constraint=rules.constraint_cost_capex_yearly_all_positions_rule(),
-        #                                  doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
+            # segment selection pwa of total cost
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_segment_selection",
+                                             constraint=rules.constraint_pwa_total_cost_segment_selection_block(),
+                                             doc="segment selection with binary variable for pwa of cumulative cost")
 
 
+            # pwa approximation for total cumulative cost
+            constraints.add_constraint_block(model, name="constraint_total_global_cost",
+                                             constraint=rules.constraint_approximate_total_global_cost_block(),
+                                             doc="approximation of cumulative cost with pwa")
+
+            # constraint for cumulative global capacity
+            constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
+                                             constraint=rules.constraint_global_cum_capacity_block(),
+                                             doc="constraint for cumulative global capacity")
+
+            # sum of capacities as difference of total cumulative cost over all nodes
+            constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
+                                             constraint=rules.constraint_capex_yearly_all_positions_block(),
+                                             doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
 
 
         # disjunct if technology is on

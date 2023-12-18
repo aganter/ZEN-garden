@@ -186,10 +186,12 @@ class TransportTechnology(Technology):
         constraints.add_constraint_block(model, name="constraint_transport_technology_losses_flow",
                                          constraint=rules.constraint_transport_technology_losses_flow_block(),
                                          doc='Carrier loss due to transport with through transport technology')
-        # capex of transport technologies
-        constraints.add_constraint_block(model, name="constraint_transport_technology_capex",
-                                         constraint=rules.constraint_transport_technology_capex_block(),
-                                         doc='Capital expenditures for installing transport technology')
+        # anyaxie
+        if not optimization_setup.system['use_endogenous_learning']:
+            # capex of transport technologies
+            constraints.add_constraint_block(model, name="constraint_transport_technology_capex",
+                                             constraint=rules.constraint_transport_technology_capex_block(),
+                                             doc='Capital expenditures for installing transport technology')
 
     # defines disjuncts if technology on/off
     @classmethod

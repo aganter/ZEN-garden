@@ -288,11 +288,14 @@ class ConversionTechnology(Technology):
             pwa_breakpoints, pwa_values = cls.calculate_pwa_breakpoints_values(optimization_setup, set_pwa_capex[0], "capex")
             constraints.add_pw_constraint(model, index_values=set_pwa_capex[0], yvar="capex_approximation", xvar="capacity_approximation",
                                           break_points=pwa_breakpoints, f_vals=pwa_values, cons_type="EQ", name="constraint_capex_pwa",)
-        if set_linear_capex[0]:
-            # if set_linear_capex contains technologies: (note we give the coordinates nice names)
-            constraints.add_constraint_rule(model, name="constraint_linear_capex",
-                                            index_sets=(set_linear_capex[0], ["lin_capex_tech", "lin_capex_node", "lin_capex_time_step"]),
-                                            rule=rules.constraint_linear_capex_rule, doc="Linear relationship in capex")
+
+        # anyaxie:
+        if not optimization_setup.system["use_endogenous_learning"]:
+            if set_linear_capex[0]:
+                # if set_linear_capex contains technologies: (note we give the coordinates nice names)
+                constraints.add_constraint_rule(model, name="constraint_linear_capex",
+                                                index_sets=(set_linear_capex[0], ["lin_capex_tech", "lin_capex_node", "lin_capex_time_step"]),
+                                                rule=rules.constraint_linear_capex_rule, doc="Linear relationship in capex")
         # Conversion Efficiency
         set_pwa_conversion_factor = cls.create_custom_set(["set_conversion_technologies", "set_conversion_factor_pwa", "set_nodes", "set_time_steps_operation"], optimization_setup)
         set_linear_conversion_factor = cls.create_custom_set(["set_conversion_technologies", "set_conversion_factor_linear", "set_nodes", "set_time_steps_operation"], optimization_setup)
@@ -306,9 +309,11 @@ class ConversionTechnology(Technology):
             constraints.add_constraint_block(model, name="constraint_linear_conversion_factor",
                                              constraint=rules.constraint_linear_conver_efficiency_block(*set_linear_conversion_factor),
                                              doc="Linear relationship in conversion_factor")  # Coupling constraints
-        # couple the real variables with the auxiliary variables
-        constraints.add_constraint_rule(model, name="constraint_capex_coupling", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup),
-            rule=rules.constraint_capex_coupling_rule, doc="couples the real capex variables with the approximated variables")
+        #anyaxie
+        if not optimization_setup.system["use_endogenous_learning"]:
+            # couple the real variables with the auxiliary variables
+            constraints.add_constraint_rule(model, name="constraint_capex_coupling", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup),
+                rule=rules.constraint_capex_coupling_rule, doc="couples the real capex variables with the approximated variables")
         # capacity
         constraints.add_constraint_rule(model, name="constraint_capacity_coupling", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup),
             rule=rules.constraint_capacity_coupling_rule, doc="couples the real capacity variables with the approximated variables")

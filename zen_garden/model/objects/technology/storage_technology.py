@@ -230,10 +230,12 @@ class StorageTechnology(Technology):
         constraints.add_constraint_block(model, name="constraint_couple_storage_level",
                                          constraint=rules.constraint_couple_storage_level_block(),
                                          doc='couple subsequent storage levels (time coupling constraints)')
+        # anyaxie
         # Linear Capex
-        constraints.add_constraint_block(model, name="constraint_storage_technology_capex",
-                                         constraint=rules.constraint_storage_technology_capex_block(),
-                                         doc='Capital expenditures for installing storage technology')
+        if not optimization_setup.system["use_endogenous_learning"]:
+            constraints.add_constraint_block(model, name="constraint_storage_technology_capex",
+                                             constraint=rules.constraint_storage_technology_capex_block(),
+                                             doc='Capital expenditures for installing storage technology')
 
         # defines disjuncts if technology on/off
 
