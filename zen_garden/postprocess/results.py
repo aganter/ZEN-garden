@@ -1866,4 +1866,3 @@ if __name__ == "__main__":
     else:
         logging.critical("No results folder found!")
 
-    print(r.get_df())

@@ -94,12 +94,13 @@ class Technology(Element):
                                                                                        "set_technologies_existing"])
 
         # anyaxie
-        # segments for pwa of cumulative cost for each technology
-        # todo: Remove list of range of int ... not very elegant
-        self.set_total_cost_pwa_segments = list(
-            range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
-        self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
-        self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
+        if self.optimization_setup.system["use_endogenous_learning"]:
+            # segments for pwa of cumulative cost for each technology
+            # todo: Remove list of range of int ... not very elegant
+            self.set_total_cost_pwa_segments = list(
+                range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
+            self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
+            self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -532,12 +533,13 @@ class Technology(Element):
                                         doc="set of all reference carriers correspondent to a technology. Dimensions: set_technologies",
                                         index_set="set_technologies")
         # anyaxie
-        # segments for pwa of cumulative cost
-        optimization_setup.sets.add_set(name="set_total_cost_pwa_segments",
-                                        data=optimization_setup.get_attribute_of_all_elements(cls,
-                                                                                              "set_total_cost_pwa_segments"),
-                                        doc="Set of segments for pwa of total cost function",
-                                        index_set="set_technologies")
+        if optimization_setup.system["use_endogenous_learning"]:
+            # segments for pwa of cumulative cost
+            optimization_setup.sets.add_set(name="set_total_cost_pwa_segments",
+                                            data=optimization_setup.get_attribute_of_all_elements(cls,
+                                                                                                  "set_total_cost_pwa_segments"),
+                                            doc="Set of segments for pwa of total cost function",
+                                            index_set="set_technologies")
 
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
@@ -697,16 +699,17 @@ class Technology(Element):
                                                     doc='Parameter which specifies the carbon intensity of each technology')
 
         # anyaxie
-        optimization_setup.parameters.add_parameter(name="learning_rate",
-                                                    data=optimization_setup.initialize_component(cls, "learning_rate",
-                                                                                                 index_names=[
-                                                                                                     "set_technologies"]),
-                                                    doc='Parameter which specifies the learning rate of the technology')
-        optimization_setup.parameters.add_parameter(name="global_share_factor",
-                                                    data=optimization_setup.initialize_component(cls, "global_share_factor",
-                                                                                                    index_names=[
-                                                                                                        "set_technologies"]),
-                                                    doc='Parameter which specifies the global share factor of the technology')
+        if optimization_setup.system["use_endogenous_learning"]:
+            optimization_setup.parameters.add_parameter(name="learning_rate",
+                                                        data=optimization_setup.initialize_component(cls, "learning_rate",
+                                                                                                     index_names=[
+                                                                                                         "set_technologies"]),
+                                                        doc='Parameter which specifies the learning rate of the technology')
+            optimization_setup.parameters.add_parameter(name="global_share_factor",
+                                                        data=optimization_setup.initialize_component(cls, "global_share_factor",
+                                                                                                        index_names=[
+                                                                                                            "set_technologies"]),
+                                                        doc='Parameter which specifies the global share factor of the technology')
 
         # Helper params
         t0 = time.perf_counter()
@@ -718,21 +721,22 @@ class Technology(Element):
                                                                                           type_existing_quantity="cost_capex",
                                                                                           time_step_type="yearly"))
         #anyaxie
-        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
-                                                           data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                           type_pwa_param="pwa_points_lower_bound"))
-        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_upper_bound",
-                                                           data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                           type_pwa_param="pwa_points_upper_bound"))
-        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_slope",
-                                                            data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                             type_pwa_param="pwa_slope"))
-        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_intersect",
-                                                           data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                           type_pwa_param="pwa_intersect"))
-        optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_initial_total_global_cost",
-                                                           data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                           type_pwa_param="pwa_initial_total_global_cost"))
+        if optimization_setup.system["use_endogenous_learning"]:
+            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+                                                               data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                               type_pwa_param="pwa_points_lower_bound"))
+            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_upper_bound",
+                                                               data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                               type_pwa_param="pwa_points_upper_bound"))
+            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_slope",
+                                                                data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                                 type_pwa_param="pwa_slope"))
+            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_intersect",
+                                                               data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                               type_pwa_param="pwa_intersect"))
+            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_initial_total_global_cost",
+                                                               data=cls.perform_total_cost_pwa(optimization_setup,
+                                                                                               type_pwa_param="pwa_initial_total_global_cost"))
 
 
         t1 = time.perf_counter()
@@ -837,27 +841,27 @@ class Technology(Element):
                                doc="total carbon emissions for operating technology at location l and time t")
 
         # anyaxie
-        # todo: Add set_capacity_types
-        # yearly capex as sum over all nodes
-        variables.add_variable(model, name="cost_capex_all_positions", index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
-                               bounds=(0, np.inf), doc="yearly capex of technology h over all positions")
-        # global cumulative capacity
-        variables.add_variable(model, name="global_cumulative_capacity", index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
-                               bounds=(0, np.inf), doc="learning-inducing capacity of technology h in period y")
-        # segement selection for pwa total cost binary variables
-        variables.add_variable(model, name="total_cost_pwa_segment_selection", index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],optimization_setup),
-                               binary=True, doc="segment selection binary variable")
-        # segment position variable for cumulative global capacity
-        variables.add_variable(model, name="total_cost_pwa_cum_capacity_segment_position",index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_time_steps_yearly","set_total_cost_pwa_segments"], optimization_setup),
-                               bounds=(0, np.inf), doc="cumulative global capacity of technology y in year y in segment w")
-        # total global cost variable
-        variables.add_variable(model, name="total_cost_pwa_global_cost", index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
-                                 bounds=(0, np.inf), doc="total global cost of technology h in period y")
+        if optimization_setup.system["use_endogenous_learning"]:
+            # yearly capex as sum over all nodes
+            variables.add_variable(model, name="cost_capex_all_positions", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                   bounds=(0, np.inf), doc="yearly capex of technology h over all positions")
+            # global cumulative capacity
+            variables.add_variable(model, name="global_cumulative_capacity", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                   bounds=(0, np.inf), doc="learning-inducing capacity of technology h in period y")
+            # segement selection for pwa total cost binary variables
+            variables.add_variable(model, name="total_cost_pwa_segment_selection", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],optimization_setup),
+                                   binary=True, doc="segment selection binary variable")
+            # segment position variable for cumulative global capacity
+            variables.add_variable(model, name="total_cost_pwa_cum_capacity_segment_position",index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly","set_total_cost_pwa_segments"], optimization_setup),
+                                   bounds=(0, np.inf), doc="cumulative global capacity of technology y in year y in segment w")
+            # total global cost variable
+            variables.add_variable(model, name="total_cost_pwa_global_cost", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                     bounds=(0, np.inf), doc="total global cost of technology h in period y")
 
         # install technology
         # Note: binary variables are written into the lp file by linopy even if they are not relevant for the optimization,
@@ -1159,7 +1163,6 @@ class TechnologyRules(GenericRule):
         :return: #TODO describe parameter/return
         """
         # todo: remove hardcode for flag
-        flag_endogenous = True
         ### index sets
         # skipped because rule-based constraint
 
@@ -1170,7 +1173,7 @@ class TechnologyRules(GenericRule):
         # skipped because rule-based constraint
 
         ### auxiliary calculations
-        if flag_endogenous:
+        if self.system["use_endogenous_learning"]:
             term_sum_yearly = self.variables["cost_capex_all_positions"].loc[..., year].sum()
         else:
             term_sum_yearly = self.variables["capex_yearly"].loc[..., year].sum()
