@@ -101,6 +101,8 @@ class Technology(Element):
                 range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
             self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
             self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
+            self.initial_cost = self.data_input.extract_attribute("initial_cost")["value"]
+            self.initial_capacity = self.data_input.extract_attribute("initial_capacity")["value"]
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -292,18 +294,24 @@ class Technology(Element):
         for tech, capacity_type in index.get_unique(["set_technologies", "set_capacity_types"]):
             ### auxiliary calculations
             # pwa
-            learning_rate = cls.get_learning_rate(optimization_setup, tech)
-            # initial_capacity = self.capacities_existing(optimization_setup, tech, capacity_type)
-            initial_capacity = 30
-
             # todo: make this dynamic
-            # todo: find initial cost parameter
             # todo: find lower and upper bound for global cumulative capacity
+            learning_rate = cls.get_learning_rate(optimization_setup, tech)
+
+            initial_cost = 5
+            initial_capacity = 10
+
+            # initial_cost = cls.get_initial_cost_hardcode(optimization_setup, tech)
+            # initial_capacity = cls.get_initial_capacity_hardcode(optimization_setup, tech)
+
+            # initial_capacity = self.capacities_existing(optimization_setup, tech, capacity_type)
+            # initial_cost = cls.get_initial_cost(optimization_setup, tech, capacity_type)
+            # initial_capacity = cls.get_global_capacity_existing(optimization_setup, tech, capacity_type)
+
             # Lower and Upper bound for global cumulative capacity
             lb = 0
             ub = 180
             npts = 101
-            initial_cost = 10
 
             q_values = np.linspace(lb, ub, npts)
 
@@ -348,6 +356,108 @@ class Technology(Element):
 
         return learning_rate_tech
 
+    @classmethod
+    def get_initial_capacity_hardcode(cls, optimization_setup, tech):
+        """ returns initial capacity of technology.
+        :param optimization_setup: OptimizationSetup the technology is part of
+        :param tech: name of the technology
+        :return: initial capacity of technology
+        """
+        # get model and system
+        params = optimization_setup.parameters.dict_parameters
+        # get the capex_specific in year 0 for the technology
+        initial_capacity_tech = params.initial_capacity[tech]
+
+        return initial_capacity_tech
+
+    @classmethod
+    def get_initial_cost_hardcode(cls, optimization_setup, tech):
+        """ returns initial cost of technology.
+        :param optimization_setup: OptimizationSetup the technology is part of
+        :param tech: name of the technology
+        :return: initial cost of technology
+        """
+        # get model and system
+        params = optimization_setup.parameters.dict_parameters
+        # get the capex_specific in year 0 for the technology
+        initial_cost_tech = params.initial_cost[tech]
+
+        return initial_cost_tech
+
+    @classmethod
+    def get_initial_cost(cls, optimization_setup, tech, capacity_type):
+        """ returns initial cost of technology.
+        :param optimization_setup: OptimizationSetup the technology is part of
+        :param tech: name of the technology
+        :return: initial cost of technology
+        """
+        # get model and system
+        params = optimization_setup.parameters.dict_parameters
+        # get the capex_specific in year 0 for the technology
+        capex_specific_tech = []
+        # todo: remove hardcode
+        for subclass in cls.__subclasses__():
+            if subclass.__name__=="ConversionTechnology":
+                index_names = ["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"]
+                capacity_types = False
+            elif subclass.__name__=="TransportTechnology":
+                index_names = ["set_transport_technologies", "set_edges", "set_time_steps_yearly"]
+                capacity_types = False
+            elif subclass.__name__=="StorageTechnology":
+                index_names = ["set_storage_technologies", "set_capacity_types","set_nodes", "set_time_steps_yearly"]
+            else:
+                raise KeyError(f"Wrong subclass {subclass.__name__}")
+
+            component_data, attribute_is_series = optimization_setup.get_attribute_of_all_elements(subclass, "capex_specific",
+                                                                                     capacity_types=capacity_types, return_attribute_is_series=True)
+            index_list = []
+            if index_names:
+                custom_set, index_list = subclass.create_custom_set(index_names, optimization_setup)
+                if np.size(custom_set):
+                    if attribute_is_series:
+                        component_data = pd.concat(component_data, keys=component_data.keys())
+                    else:
+                        component_data = pd.Series(component_data)
+                    component_data = optimization_setup.check_for_subindex(component_data, custom_set)
+            elif attribute_is_series:
+                component_data = pd.concat(component_data, keys=component_data.keys())
+            if not index_names:
+                logging.warning(
+                    f"Initializing a parameter (capex_specific) without the specifying the index names will be deprecated!")
+
+        # return component_data, index_list
+
+        # if any(tech in key for key in params.capex_specific_conversion.keys()):
+        #     capex_specific_tech = [value for key, value in params.capex_specific_conversion.items() if key[0] == tech and key[2] == 0]
+        # elif any(tech in key for key in params.capex_specific_storage.keys()):
+        #     capex_specific_tech = [value for key, value in params.capex_specific_conversion.items() if key[0] == tech and key[1] == capacity_type and key[3] == 0]
+        # elif any(tech in key for key in params.capex_specific_transport.keys()):
+        #     capex_specific_tech = [value for key, value in params.capex_specific_transport.items() if key[0] == tech and key[2] == 0]
+        # else:
+        #     raise KeyError(f"No capex specific found for {tech}")
+
+        if subclass.__name__ == "StorageTechnology":
+            capex_specific_tech = [value for (ind_tech, ind_cap_type, _, ind_year), value in component_data if ind_tech == tech and ind_cap_type == capacity_type and ind_year == 0]
+        else:
+            capex_specific_tech = [value for (ind_tech, _, ind_year), value in component_data if ind_tech == tech and ind_year == 0]
+
+
+        # calculate initial cost as the average across all nodes
+        initial_cost_tech = sum(capex_specific_tech)/len(capex_specific_tech)
+
+        return initial_cost_tech
+
+    @classmethod
+    def get_global_capacity_existing(cls, optimization_setup, tech, capacity_type):
+        """ returns the existing capacity of a technology over all positions
+        """
+        # get model and system
+        params = optimization_setup.parameters.dict_parameters
+        # get the capex_specific in year 0 for the technology
+        capacity_existing_tech = params.capacity_existing.loc[tech, :, :, :].sum(dim=["set_location", "set_technologies_existing"])
+        global_capacity_existing_tech = (1/params.global_share[tech]) * capacity_existing_tech
+
+        return global_capacity_existing_tech
     @classmethod
     def get_capacity_existing(cls, optimization_setup, tech, capacity_type):
         """ returns the existing capacity of a technology over all positions
@@ -702,13 +812,20 @@ class Technology(Element):
         if optimization_setup.system["use_endogenous_learning"]:
             optimization_setup.parameters.add_parameter(name="learning_rate",
                                                         data=optimization_setup.initialize_component(cls, "learning_rate",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies"]),
+                                                        index_names=[ "set_technologies"]),
                                                         doc='Parameter which specifies the learning rate of the technology')
             optimization_setup.parameters.add_parameter(name="global_share_factor",
                                                         data=optimization_setup.initialize_component(cls, "global_share_factor",
-                                                                                                        index_names=[
-                                                                                                            "set_technologies"]),
+                                                        index_names=["set_technologies"]),
+                                                        doc='Parameter which specifies the global share factor of the technology')
+            # todo: remove these two later for dynamic
+            optimization_setup.parameters.add_parameter(name="initial_cost",
+                                                        data=optimization_setup.initialize_component(cls, "initial_cost",
+                                                        index_names=["set_technologies"]),
+                                                        doc='Parameter which specifies the global share factor of the technology')
+            optimization_setup.parameters.add_parameter(name="initial_capacity",
+                                                        data=optimization_setup.initialize_component(cls, "initial_capacity",
+                                                        index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the global share factor of the technology')
 
         # Helper params
@@ -993,6 +1110,8 @@ class Technology(Element):
                                              doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
 
 
+
+
         # disjunct if technology is on
         # the disjunction variables
         variables = optimization_setup.variables
@@ -1162,7 +1281,6 @@ class TechnologyRules(GenericRule):
         :param year: #TODO describe parameter/return
         :return: #TODO describe parameter/return
         """
-        # todo: remove hardcode for flag
         ### index sets
         # skipped because rule-based constraint
 
@@ -2092,10 +2210,6 @@ class TechnologyRules(GenericRule):
 
         # Initialize an empty list to store the constraints
         constraints = []
-        # Might need to be added as extra constraint
-        # todo: Add this constraint
-        # self.variables["cost_capex_all_positions"].loc[:,:,:] = self.variables["cost_capex"].loc[:, :, :, :].sum("set_location")
-
         # Iterate over technologies
         for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types", "set_time_steps_yearly"]):
             # Get the unique segments for the current technology
@@ -2371,9 +2485,7 @@ class TechnologyRules(GenericRule):
                 annuity = ((1 + discount_rate) ** lifetime * discount_rate) / ((1 + discount_rate) ** lifetime - 1)
             else:
                 annuity = 1 / lifetime
-            # todo: change this term for new investments
             # todo: change hardcode
-            # todo:
             term_neg_annuity_cost_capex_previous = []
             for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year,
                                                                time_step_type="yearly"):
@@ -2399,5 +2511,3 @@ class TechnologyRules(GenericRule):
                                                   index_values=index.get_unique(
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
-
-
