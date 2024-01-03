@@ -68,7 +68,8 @@ class StorageTechnology(Technology):
         self.opex_specific_fixed_energy = self.data_input.extract_input_data("opex_specific_fixed_energy", index_sets=["set_nodes", "set_time_steps_yearly"],
                                                                             time_steps=set_time_steps_yearly)
         #anyaxie
-        self.perform_total_cost_pwa()
+        if self.optimization_setup.system["use_endogenous_learning"]:
+            self.perform_total_cost_pwa()
 
         # original
         self.convert_to_fraction_of_capex()

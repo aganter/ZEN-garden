@@ -56,7 +56,8 @@ class TransportTechnology(Technology):
         # calculate capex of existing capacity
         self.capex_capacity_existing = self.calculate_capex_of_capacities_existing()
         # anyaxie
-        self.perform_total_cost_pwa()
+        if self.optimization_setup.system['use_endogenous_learning']:
+            self.perform_total_cost_pwa()
 
     def get_capex_transport(self):
         """get capex of transport technology"""

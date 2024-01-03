@@ -1866,12 +1866,12 @@ if __name__ == "__main__":
     else:
         logging.critical("No results folder found!")
 
-    r.plot("capacity", node_edit="all")
     r.plot(component="capacity_addition", tech_type="conversion")
     r.plot(component="capacity", tech_type="conversion")
     r.plot(component="capacity_addition")
     r.plot(component="capacity")
 
+    r.plot("capacity", node_edit="all")
     r.plot("capacity", tech_type="conversion", node_edit="all")
     r.plot("capacity", tech_type="transport", node_edit="all")
     r.plot("capacity", tech_type="storage", node_edit="all")

@@ -63,7 +63,8 @@ class ConversionTechnology(Technology):
         self.get_conversion_factor()
         self.convert_to_fraction_of_capex()
         # anyaxie
-        self.perform_total_cost_pwa()
+        if self.optimization_setup.system["use_endogenous_learning"]:
+            self.perform_total_cost_pwa()
 
     def get_conversion_factor(self):
         """retrieves and stores conversion_factor for <ConversionTechnology>.
