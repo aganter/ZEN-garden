@@ -109,7 +109,6 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[])
 
-
     def calculate_edges_from_nodes(self):
         """ calculates set_nodes_on_edges from set_nodes
 

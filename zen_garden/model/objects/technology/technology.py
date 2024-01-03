@@ -58,51 +58,51 @@ class Technology(Element):
         self.lifetime = self.data_input.extract_attribute("lifetime")["value"]
         self.construction_time = self.data_input.extract_attribute("construction_time")["value"]
         # maximum diffusion rate
-        self.max_diffusion_rate = self.data_input.extract_input_data("max_diffusion_rate",
-                                                                     index_sets=["set_time_steps_yearly"],
-                                                                     time_steps=set_time_steps_yearly)
+        self.max_diffusion_rate = self.data_input.extract_input_data("max_diffusion_rate", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly")
 
         # add all raw time series to dict
         self.raw_time_series = {}
-        self.raw_time_series["min_load"] = self.data_input.extract_input_data("min_load", index_sets=[set_location,
-                                                                                                      "set_time_steps"],
-                                                                              time_steps=set_base_time_steps_yearly)
-        self.raw_time_series["max_load"] = self.data_input.extract_input_data("max_load", index_sets=[set_location,
-                                                                                                      "set_time_steps"],
-                                                                              time_steps=set_base_time_steps_yearly)
-        self.raw_time_series["opex_specific_variable"] = self.data_input.extract_input_data("opex_specific_variable",
-                                                                                            index_sets=[set_location,
-                                                                                                        "set_time_steps"],
-                                                                                            time_steps=set_base_time_steps_yearly)
+        self.raw_time_series["min_load"] = self.data_input.extract_input_data("min_load", index_sets=[set_location, "set_time_steps"], time_steps=set_base_time_steps_yearly)
+        self.raw_time_series["max_load"] = self.data_input.extract_input_data("max_load", index_sets=[set_location, "set_time_steps"], time_steps=set_base_time_steps_yearly)
+        self.raw_time_series["opex_specific_variable"] = self.data_input.extract_input_data("opex_specific_variable", index_sets=[set_location, "set_time_steps"], time_steps=set_base_time_steps_yearly)
         # non-time series input data
-        self.opex_specific_fixed = self.data_input.extract_input_data("opex_specific_fixed", index_sets=[set_location,
-                                                                                                         "set_time_steps_yearly"],
-                                                                      time_steps=set_time_steps_yearly)
+        self.opex_specific_fixed = self.data_input.extract_input_data("opex_specific_fixed", index_sets=[set_location, "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
         self.capacity_limit = self.data_input.extract_input_data("capacity_limit", index_sets=[set_location])
-        self.carbon_intensity_technology = self.data_input.extract_input_data("carbon_intensity",
-                                                                              index_sets=[set_location])
+        self.carbon_intensity_technology = self.data_input.extract_input_data("carbon_intensity", index_sets=[set_location])
         # extract existing capacity
         self.set_technologies_existing = self.data_input.extract_set_technologies_existing()
-        self.capacity_existing = self.data_input.extract_input_data("capacity_existing", index_sets=[set_location,
-                                                                                                     "set_technologies_existing"])
-        self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing",
-                                                                               index_sets=[set_location,
-                                                                                           "set_time_steps_yearly"],
-                                                                               time_steps=set_time_steps_yearly)
-        self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing",
-                                                                           index_sets=[set_location,
-                                                                                       "set_technologies_existing"])
+        self.capacity_existing = self.data_input.extract_input_data("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
+        self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing", index_sets=[set_location, "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
+        self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
+
 
         # anyaxie
-        if self.optimization_setup.system["use_endogenous_learning"]:
-            # segments for pwa of cumulative cost for each technology
-            # todo: Remove list of range of int ... not very elegant
-            self.set_total_cost_pwa_segments = list(
-                range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
-            self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
-            self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
-            self.initial_cost = self.data_input.extract_attribute("initial_cost")["value"]
-            self.initial_capacity = self.data_input.extract_attribute("initial_capacity")["value"]
+        # endogenous learning input data
+        # if self.optimization_setup.system["use_endogenous_learning"]:
+        # segments for pwa of cumulative cost for each technology
+        # todo: Remove list of range of int ... not very elegant
+        self.set_total_cost_pwa_segments = list(
+            range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
+        self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
+        self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
+        self.initial_cost = self.data_input.extract_attribute("initial_cost")["value"]
+        self.initial_capacity = self.data_input.extract_attribute("initial_capacity")["value"]
+
+        # optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+        #                                                    data=cls.perform_total_cost_pwa(optimization_setup,
+        #                                                                                    type_pwa_param="pwa_points_lower_bound"))
+        # optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_upper_bound",
+        #                                                    data=cls.perform_total_cost_pwa(optimization_setup,
+        #                                                                                    type_pwa_param="pwa_points_upper_bound"))
+        # optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_slope",
+        #                                                    data=cls.perform_total_cost_pwa(optimization_setup,
+        #                                                                                    type_pwa_param="pwa_slope"))
+        # optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_intersect",
+        #                                                    data=cls.perform_total_cost_pwa(optimization_setup,
+        #                                                                                    type_pwa_param="pwa_intersect"))
+        # optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_initial_total_global_cost",
+        #                                                    data=cls.perform_total_cost_pwa(optimization_setup,
+        #                                                                                    type_pwa_param="pwa_initial_total_global_cost"))
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -116,14 +116,10 @@ class Technology(Element):
             else:
                 capacities_existing = self.capacity_existing
             capex_capacity_existing = capacities_existing.to_frame().apply(
-                lambda _capacity_existing: self.calculate_capex_of_single_capacity(_capacity_existing.squeeze(),
-                                                                                   _capacity_existing.name,
-                                                                                   storage_energy), axis=1)
+                lambda _capacity_existing: self.calculate_capex_of_single_capacity(_capacity_existing.squeeze(), _capacity_existing.name, storage_energy), axis=1)
         else:
             capacities_existing = self.capacity_existing
-            capex_capacity_existing = capacities_existing.to_frame().apply(
-                lambda _capacity_existing: self.calculate_capex_of_single_capacity(_capacity_existing.squeeze(),
-                                                                                   _capacity_existing.name), axis=1)
+            capex_capacity_existing = capacities_existing.to_frame().apply(lambda _capacity_existing: self.calculate_capex_of_single_capacity(_capacity_existing.squeeze(), _capacity_existing.name), axis=1)
         return capex_capacity_existing
 
     def calculate_capex_of_single_capacity(self, *args):
@@ -218,24 +214,11 @@ class Technology(Element):
                 setattr(self, "capacity_investment_existing" + _energy_string, _capacity_investment_existing.stack())
 
     # anyaxie
-    @classmethod
-    def perform_total_cost_pwa(cls, optimization_setup, type_pwa_param):
+    def perform_total_cost_pwa(self):
         """
         perform pwa approximation for total cost
         :return: slope and intersect of each segment, interpolation points
         """
-        # todo: don't run this everytime for each technology, just run it once
-        index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], optimization_setup)
-        index = ZenIndex(index_values, index_names)
-        # get all the capacities
-        index_arrs = IndexSet.tuple_to_arr(index_values, index_names)
-        coords = [optimization_setup.sets.get_coord(data, name) for data, name in zip(index_arrs, index_names)]
-        pwa_lower_bound = xr.DataArray(np.nan, coords=coords, dims=index_names)
-        pwa_upper_bound = xr.DataArray(np.nan, coords=coords, dims=index_names)
-        pwa_intersect = xr.DataArray(np.nan, coords=coords, dims=index_names)
-        pwa_slope = xr.DataArray(np.nan, coords=coords, dims=index_names)
-        pwa_initial_total_global_cost = xr.DataArray(np.nan, coords=coords[:2], dims=index_names[:2])
 
         def fun_total_cost(u, c_initial: float, q_initial: float,
                            learning_rate: float) -> object:  # u is a vector
@@ -291,98 +274,47 @@ class Technology(Element):
 
             return interpolated_x, y_values, intersect, slope
 
-        for tech, capacity_type in index.get_unique(["set_technologies", "set_capacity_types"]):
-            ### auxiliary calculations
-            # pwa
-            # todo: make this dynamic
-            # todo: find lower and upper bound for global cumulative capacity
-            learning_rate = cls.get_learning_rate(optimization_setup, tech)
+        learning_rate = self.learning_rate
+        global_share_factor = self.global_share_factor
+        global_initial_capacity = (1/global_share_factor) * self.capacity_existing.sum()
+        initial_cost = self.capex_specific.loc[:, 0].sum() / len(self.capex_specific.loc[:, 0])
 
-            initial_cost = 5
-            initial_capacity = 10
+        # todo: how to treat this case?
+        # In case there is no existing capacity, set the global initial capacity to 1
+        if global_initial_capacity == 0:
+            global_initial_capacity = 1
 
-            # initial_cost = cls.get_initial_cost_hardcode(optimization_setup, tech)
-            # initial_capacity = cls.get_initial_capacity_hardcode(optimization_setup, tech)
+        # todo: remove hardcode
+        # Lower and Upper bound for global cumulative capacity
+        lb = 0
+        ub = 180
+        npts = 101
 
-            # initial_capacity = self.capacities_existing(optimization_setup, tech, capacity_type)
-            # initial_cost = cls.get_initial_cost(optimization_setup, tech, capacity_type)
-            # initial_capacity = cls.get_global_capacity_existing(optimization_setup, tech, capacity_type)
+        q_values = np.linspace(lb, ub, npts)
 
-            # Lower and Upper bound for global cumulative capacity
-            lb = 0
-            ub = 180
-            npts = 101
+        segments = self.set_total_cost_pwa_segments
+        num_interpolation_points = len(segments) + 1
 
-            q_values = np.linspace(lb, ub, npts)
+        function = lambda u: fun_total_cost(u, initial_cost, global_initial_capacity, learning_rate)
 
-            segments = optimization_setup.sets["set_total_cost_pwa_segments"][tech]
-            num_interpolation_points = len(segments) + 1
+        interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
+                                                                                 num_interpolation_points)
 
-            function = lambda u: fun_total_cost(u, initial_cost, initial_capacity, learning_rate)
+        index_sets = ["set_total_cost_pwa_segments"]
+        time_steps = None
+        index_list, index_name_list = self.data_input.construct_index_list(index_sets, None)
+        index_multi_index = pd.MultiIndex.from_product(index_list, names=index_name_list)
+        df_output = pd.Series(index=index_multi_index, data=interpolated_q, dtype=float)
 
-            interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
-                                                                                     num_interpolation_points)
-            pwa_lower_bound.loc[tech, capacity_type, :] = interpolated_q[:-1]
-            pwa_upper_bound.loc[tech, capacity_type, :] = interpolated_q[1:]
-            pwa_intersect.loc[tech, capacity_type, :] = intersect
-            pwa_slope.loc[tech, capacity_type, :] = slope
 
-            pwa_initial_total_global_cost.loc[tech, capacity_type] = intersect[0] + slope[0] * initial_capacity
+        pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity
 
-        if type_pwa_param == "pwa_points_lower_bound":
-            return pwa_lower_bound
-        elif type_pwa_param == "pwa_points_upper_bound":
-            return pwa_upper_bound
-        elif type_pwa_param == "pwa_slope":
-            return pwa_slope
-        elif type_pwa_param == "pwa_intersect":
-            return pwa_intersect
-        elif type_pwa_param == "pwa_initial_total_global_cost":
-            return pwa_initial_total_global_cost
-        else:
-            raise ValueError("type_pwa_param must be either pwa_points or pwa_coefficients")
+        self.total_cost_pwa_points_lower_bound = pd.Series(interpolated_q[:-1], index=self.set_total_cost_pwa_segments)
+        self.total_cost_pwa_points_upper_bound = pd.Series(interpolated_q[1:], index=self.set_total_cost_pwa_segments)
+        self.total_cost_pwa_slope = pd.Series(slope, index=self.set_total_cost_pwa_segments)
+        self.total_cost_pwa_intersect = pd.Series(intersect, index=self.set_total_cost_pwa_segments)
+        self.total_cost_pwa_initial_global_cost = pd.Series(pwa_initial_total_global_cost)
 
-    @classmethod
-    def get_learning_rate(cls, optimization_setup, tech):
-        """ returns learning_rate of technology.
-        :param optimization_setup: OptimizationSetup the technology is part of
-        :param tech: name of the technology
-        :return: learning rate of technology
-        """
-        # get model and system
-        params = optimization_setup.parameters.dict_parameters
-        # get the learning rate
-        learning_rate_tech = params.learning_rate[tech]
-
-        return learning_rate_tech
-
-    @classmethod
-    def get_initial_capacity_hardcode(cls, optimization_setup, tech):
-        """ returns initial capacity of technology.
-        :param optimization_setup: OptimizationSetup the technology is part of
-        :param tech: name of the technology
-        :return: initial capacity of technology
-        """
-        # get model and system
-        params = optimization_setup.parameters.dict_parameters
-        # get the capex_specific in year 0 for the technology
-        initial_capacity_tech = params.initial_capacity[tech]
-
-        return initial_capacity_tech
-
-    @classmethod
-    def get_initial_cost_hardcode(cls, optimization_setup, tech):
-        """ returns initial cost of technology.
-        :param optimization_setup: OptimizationSetup the technology is part of
-        :param tech: name of the technology
-        :return: initial cost of technology
-        """
-        # get model and system
-        params = optimization_setup.parameters.dict_parameters
-        # get the capex_specific in year 0 for the technology
-        initial_cost_tech = params.initial_cost[tech]
-
-        return initial_cost_tech
 
     @classmethod
     def get_initial_cost(cls, optimization_setup, tech, capacity_type):
@@ -818,15 +750,8 @@ class Technology(Element):
                                                         data=optimization_setup.initialize_component(cls, "global_share_factor",
                                                         index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the global share factor of the technology')
-            # todo: remove these two later for dynamic
-            optimization_setup.parameters.add_parameter(name="initial_cost",
-                                                        data=optimization_setup.initialize_component(cls, "initial_cost",
-                                                        index_names=["set_technologies"]),
-                                                        doc='Parameter which specifies the global share factor of the technology')
-            optimization_setup.parameters.add_parameter(name="initial_capacity",
-                                                        data=optimization_setup.initialize_component(cls, "initial_capacity",
-                                                        index_names=["set_technologies"]),
-                                                        doc='Parameter which specifies the global share factor of the technology')
+
+            #todo: add parameter for pwa of total cost function
 
         # Helper params
         t0 = time.perf_counter()
@@ -838,22 +763,27 @@ class Technology(Element):
                                                                                           type_existing_quantity="cost_capex",
                                                                                           time_step_type="yearly"))
         #anyaxie
-        if optimization_setup.system["use_endogenous_learning"]:
-            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
-                                                               data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                               type_pwa_param="pwa_points_lower_bound"))
-            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_upper_bound",
-                                                               data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                               type_pwa_param="pwa_points_upper_bound"))
-            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_slope",
-                                                                data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                                 type_pwa_param="pwa_slope"))
-            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_intersect",
-                                                               data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                               type_pwa_param="pwa_intersect"))
-            optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_initial_total_global_cost",
-                                                               data=cls.perform_total_cost_pwa(optimization_setup,
-                                                                                               type_pwa_param="pwa_initial_total_global_cost"))
+        # if optimization_setup.system["use_endogenous_learning"]:
+        #     optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_lower_bound",
+        #                                                 data=optimization_setup.initialize_component(cls,"total_cost_pwa_points_lower_bound",
+        #                                                 index_names=["set_technologies"]),
+        #                                                 doc='Parameter which specifies the lower bound of the pwa of total cost function')
+        #
+        #
+        #
+        #     optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+        #                                                        data=cls.get_existing_quantity(optimization_setup,
+        #                                                             type_existing_quantity="total_cost_pwa_points_upper_bound"))
+        #     optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+        #                                                        data=cls.get_existing_quantity(optimization_setup,
+        #                                                             type_existing_quantity="total_cost_pwa_slope"))
+        #     optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+        #                                                        data=cls.get_existing_quantity(optimization_setup,
+        #                                                             type_existing_quantity="total_cost_pwa_intersect"))
+        #     optimization_setup.parameters.add_helper_parameter(name="total_cost_pwa_points_lower_bound",
+        #                                                        data=cls.get_existing_quantity(optimization_setup,
+        #                                                             type_existing_quantity="total_cost_pwa_initial_global_cost"))
+
 
 
         t1 = time.perf_counter()
@@ -1213,9 +1143,6 @@ class Technology(Element):
                                                                    time_step_type=time_step_type)
         existing_quantities.loc[index_arrs] = values
         return existing_quantities
-
-
-
 
 
 class TechnologyRules(GenericRule):
