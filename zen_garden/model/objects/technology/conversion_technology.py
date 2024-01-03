@@ -62,6 +62,8 @@ class ConversionTechnology(Technology):
         # get conversion efficiency and capex
         self.get_conversion_factor()
         self.convert_to_fraction_of_capex()
+        # anyaxie
+        self.perform_total_cost_pwa()
 
     def get_conversion_factor(self):
         """retrieves and stores conversion_factor for <ConversionTechnology>.
