@@ -1871,10 +1871,10 @@ if __name__ == "__main__":
     r.plot(component="capacity_addition")
     r.plot(component="capacity")
 
-    r.plot("capacity", node_edit="all")
-    r.plot("capacity", tech_type="conversion", node_edit="all")
-    r.plot("capacity", tech_type="transport", node_edit="all")
-    r.plot("capacity", tech_type="storage", node_edit="all")
+    # r.plot("capacity", node_edit="all")
+    # r.plot("capacity", tech_type="conversion", node_edit="all")
+    # r.plot("capacity", tech_type="transport", node_edit="all")
+    # r.plot("capacity", tech_type="storage", node_edit="all")
 
     print("Done with result analysis")
 

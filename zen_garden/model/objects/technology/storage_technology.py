@@ -182,12 +182,6 @@ class StorageTechnology(Technology):
         optimization_setup.parameters.add_parameter(name="capex_specific_storage",
             data=optimization_setup.initialize_component(cls, "capex_specific", index_names=["set_storage_technologies", "set_capacity_types", "set_nodes", "set_time_steps_yearly"], capacity_types=True),
             doc='specific capex of storage technologies')
-        # anyaxie
-        # lower bound for pwa of total cost function
-        if optimization_setup.system["use_endogenous_learning"]:
-            optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_lower_bound",
-                data=optimization_setup.initialize_component(cls, "total_cost_pwa_points_lower_bound", index_names=["set_storage_technologies"]),
-                doc='Parameter which specifies the lower bound of the pwa of total cost function')
 
     @classmethod
     def construct_vars(cls, optimization_setup):
