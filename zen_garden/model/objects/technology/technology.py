@@ -860,6 +860,11 @@ class Technology(Element):
             variables.add_variable(model, name="total_cost_pwa_global_cost", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global cost of technology h in period y")
+            # todo: remove this if possible?
+            # total global initial cost variable
+            variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types"], optimization_setup),
+                                     bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
 
         # install technology
         # Note: binary variables are written into the lp file by linopy even if they are not relevant for the optimization,
@@ -953,6 +958,11 @@ class Technology(Element):
 
         # anyaxie
         if optimization_setup.system["use_endogenous_learning"]:
+            # todo: remove this if possible?
+            # helper constraint for variable - parameter problem
+            constraints.add_constraint_block(model, name="constraint_total_cost_pwa_initial_global_cost",
+                                             constraint=rules.constraint_total_cost_pwa_initial_global_cost_block(),
+                                             doc="helper constraint for variable - parameter problem")
             # segment capacity sum
             constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
                                              constraint=rules.constraint_pwa_total_cost_global_cum_capacity_segment_block(),
@@ -2302,6 +2312,7 @@ class TechnologyRules(GenericRule):
         # we loop over technologies and time steps, because we need to cycle over the lifetime range of the technology
         # which requires the technology and the year, we vectorize over capacity types and locations
         constraints = []
+        #todo: where is the global share factor
         for tech, time in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             ### auxiliary calculations
@@ -2352,12 +2363,9 @@ class TechnologyRules(GenericRule):
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             ### auxiliary calculations
-            # todo: remove hardcode
-            # todo: change the way initital total cost is defined
             discount_rate = self.parameters.discount_rate
             lifetime = self.parameters.lifetime.loc[tech].item()
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
-            initial_total_global_cost = self.parameters.total_cost_pwa_initial_global_cost.loc[tech]
 
             if discount_rate != 0:
                 annuity = ((1 + discount_rate) ** lifetime * discount_rate) / ((1 + discount_rate) ** lifetime - 1)
@@ -2367,24 +2375,66 @@ class TechnologyRules(GenericRule):
             for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year,
                                                                time_step_type="yearly"):
                 if previous_year == 0:
-                    # todo: substract the initial total cost
                     # Mistake here with the previous years
+                    # todo: change the way initital total cost is defined
                     term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
-                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]))
+                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year]
+                                                        - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]))
                 else:
                     term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
-                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year] -
-                                                         self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1]))
+                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year] -
+                                                         self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year-1]))
 
             ### formulate constraint
             lhs = lp_sum([1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year],
                           *term_neg_annuity_cost_capex_previous])
             rhs = annuity * self.parameters.existing_capex.loc[tech, :, :, year].sum(dim=["set_location"])
             constraints.append(lhs == rhs)
-
         ### return
         return self.constraints.return_contraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
+
+
+    def constraint_total_cost_pwa_initial_global_cost_block(self):
+        """ aggregates the capex of built capacity and of existing capacity
+
+                .. math::
+                    A_{h,y} = f_h \left(\sum_{\tilde{y}=\max\left(y_0,y-\left\lceil\nicefrac{l_h}{\Delta^\mathrm{y}}\right
+                    \rceil+1\right)}^y g_h \left( TC_{h,y} - TC_{h,y-1} \right)\right.\nonumber+ \left.\sum_{\hat{y}=\psi\left(
+                    y-\left\lceil\nicefrac{l_h}{\Delta^\mathrm{y}}\right\rceil+1\right)}^{\psi(y_0-1)}
+                     \sum_{p\in\mathcal{P}}\alpha_{h,y_0}\Delta s^\mathrm{ex}_{h,p,\hat{y}} \right)
+
+                :return:
+                """
+
+        ### index sets
+        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
+        # we vectorize over capacities and locations
+        constraints = []
+        # todo: add capacity type
+        for tech, capacity_type in index.get_unique(["set_technologies", "set_capacity_types"]):
+
+            ### formulate constraint
+            lhs = self.variables["total_cost_pwa_global_cost_initial"].loc[tech, capacity_type]
+            rhs = self.parameters.total_cost_pwa_initial_global_cost.loc[tech, capacity_type]
+
+            constraints.append(lhs == rhs)
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_capacity_types"]),
+                                                  index_names=["set_technologies", "set_capacity_types"])
+
+
