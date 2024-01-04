@@ -69,7 +69,7 @@ class StorageTechnology(Technology):
                                                                             time_steps=set_time_steps_yearly)
         #anyaxie
         if self.optimization_setup.system["use_endogenous_learning"]:
-            self.perform_total_cost_pwa()
+            self.perform_total_cost_pwa(capacity_types=True)
 
         # original
         self.convert_to_fraction_of_capex()

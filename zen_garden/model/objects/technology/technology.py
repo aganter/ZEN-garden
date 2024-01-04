@@ -220,7 +220,7 @@ class Technology(Element):
                 setattr(self, "capacity_investment_existing" + _energy_string, _capacity_investment_existing.stack())
 
     # anyaxie
-    def perform_total_cost_pwa(self):
+    def perform_total_cost_pwa(self, capacity_types=False):
         """
         perform pwa approximation for total cost
         :return: slope and intersect of each segment, interpolation points
@@ -282,19 +282,27 @@ class Technology(Element):
 
         learning_rate = self.learning_rate
         global_share_factor = self.global_share_factor
+        # global initial capacity, capex and capacity limit for power-rated technologies
         global_initial_capacity = (1/global_share_factor) * self.capacity_existing.sum()
         initial_cost = self.capex_specific.loc[:, 0].sum() / len(self.capex_specific.loc[:, 0])
+        max_capacity = self.capacity_limit.sum()
 
         # todo: how to treat this case?
+        # todo: This must be treated differently when calculating the investment cost
         # In case there is no existing capacity, set the global initial capacity to 1
         if global_initial_capacity == 0:
             global_initial_capacity = 1
 
-        # todo: remove hardcode
+        # todo: remove hardcode for lower boud and number of points
+        # todo: implement case for lower bound of PWA
         # Lower and Upper bound for global cumulative capacity
-        lb = 0
-        ub = 180
         npts = 101
+        lb = 0
+        # Set max_capacity to a very high value if it is infinite
+        if max_capacity == float('inf'):
+            ub = 1e6
+        else:
+            ub = (1/global_share_factor)*max_capacity
 
         q_values = np.linspace(lb, ub, npts)
 
@@ -313,103 +321,41 @@ class Technology(Element):
         self.total_cost_pwa_points_upper_bound = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
         self.total_cost_pwa_slope = pd.Series(slope, index=self.set_total_cost_pwa_segments)
         self.total_cost_pwa_intersect = pd.Series(index=index_tech, data=intersect, dtype=float)
-        self.total_cost_pwa_initial_global_cost = pd.Series(index=index_tech, data=pwa_initial_total_global_cost, dtype=float)
+        self.total_cost_pwa_initial_global_cost = pwa_initial_total_global_cost
 
+        if capacity_types:
+            global_initial_capacity_energy = (1 / global_share_factor) * self.capacity_existing_energy.sum()
+            initial_cost_energy = self.capex_specific_energy.loc[:, 0].sum() / len(self.capex_specific_energy.loc[:, 0])
+            max_capacity_energy = self.capacity_limit_energy.sum()
+            if global_initial_capacity_energy == 0:
+                global_initial_capacity_energy = 1
 
-    @classmethod
-    def get_initial_cost(cls, optimization_setup, tech, capacity_type):
-        """ returns initial cost of technology.
-        :param optimization_setup: OptimizationSetup the technology is part of
-        :param tech: name of the technology
-        :return: initial cost of technology
-        """
-        # get model and system
-        params = optimization_setup.parameters.dict_parameters
-        # get the capex_specific in year 0 for the technology
-        capex_specific_tech = []
-        # todo: remove hardcode
-        for subclass in cls.__subclasses__():
-            if subclass.__name__=="ConversionTechnology":
-                index_names = ["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"]
-                capacity_types = False
-            elif subclass.__name__=="TransportTechnology":
-                index_names = ["set_transport_technologies", "set_edges", "set_time_steps_yearly"]
-                capacity_types = False
-            elif subclass.__name__=="StorageTechnology":
-                index_names = ["set_storage_technologies", "set_capacity_types","set_nodes", "set_time_steps_yearly"]
+            npts = 101
+            lb = 0
+            # Set max_capacity to a very high value if it is infinite
+            if max_capacity_energy == float('inf'):
+                ub = 1e6
             else:
-                raise KeyError(f"Wrong subclass {subclass.__name__}")
+                ub = (1 / global_share_factor) * max_capacity
 
-            component_data, attribute_is_series = optimization_setup.get_attribute_of_all_elements(subclass, "capex_specific",
-                                                                                     capacity_types=capacity_types, return_attribute_is_series=True)
-            index_list = []
-            if index_names:
-                custom_set, index_list = subclass.create_custom_set(index_names, optimization_setup)
-                if np.size(custom_set):
-                    if attribute_is_series:
-                        component_data = pd.concat(component_data, keys=component_data.keys())
-                    else:
-                        component_data = pd.Series(component_data)
-                    component_data = optimization_setup.check_for_subindex(component_data, custom_set)
-            elif attribute_is_series:
-                component_data = pd.concat(component_data, keys=component_data.keys())
-            if not index_names:
-                logging.warning(
-                    f"Initializing a parameter (capex_specific) without the specifying the index names will be deprecated!")
+            q_values = np.linspace(lb, ub, npts)
 
-        # return component_data, index_list
+            segments = self.set_total_cost_pwa_segments
+            num_interpolation_points = len(segments) + 1
 
-        # if any(tech in key for key in params.capex_specific_conversion.keys()):
-        #     capex_specific_tech = [value for key, value in params.capex_specific_conversion.items() if key[0] == tech and key[2] == 0]
-        # elif any(tech in key for key in params.capex_specific_storage.keys()):
-        #     capex_specific_tech = [value for key, value in params.capex_specific_conversion.items() if key[0] == tech and key[1] == capacity_type and key[3] == 0]
-        # elif any(tech in key for key in params.capex_specific_transport.keys()):
-        #     capex_specific_tech = [value for key, value in params.capex_specific_transport.items() if key[0] == tech and key[2] == 0]
-        # else:
-        #     raise KeyError(f"No capex specific found for {tech}")
+            function = lambda u: fun_total_cost(u, initial_cost_energy, global_initial_capacity_energy, learning_rate)
 
-        if subclass.__name__ == "StorageTechnology":
-            capex_specific_tech = [value for (ind_tech, ind_cap_type, _, ind_year), value in component_data if ind_tech == tech and ind_cap_type == capacity_type and ind_year == 0]
-        else:
-            capex_specific_tech = [value for (ind_tech, _, ind_year), value in component_data if ind_tech == tech and ind_year == 0]
+            interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
+                                                                                     num_interpolation_points)
 
+            pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity_energy
 
-        # calculate initial cost as the average across all nodes
-        initial_cost_tech = sum(capex_specific_tech)/len(capex_specific_tech)
-
-        return initial_cost_tech
-
-    @classmethod
-    def get_global_capacity_existing(cls, optimization_setup, tech, capacity_type):
-        """ returns the existing capacity of a technology over all positions
-        """
-        # get model and system
-        params = optimization_setup.parameters.dict_parameters
-        # get the capex_specific in year 0 for the technology
-        capacity_existing_tech = params.capacity_existing.loc[tech, :, :, :].sum(dim=["set_location", "set_technologies_existing"])
-        global_capacity_existing_tech = (1/params.global_share[tech]) * capacity_existing_tech
-
-        return global_capacity_existing_tech
-    @classmethod
-    def get_capacity_existing(cls, optimization_setup, tech, capacity_type):
-        """ returns the existing capacity of a technology over all positions
-        """
-        # get model and system
-        params = optimization_setup.parameters.dict_parameters
-
-        # Initialize a variable to store the sum
-        sum_for_specific_tech_cap_type = 0.0
-
-        # Iterate over the dictionary keys
-        for key, value in params.capacity_existing.items():
-            technology, capacity_type, _, _ = key  # Extract relevant components from the key
-
-            # Check if the key matches the target technology and capacity type
-            if technology == tech and capacity_type == capacity_type:
-                # Update the sum for the specific technology and capacity type
-                sum_for_specific_tech_cap_type += value
-
-        return sum_for_specific_tech_cap_type
+            index_tech = pd.Index(segments, name="set_total_cost_pwa_segments")
+            self.total_cost_pwa_points_lower_bound_energy = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
+            self.total_cost_pwa_points_upper_bound_energy = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
+            self.total_cost_pwa_slope_energy = pd.Series(slope, index=self.set_total_cost_pwa_segments)
+            self.total_cost_pwa_intersect_energy = pd.Series(index=index_tech, data=intersect, dtype=float)
+            self.total_cost_pwa_initial_global_cost_energy = pwa_initial_total_global_cost
 
     ### --- classmethods
     @classmethod
@@ -752,23 +698,28 @@ class Technology(Element):
                                                         doc='Parameter which specifies the global share factor of the technology')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_lower_bound",
                                                         data=optimization_setup.initialize_component(cls,"total_cost_pwa_points_lower_bound",
-                                                        index_names=["set_technologies", "set_total_cost_pwa_segments"]),
+                                                        index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
+                                                        capacity_types=True),
                                                         doc='Parameter which specifies the lower bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_upper_bound",
                                                         data=optimization_setup.initialize_component(cls,"total_cost_pwa_points_upper_bound",
-                                                        index_names=["set_technologies", "set_total_cost_pwa_segments"]),
+                                                        index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
+                                                        capacity_types=True),
                                                         doc='Parameter which specifies the upper bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_intersect",
                                                         data=optimization_setup.initialize_component(cls,"total_cost_pwa_intersect",
-                                                        index_names=["set_technologies", "set_total_cost_pwa_segments"]),
+                                                        index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
+                                                        capacity_types=True),
                                                         doc='Parameter which specifies the intersect of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_slope",
                                                         data=optimization_setup.initialize_component(cls,"total_cost_pwa_slope",
-                                                        index_names=["set_technologies", "set_total_cost_pwa_segments"]),
+                                                        index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
+                                                        capacity_types=True),
                                                         doc='Parameter which specifies the slope of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_initial_global_cost",
                                                         data=optimization_setup.initialize_component(cls,"total_cost_pwa_initial_global_cost",
-                                                        index_names=["set_technologies", "set_total_cost_pwa_segments"]),
+                                                        index_names=["set_technologies", "set_capacity_types"],
+                                                        capacity_types=True),
                                                         doc='Parameter which specifies the initital total global cost of the pwa of total cost function')
 
 
@@ -2144,11 +2095,11 @@ class TechnologyRules(GenericRule):
 
             # todo: what if only one segment?
             # Calculate the linear combination for Z and S using pwa parameters intersect and slope
-            term_Z = sum(self.parameters.total_cost_pwa_intersect.loc[tech, segment] # todo: add capacity_type
+            term_Z = sum(self.parameters.total_cost_pwa_intersect.loc[tech, capacity_type, segment]
                          * self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment]
                          for segment in segments)
 
-            term_X = sum(self.parameters.total_cost_pwa_slope.loc[tech, segment] # todo: add capacity_type
+            term_X = sum(self.parameters.total_cost_pwa_slope.loc[tech, capacity_type, segment]
                 * self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment]
                 for segment in segments)
 
@@ -2238,7 +2189,7 @@ class TechnologyRules(GenericRule):
                                                                     "set_time_steps_yearly", "set_total_cost_pwa_segments"]):
 
             lhs = (self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment]
-                - self.parameters.total_cost_pwa_points_upper_bound.loc[tech, segment] # todo: add capacity_type
+                - self.parameters.total_cost_pwa_points_upper_bound.loc[tech, capacity_type, segment]
                    *self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment])
             rhs = 0
 
@@ -2274,7 +2225,7 @@ class TechnologyRules(GenericRule):
         for tech, capacity_type, year, segment in index.get_unique(["set_technologies", "set_capacity_types",
                                                                     "set_time_steps_yearly",
                                                                     "set_total_cost_pwa_segments"]):
-            lhs = (self.parameters.total_cost_pwa_points_lower_bound.loc[tech, segment] # todo: add capacity_type
+            lhs = (self.parameters.total_cost_pwa_points_lower_bound.loc[tech, capacity_type, segment]
                    * self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment]
                    - self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment])
             rhs = 0
