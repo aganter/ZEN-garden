@@ -2099,22 +2099,22 @@ class TechnologyRules(GenericRule):
         # Initialize an empty list to store the constraints
         constraints = []
         # Iterate over technologies
-        for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types", "set_time_steps_yearly"]):
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             # Get the unique segments for the current technology
             segments = index.get_unique(["set_total_cost_pwa_segments"])
 
             # todo: what if only one segment?
             # Calculate the linear combination for Z and S using pwa parameters intersect and slope
-            term_Z = sum(self.parameters.total_cost_pwa_intersect.loc[tech, capacity_type, segment]
-                         * self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment]
+            term_Z = sum(self.parameters.total_cost_pwa_intersect.loc[tech, :, segment]
+                         * self.variables['total_cost_pwa_segment_selection'].loc[tech, :, year, segment]
                          for segment in segments)
 
-            term_X = sum(self.parameters.total_cost_pwa_slope.loc[tech, capacity_type, segment]
-                * self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment]
+            term_X = sum(self.parameters.total_cost_pwa_slope.loc[tech, :, segment]
+                * self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, :, year, segment]
                 for segment in segments)
 
             # Formulate the constraint
-            lhs = (self.variables['total_cost_pwa_global_cost'].loc[tech, capacity_type, year]
+            lhs = (self.variables['total_cost_pwa_global_cost'].loc[tech, :, year]
                    - term_Z
                    - term_X)
             rhs = 0
@@ -2151,14 +2151,13 @@ class TechnologyRules(GenericRule):
         constraints = []
 
         # Iterate over technologies
-        for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types",
-                                                                    "set_time_steps_yearly"]):
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             # Get the unique segments for the current technology
             segments = index.get_unique(["set_total_cost_pwa_segments"])
 
             # Sum up all binary variables for the segment selection for each timestep and each technology
             sum_segments_z = sum(self.variables['total_cost_pwa_segment_selection']
-                                 .loc[tech, capacity_type, year, segment] for segment in segments)
+                                 .loc[tech, :, year, segment] for segment in segments)
 
             # Formulate the constraint
             lhs = sum_segments_z
@@ -2195,12 +2194,12 @@ class TechnologyRules(GenericRule):
         ### index loop
         # Initialize an empty list to store the constraints
         constraints = []
-        for tech, capacity_type, year, segment in index.get_unique(["set_technologies", "set_capacity_types",
+        for tech, year, segment in index.get_unique(["set_technologies",
                                                                     "set_time_steps_yearly", "set_total_cost_pwa_segments"]):
 
-            lhs = (self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment]
-                - self.parameters.total_cost_pwa_points_upper_bound.loc[tech, capacity_type, segment]
-                   *self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment])
+            lhs = (self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, :, year, segment]
+                - self.parameters.total_cost_pwa_points_upper_bound.loc[tech, :, segment]
+                   *self.variables['total_cost_pwa_segment_selection'].loc[tech, :, year, segment])
             rhs = 0
 
             # Append the constraint to the list
@@ -2232,12 +2231,11 @@ class TechnologyRules(GenericRule):
         ### index loop
         # Initialize an empty list to store the constraints
         constraints = []
-        for tech, capacity_type, year, segment in index.get_unique(["set_technologies", "set_capacity_types",
-                                                                    "set_time_steps_yearly",
+        for tech, year, segment in index.get_unique(["set_technologies", "set_time_steps_yearly",
                                                                     "set_total_cost_pwa_segments"]):
-            lhs = (self.parameters.total_cost_pwa_points_lower_bound.loc[tech, capacity_type, segment]
-                   * self.variables['total_cost_pwa_segment_selection'].loc[tech, capacity_type, year, segment]
-                   - self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment])
+            lhs = (self.parameters.total_cost_pwa_points_lower_bound.loc[tech, :, segment]
+                   * self.variables['total_cost_pwa_segment_selection'].loc[tech, :, year, segment]
+                   - self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, :, year, segment])
             rhs = 0
 
             # Append the constraint to the list
@@ -2268,14 +2266,14 @@ class TechnologyRules(GenericRule):
 
         ### index loop
         constraints = []
-        for tech, capacity_type, year in index.get_unique(["set_technologies", "set_capacity_types", "set_time_steps_yearly"]):
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             # Get the unique segments for the current technology
             segments = self.sets["set_total_cost_pwa_segments"][tech]
 
             # Iterate over the segments
-            lhs = (self.variables['global_cumulative_capacity'].loc[tech, capacity_type, year]
-                   - sum(self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, capacity_type, year, segment] for segment in segments))
+            lhs = (self.variables['global_cumulative_capacity'].loc[tech, :, year]
+                   - sum(self.variables['total_cost_pwa_cum_capacity_segment_position'].loc[tech, :, year, segment] for segment in segments))
             rhs = 0
 
             constraints.append(lhs == rhs)
@@ -2312,20 +2310,20 @@ class TechnologyRules(GenericRule):
         # we loop over technologies and time steps, because we need to cycle over the lifetime range of the technology
         # which requires the technology and the year, we vectorize over capacity types and locations
         constraints = []
-        #todo: where is the global share factor
+        # todo: implement aggregated and active capacity
         for tech, time in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             ### auxiliary calculations
+            global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             term_neg_previous_capacity_additions = []
             # sum up over all previous years and all nodes
             for previous_time in range(time+1):
                 term_neg_previous_capacity_additions.append(
-                    -1.0 * self.variables["capacity_addition"].loc[tech, :, :, previous_time].sum(dims="set_location"))
-            # todo: wrong capacity term
+                    (-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_time].sum(dims="set_location"))
             ### formulate constraint
             lhs = lp_sum([1.0 * self.variables["global_cumulative_capacity"].loc[tech, :, time],
                           *term_neg_previous_capacity_additions])
-            rhs = self.parameters.capacity_existing.loc[tech, :, :, :].sum(dim=["set_location", "set_technologies_existing"])
+            rhs = (-1/global_share_factor)* self.parameters.existing_capacities.loc[tech, :, :, time].sum(dim=["set_location"])
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
@@ -2399,14 +2397,10 @@ class TechnologyRules(GenericRule):
 
 
     def constraint_total_cost_pwa_initial_global_cost_block(self):
-        """ aggregates the capex of built capacity and of existing capacity
+        """ sets the variable for the initital capacity to the parameter
 
                 .. math::
-                    A_{h,y} = f_h \left(\sum_{\tilde{y}=\max\left(y_0,y-\left\lceil\nicefrac{l_h}{\Delta^\mathrm{y}}\right
-                    \rceil+1\right)}^y g_h \left( TC_{h,y} - TC_{h,y-1} \right)\right.\nonumber+ \left.\sum_{\hat{y}=\psi\left(
-                    y-\left\lceil\nicefrac{l_h}{\Delta^\mathrm{y}}\right\rceil+1\right)}^{\psi(y_0-1)}
-                     \sum_{p\in\mathcal{P}}\alpha_{h,y_0}\Delta s^\mathrm{ex}_{h,p,\hat{y}} \right)
-
+                    TC_{h,y=-1} = total_cost_pwa_initial_global_cost
                 :return:
                 """
 
@@ -2422,19 +2416,19 @@ class TechnologyRules(GenericRule):
         # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
         # we vectorize over capacities and locations
         constraints = []
-        # todo: add capacity type
-        for tech, capacity_type in index.get_unique(["set_technologies", "set_capacity_types"]):
+        for tech in index.get_unique(["set_technologies"]):
 
             ### formulate constraint
-            lhs = self.variables["total_cost_pwa_global_cost_initial"].loc[tech, capacity_type]
-            rhs = self.parameters.total_cost_pwa_initial_global_cost.loc[tech, capacity_type]
+            lhs = self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]
+            rhs = self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
 
             constraints.append(lhs == rhs)
         ### return
         return self.constraints.return_contraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(
-                                                      ["set_technologies", "set_capacity_types"]),
-                                                  index_names=["set_technologies", "set_capacity_types"])
+                                                      ["set_technologies"]),
+                                                  index_names=["set_technologies"])
+
 
 
