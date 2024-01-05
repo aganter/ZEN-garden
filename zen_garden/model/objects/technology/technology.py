@@ -236,6 +236,7 @@ class Technology(Element):
             :param learning_rate: Learning Rate
             :return: Total cumulative cot
             """
+            # todo: fix the formulation of the total cost function? This is only the case if integrate from zero
             alpha = c_initial / np.power(q_initial, learning_rate)
             exp = 1 + learning_rate
             v = alpha / exp * np.power(u, exp)
@@ -2297,6 +2298,9 @@ class TechnologyRules(GenericRule):
        :return: List of constraints
        """
 
+        # todo: remove hardcode
+        flag_active_capacity = True
+
         ### index sets
         index_values, index_names = Element.create_custom_set(
             ["set_technologies", "set_location", "set_capacity_types", "set_time_steps_yearly"], self.optimization_setup)
@@ -2311,19 +2315,35 @@ class TechnologyRules(GenericRule):
         # which requires the technology and the year, we vectorize over capacity types and locations
         constraints = []
         # todo: implement aggregated and active capacity
-        for tech, time in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             ### auxiliary calculations
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             term_neg_previous_capacity_additions = []
+
+            # Case for active cumulative technologies with decomissioning
             # sum up over all previous years and all nodes
-            for previous_time in range(time+1):
+            if flag_active_capacity:
+                time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly")
+                term_global_existing_capacities = (-1 / global_share_factor) * self.parameters.existing_capacities.loc[tech, :, :, year].sum(dim=["set_location"])
+            else:
+                # Case for aggregated cumulative technologies with decomissioning
+                # sum up over all previous years and all nodes
+                # todo: How do I handle technologies built in the future?
+                time_for_sum = range(year+1)
+                term_global_existing_capacities = self.parameters.capacity_existing.loc["photovoltaics", :, :, :].sum(
+                    dim=["set_location", "set_technologies_existing"])
+
+            # Sum up all capacity additions over the selected time horizon
+            for previous_year in time_for_sum:
                 term_neg_previous_capacity_additions.append(
-                    (-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_time].sum(dims="set_location"))
+                    (-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
+
+            # Case for
             ### formulate constraint
-            lhs = lp_sum([1.0 * self.variables["global_cumulative_capacity"].loc[tech, :, time],
+            lhs = lp_sum([1.0 * self.variables["global_cumulative_capacity"].loc[tech, :, year],
                           *term_neg_previous_capacity_additions])
-            rhs = (-1/global_share_factor)* self.parameters.existing_capacities.loc[tech, :, :, time].sum(dim=["set_location"])
+            rhs = term_global_existing_capacities
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
@@ -2373,11 +2393,16 @@ class TechnologyRules(GenericRule):
             for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year,
                                                                time_step_type="yearly"):
                 if previous_year == 0:
-                    # Mistake here with the previous years
-                    # todo: change the way initital total cost is defined
-                    term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
-                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year]
-                                                        - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]))
+                    if len(self.set_technologies_existing) > 1: # if there are any existing technologies
+                        # todo: change the way initital total cost is defined
+                        # todo: how to implement decommissioning here?
+                        term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
+                                                            (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year]
+                                                            - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]))
+                    else:
+                        term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
+                                                                    (self.variables["total_cost_pwa_global_cost"].loc[
+                                                                     tech, :, previous_year]))
                 else:
                     term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
                                                         (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year] -
