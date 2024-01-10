@@ -102,8 +102,7 @@ class Technology(Element):
             range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
         self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
         self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
-        self.initial_cost = self.data_input.extract_attribute("initial_cost")["value"]
-        self.initial_capacity = self.data_input.extract_attribute("initial_capacity")["value"]
+
 
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
@@ -281,82 +280,82 @@ class Technology(Element):
 
             return interpolated_x, y_values, intersect, slope
 
+        def perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments):
+            """
+            perform pwa approximation for total cost
+            :return: slope and intersect of each segment, interpolation points
+            """
+
+            # todo: how to treat this case?
+            # todo: This must be treated differently when calculating the investment cost
+            # todo: remove hardcode
+            # In case there is no existing capacity, set the global initial capacity to 1
+            if hasattr(self, 'set_technologies_existing'):
+                # global initial capacity, capex and capacity limit for power-rated technologies
+                global_initial_capacity = (1 / global_share_factor) * capacity_existing
+            else:
+                global_initial_capacity = 50
+
+            # todo: remove hardcode for lower boud and number of points
+            # todo: implement case for lower bound of PWA
+            # Lower and Upper bound for global cumulative capacity
+            npts = 101
+            lb = 0
+            # Set max_capacity to a very high value if it is infinite
+            # todo: remove this hardcode
+            if max_capacity == float('inf'):
+                ub = 200
+            else:
+                ub = (1/global_share_factor)*max_capacity
+
+            q_values = np.linspace(lb, ub, npts)
+
+            num_interpolation_points = len(segments) + 1
+
+            function = lambda u: fun_total_cost(u, initial_cost, global_initial_capacity, learning_rate)
+
+            interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
+                                                                                     num_interpolation_points)
+
+            pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity
+
+            return interpolated_q, intersect, slope, pwa_initial_total_global_cost, initial_cost
+
+        # Same for power and energy-rated
         learning_rate = self.learning_rate
         global_share_factor = self.global_share_factor
-        # global initial capacity, capex and capacity limit for power-rated technologies
-        global_initial_capacity = (1/global_share_factor) * self.capacity_existing.sum()
+        segments = self.set_total_cost_pwa_segments
+        index_tech= pd.Index(segments, name="set_total_cost_pwa_segments")
+
+        # Different for energy-rated and power-rated
         initial_cost = self.capex_specific.loc[:, 0].sum() / len(self.capex_specific.loc[:, 0])
         max_capacity = self.capacity_limit.sum()
+        capacity_existing = self.capacity_existing.sum()
 
-        # todo: how to treat this case?
-        # todo: This must be treated differently when calculating the investment cost
-        # In case there is no existing capacity, set the global initial capacity to 1
-        if global_initial_capacity == 0:
-            global_initial_capacity = 1
+        [interpolated_q, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
 
-        # todo: remove hardcode for lower boud and number of points
-        # todo: implement case for lower bound of PWA
-        # Lower and Upper bound for global cumulative capacity
-        npts = 101
-        lb = 0
-        # Set max_capacity to a very high value if it is infinite
-        if max_capacity == float('inf'):
-            ub = 1e6
-        else:
-            ub = (1/global_share_factor)*max_capacity
-
-        q_values = np.linspace(lb, ub, npts)
-
-        segments = self.set_total_cost_pwa_segments
-        num_interpolation_points = len(segments) + 1
-
-        function = lambda u: fun_total_cost(u, initial_cost, global_initial_capacity, learning_rate)
-
-        interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
-                                                                                 num_interpolation_points)
-
-        pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity
-
-        index_tech= pd.Index(segments, name="set_total_cost_pwa_segments")
         self.total_cost_pwa_points_lower_bound = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
         self.total_cost_pwa_points_upper_bound = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
         self.total_cost_pwa_slope = pd.Series(slope, index=self.set_total_cost_pwa_segments)
         self.total_cost_pwa_intersect = pd.Series(index=index_tech, data=intersect, dtype=float)
         self.total_cost_pwa_initial_global_cost = pwa_initial_total_global_cost
+        self.total_cost_pwa_initial_unit_cost = initial_cost
 
+        # for energy-rated technologies
         if capacity_types:
-            global_initial_capacity_energy = (1 / global_share_factor) * self.capacity_existing_energy.sum()
-            initial_cost_energy = self.capex_specific_energy.loc[:, 0].sum() / len(self.capex_specific_energy.loc[:, 0])
-            max_capacity_energy = self.capacity_limit_energy.sum()
-            if global_initial_capacity_energy == 0:
-                global_initial_capacity_energy = 1
+            # Different for energy-rated and power-rated
+            initial_cost = self.capex_specific_energy.loc[:, 0].sum() / len(self.capex_specific_energy.loc[:, 0])
+            max_capacity = self.capacity_limit_energy.sum()
+            capacity_existing = self.capacity_existing_energy.sum()
 
-            npts = 101
-            lb = 0
-            # Set max_capacity to a very high value if it is infinite
-            if max_capacity_energy == float('inf'):
-                ub = 1e6
-            else:
-                ub = (1 / global_share_factor) * max_capacity
+            [interpolated_q, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
 
-            q_values = np.linspace(lb, ub, npts)
-
-            segments = self.set_total_cost_pwa_segments
-            num_interpolation_points = len(segments) + 1
-
-            function = lambda u: fun_total_cost(u, initial_cost_energy, global_initial_capacity_energy, learning_rate)
-
-            interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
-                                                                                     num_interpolation_points)
-
-            pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity_energy
-
-            index_tech = pd.Index(segments, name="set_total_cost_pwa_segments")
             self.total_cost_pwa_points_lower_bound_energy = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
             self.total_cost_pwa_points_upper_bound_energy = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
             self.total_cost_pwa_slope_energy = pd.Series(slope, index=self.set_total_cost_pwa_segments)
             self.total_cost_pwa_intersect_energy = pd.Series(index=index_tech, data=intersect, dtype=float)
             self.total_cost_pwa_initial_global_cost_energy = pwa_initial_total_global_cost
+            self.total_cost_pwa_initial_unit_cost_energy = initial_cost
 
     ### --- classmethods
     @classmethod
@@ -722,6 +721,11 @@ class Technology(Element):
                                                         index_names=["set_technologies", "set_capacity_types"],
                                                         capacity_types=True),
                                                         doc='Parameter which specifies the initital total global cost of the pwa of total cost function')
+            optimization_setup.parameters.add_parameter(name="total_cost_pwa_initial_unit_cost",
+                                                        data=optimization_setup.initialize_component(cls,"total_cost_pwa_initial_unit_cost",
+                                                        index_names=["set_technologies", "set_capacity_types"],
+                                                        capacity_types=True),
+                                                        doc='Parameter which specifies the initital unit cost of the technology')
 
 
 
@@ -807,10 +811,19 @@ class Technology(Element):
         variables.add_variable(model, name="capacity_investment", index_sets=cls.create_custom_set(
             ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
                                bounds=(0, np.inf), doc='size of invested technology at location l and time t')
-        # capex of building capacity
-        variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
-                               bounds=(0, np.inf), doc='capex for building technology at location l and time t')
+        # anyaxie:
+        # todo: remove this if possible?
+        if not optimization_setup.system["use_endogenous_learning"]:
+            # capex of building capacity
+            variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+                                   bounds=(0, np.inf), doc='capex for building technology at location l and time t')
+        else:
+            variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
+                optimization_setup),
+                                   bounds=(0, np.inf), doc='capex for building technology at location l and time t')
+
         # annual capex of having capacity
         variables.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(
             ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
@@ -864,7 +877,7 @@ class Technology(Element):
             # todo: remove this if possible?
             # total global initial cost variable
             variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
-                ["set_technologies", "set_capacity_types"], optimization_setup),
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
 
         # install technology
@@ -1000,6 +1013,11 @@ class Technology(Element):
             constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
                                              constraint=rules.constraint_capex_yearly_all_positions_block(),
                                              doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
+            
+            # todo: can you remove this?                                             
+            # cost capex constraint 
+            # constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
+            #                                  doc="Create link for cost_capex")
 
 
 
@@ -2325,13 +2343,13 @@ class TechnologyRules(GenericRule):
             # sum up over all previous years and all nodes
             if flag_active_capacity:
                 time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly")
-                term_global_existing_capacities = (-1 / global_share_factor) * self.parameters.existing_capacities.loc[tech, :, :, year].sum(dim=["set_location"])
+                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.existing_capacities.loc[tech, :, :, year].sum(dim=["set_location"])
             else:
                 # Case for aggregated cumulative technologies with decomissioning
                 # sum up over all previous years and all nodes
                 # todo: How do I handle technologies built in the future?
                 time_for_sum = range(year+1)
-                term_global_existing_capacities = self.parameters.capacity_existing.loc["photovoltaics", :, :, :].sum(
+                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
                     dim=["set_location", "set_technologies_existing"])
 
             # Sum up all capacity additions over the selected time horizon
@@ -2393,7 +2411,7 @@ class TechnologyRules(GenericRule):
             for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year,
                                                                time_step_type="yearly"):
                 if previous_year == 0:
-                    if len(self.set_technologies_existing) > 1: # if there are any existing technologies
+                    if hasattr(self, 'set_technologies_existing'):  # if there are any existing technologies
                         # todo: change the way initital total cost is defined
                         # todo: how to implement decommissioning here?
                         term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
@@ -2430,7 +2448,7 @@ class TechnologyRules(GenericRule):
                 """
 
         ### index sets
-        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types"],
+        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
             self.optimization_setup)
         index = ZenIndex(index_values, index_names)
 
@@ -2456,4 +2474,57 @@ class TechnologyRules(GenericRule):
                                                   index_names=["set_technologies"])
 
 
+    def constraint_cost_capex_block(self):
+        """ calculates the capex of each technology
 
+        .. math::
+            Cost_Capex{h,y} = TC{h,y} - TC{h,y-1}
+
+        :return:
+        """
+        ### index sets
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
+        # we vectorize over capacities and locations
+        constraints = []
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            global_share_factor = self.parameters.global_share_factor.loc[tech].item()
+            if year == 0:
+                if hasattr(self, 'set_technologies_existing'):  # if there are any existing technologies
+                    # todo: change the way initital total cost is defined
+                    # todo: how to implement decommissioning here?
+                    cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                                           - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
+                else:
+                    # have to add the cost for the
+                    cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                                           - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]
+                                                           + self.variables["capacity_addition"].loc[tech,:, year]*self.parameters["total_cost_pwa_initial_unit_cost"])
+
+            else:
+                cost_capex_tech =global_share_factor* (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year] - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1])
+
+
+            ### formulate constraint
+            lhs = self.variables["cost_capex"].loc[tech, :, year] - cost_capex_tech
+            rhs = 0
+            constraints.append(lhs == rhs)
+
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+        
+        
+        

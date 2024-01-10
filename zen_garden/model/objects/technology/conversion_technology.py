@@ -59,12 +59,16 @@ class ConversionTechnology(Technology):
         """ retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes """
         # get attributes from class <Technology>
         super().store_input_data()
+        # anyaxie
+        if self.optimization_setup.system["use_endogenous_learning"]:
+            set_time_steps_yearly = self.energy_system.set_time_steps_yearly
+            self.capex_specific = self.data_input.extract_input_data("capex_specific",
+                                                                     index_sets=["set_nodes", "set_time_steps_yearly"],
+                                                                     time_steps=set_time_steps_yearly)
+            self.perform_total_cost_pwa()
         # get conversion efficiency and capex
         self.get_conversion_factor()
         self.convert_to_fraction_of_capex()
-        # anyaxie
-        if self.optimization_setup.system["use_endogenous_learning"]:
-            self.perform_total_cost_pwa()
 
     def get_conversion_factor(self):
         """retrieves and stores conversion_factor for <ConversionTechnology>.
