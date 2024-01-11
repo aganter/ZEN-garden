@@ -1874,7 +1874,19 @@ if __name__ == "__main__":
     # todo: cost_capex not plottable when endogenous learning on
     # todo: capex_yearly not plottable when endogenous learning on
     r.plot(component="net_present_cost")
+    r.plot(component="cost_total")
+    r.plot(component="cost_capex_total")
+    r.plot(component="cost_opex_total")
+    r.plot(component="cost_carrier_total")
+    r.plot(component="cost_carbon_emissions_total")
+
+
+    # Endogenous
+    r.plot(component="capex_yearly_all_positions")
+    # Exogenous
+    r.plot(component="capex_yearly")
     r.plot(component="cost_capex")
+    r.plot(component="capex_approximation")
 
     # r.plot("capacity", node_edit="all")
     # r.plot("capacity", tech_type="conversion", node_edit="all")

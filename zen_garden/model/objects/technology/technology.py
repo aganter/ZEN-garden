@@ -855,7 +855,7 @@ class Technology(Element):
         # anyaxie
         if optimization_setup.system["use_endogenous_learning"]:
             # yearly capex as sum over all nodes
-            variables.add_variable(model, name="cost_capex_all_positions", index_sets=cls.create_custom_set(
+            variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
                                    bounds=(0, np.inf), doc="yearly capex of technology h over all positions")
             # global cumulative capacity
@@ -877,7 +877,7 @@ class Technology(Element):
             # todo: remove this if possible?
             # total global initial cost variable
             variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
-                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                ["set_technologies", "set_capacity_types"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
 
         # install technology
@@ -1018,7 +1018,7 @@ class Technology(Element):
             # cost capex constraint 
             # constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
             #                                  doc="Create link for cost_capex")
-
+            #
 
 
 
@@ -1199,7 +1199,7 @@ class TechnologyRules(GenericRule):
 
         ### auxiliary calculations
         if self.system["use_endogenous_learning"]:
-            term_sum_yearly = self.variables["cost_capex_all_positions"].loc[..., year].sum()
+            term_sum_yearly = self.variables["capex_yearly_all_positions"].loc[..., year].sum()
         else:
             term_sum_yearly = self.variables["capex_yearly"].loc[..., year].sum()
 
@@ -2427,7 +2427,7 @@ class TechnologyRules(GenericRule):
                                                          self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year-1]))
 
             ### formulate constraint
-            lhs = lp_sum([1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year],
+            lhs = lp_sum([1.0 * self.variables["capex_yearly_all_positions"].loc[tech, :, year],
                           *term_neg_annuity_cost_capex_previous])
             rhs = annuity * self.parameters.existing_capex.loc[tech, :, :, year].sum(dim=["set_location"])
             constraints.append(lhs == rhs)
@@ -2508,11 +2508,12 @@ class TechnologyRules(GenericRule):
                     # have to add the cost for the
                     cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
                                                            - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]
-                                                           + self.variables["capacity_addition"].loc[tech,:, year]*self.parameters["total_cost_pwa_initial_unit_cost"])
+                                                           + self.parameters.total_cost_pwa_initial_unit_cost.loc[tech, :]
+                                                           * self.variables["capacity_addition"].loc[tech, :, :, year].sum(dims="set_location"))
 
             else:
-                cost_capex_tech =global_share_factor* (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year] - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1])
-
+                cost_capex_tech = global_share_factor* (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                                       - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1])
 
             ### formulate constraint
             lhs = self.variables["cost_capex"].loc[tech, :, year] - cost_capex_tech
