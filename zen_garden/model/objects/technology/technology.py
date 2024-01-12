@@ -290,7 +290,7 @@ class Technology(Element):
             # todo: This must be treated differently when calculating the investment cost
             # todo: remove hardcode
             # In case there is no existing capacity, set the global initial capacity to 1
-            if hasattr(self, 'set_technologies_existing'):
+            if hasattr(self, 'set_technologies_existing') and capacity_existing > 0:
                 # global initial capacity, capex and capacity limit for power-rated technologies
                 global_initial_capacity = (1 / global_share_factor) * capacity_existing
             else:
@@ -299,7 +299,7 @@ class Technology(Element):
             # todo: remove hardcode for lower boud and number of points
             # todo: implement case for lower bound of PWA
             # Lower and Upper bound for global cumulative capacity
-            npts = 101
+            npts = 10000
             lb = 0
             # Set max_capacity to a very high value if it is infinite
             # todo: remove this hardcode
@@ -1016,9 +1016,9 @@ class Technology(Element):
             
             # todo: can you remove this?                                             
             # cost capex constraint 
-            # constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
-            #                                  doc="Create link for cost_capex")
-            #
+            constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
+                                             doc="Create link for cost_capex")
+
 
 
 
@@ -2317,8 +2317,6 @@ class TechnologyRules(GenericRule):
        """
 
         # todo: remove hardcode
-        flag_active_capacity = True
-
         ### index sets
         index_values, index_names = Element.create_custom_set(
             ["set_technologies", "set_location", "set_capacity_types", "set_time_steps_yearly"], self.optimization_setup)
@@ -2341,7 +2339,7 @@ class TechnologyRules(GenericRule):
 
             # Case for active cumulative technologies with decomissioning
             # sum up over all previous years and all nodes
-            if flag_active_capacity:
+            if self.system["global_active_capacity"]:
                 time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly")
                 term_global_existing_capacities = (1 / global_share_factor) * self.parameters.existing_capacities.loc[tech, :, :, year].sum(dim=["set_location"])
             else:
@@ -2401,7 +2399,6 @@ class TechnologyRules(GenericRule):
             ### auxiliary calculations
             discount_rate = self.parameters.discount_rate
             lifetime = self.parameters.lifetime.loc[tech].item()
-            global_share_factor = self.parameters.global_share_factor.loc[tech].item()
 
             if discount_rate != 0:
                 annuity = ((1 + discount_rate) ** lifetime * discount_rate) / ((1 + discount_rate) ** lifetime - 1)
@@ -2410,21 +2407,7 @@ class TechnologyRules(GenericRule):
             term_neg_annuity_cost_capex_previous = []
             for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year,
                                                                time_step_type="yearly"):
-                if previous_year == 0:
-                    if hasattr(self, 'set_technologies_existing'):  # if there are any existing technologies
-                        # todo: change the way initital total cost is defined
-                        # todo: how to implement decommissioning here?
-                        term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
-                                                            (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year]
-                                                            - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]))
-                    else:
-                        term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
-                                                                    (self.variables["total_cost_pwa_global_cost"].loc[
-                                                                     tech, :, previous_year]))
-                else:
-                    term_neg_annuity_cost_capex_previous.append(-annuity * global_share_factor *
-                                                        (self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year] -
-                                                         self.variables["total_cost_pwa_global_cost"].loc[tech, :, previous_year-1]))
+                term_neg_annuity_cost_capex_previous.append(-annuity*self.variables["cost_capex"].loc[tech, :, previous_year])
 
             ### formulate constraint
             lhs = lp_sum([1.0 * self.variables["capex_yearly_all_positions"].loc[tech, :, year],
@@ -2498,17 +2481,16 @@ class TechnologyRules(GenericRule):
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
+            term_neg_annuity_cost_capex_previous = []
             if year == 0:
-                if hasattr(self, 'set_technologies_existing'):  # if there are any existing technologies
-                    # todo: change the way initital total cost is defined
-                    # todo: how to implement decommissioning here?
-                    cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
-                                                           - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
-                else:
-                    # have to add the cost for the
-                    cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
-                                                           - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]
-                                                           + self.parameters.total_cost_pwa_initial_unit_cost.loc[tech, :]
+                # todo: change the way initital total cost is defined
+                # todo: change the way technologies ecisting is chechked
+                # todo: how to implement decommissioning here?
+                cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                                       - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
+                if not tech in self.sets["set_technologies_existing"].items:  # if there are no existing technologies
+                    # have to add the cost for the capacity in the first step
+                    cost_capex_tech = cost_capex_tech + global_share_factor*(self.parameters.total_cost_pwa_initial_unit_cost.loc[tech, :]
                                                            * self.variables["capacity_addition"].loc[tech, :, :, year].sum(dims="set_location"))
 
             else:
