@@ -99,12 +99,13 @@ class Technology(Element):
         # endogenous learning input data
         # if self.optimization_setup.system["use_endogenous_learning"]:
         # segments for pwa of cumulative cost for each technology
-        # todo: Remove list of range of int ... not very elegant
-        self.set_total_cost_pwa_segments = list(
-            range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
+        self.set_total_cost_pwa_segments = list(range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
         self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
         self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
-
+        self.learning_curve_lb = self.data_input.extract_attribute("learning_curve_lower_bound")["value"]
+        self.learning_curve_ub = self.data_input.extract_attribute("learning_curve_upper_bound")["value"]
+        self.learning_curve_npts = self.data_input.extract_attribute("learning_curve_npts")["value"]
+        self.global_initial_capacity_default = self.data_input.extract_attribute("global_initial_capacity")["value"]
 
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
@@ -282,31 +283,33 @@ class Technology(Element):
 
             return interpolated_x, y_values, intersect, slope
 
-        def perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments):
+        def perform_pwa(capacity_existing, initial_cost, max_capacity, segments):
             """
             perform pwa approximation for total cost
             :return: slope and intersect of each segment, interpolation points
             """
 
+            # Same for power and energy-rated
+            learning_rate = self.learning_rate
+            global_share_factor = self.global_share_factor
+
+
             # todo: how to treat this case?
             # todo: This must be treated differently when calculating the investment cost
-            # todo: remove hardcode
             # In case there is no existing capacity, set the global initial capacity to 1
             if hasattr(self, 'set_technologies_existing') and capacity_existing > 0:
                 # global initial capacity, capex and capacity limit for power-rated technologies
                 global_initial_capacity = (1 / global_share_factor) * capacity_existing
             else:
-                global_initial_capacity = 50
+                global_initial_capacity = self.global_initial_capacity
 
-            # todo: remove hardcode for lower boud and number of points
             # todo: implement case for lower bound of PWA
             # Lower and Upper bound for global cumulative capacity
-            npts = 10000
-            lb = 0
-            # Set max_capacity to a very high value if it is infinite
-            # todo: remove this hardcode
+            npts = int(self.learning_curve_npts)
+            lb = int(self.learning_curve_lb)
+            # Set max_capacity to default value if it is infinite
             if max_capacity == float('inf'):
-                ub = 200
+                ub = int(self.learning_curve_ub)
             else:
                 ub = (1/global_share_factor)*max_capacity
 
@@ -318,9 +321,10 @@ class Technology(Element):
 
             interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
                                                                                      num_interpolation_points)
-
-            # todo: change this, in case not in the first segment, this gives wrong initial cost, overestimates
-            pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity
+            # Determines which segment the initial capacity is on, to calculate total global initial cost
+            index_segment = np.where(
+                (interpolated_q[:-1] <= global_initial_capacity) & (global_initial_capacity < interpolated_q[1:]))[0][0]
+            pwa_initial_total_global_cost = intersect[index_segment] + slope[index_segment] * global_initial_capacity
 
             # todo: remove this later, only to validate values
             plt.subplots()
@@ -334,9 +338,6 @@ class Technology(Element):
 
             return interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost
 
-        # Same for power and energy-rated
-        learning_rate = self.learning_rate
-        global_share_factor = self.global_share_factor
         segments = self.set_total_cost_pwa_segments
         index_tech= pd.Index(segments, name="set_total_cost_pwa_segments")
 
@@ -345,7 +346,7 @@ class Technology(Element):
         max_capacity = self.capacity_limit.sum()
         capacity_existing = self.capacity_existing.sum()
 
-        [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
+        [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(capacity_existing, initial_cost, max_capacity, segments)
 
 
         self.total_cost_pwa_points_lower_bound = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
