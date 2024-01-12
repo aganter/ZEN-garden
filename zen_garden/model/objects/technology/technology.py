@@ -2203,8 +2203,8 @@ class TechnologyRules(GenericRule):
         return self.constraints.return_contraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(
-                                                      ["set_technologies", "set_time_steps_yearly"]),
-                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+                                                      ["set_technologies", "set_time_steps_yearly","set_total_cost_pwa_segments"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"])
 
 
     def constraint_pwa_total_cost_cum_capacity_upper_bound_block(self):
@@ -2242,8 +2242,8 @@ class TechnologyRules(GenericRule):
         return self.constraints.return_contraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(
-                                                      ["set_technologies", "set_time_steps_yearly"]),
-                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+                                                      ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"])
     def constraint_pwa_total_cost_cum_capacity_lower_bound_block(self):
         """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
 
@@ -2278,8 +2278,8 @@ class TechnologyRules(GenericRule):
         return self.constraints.return_contraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(
-                                                      ["set_technologies", "set_time_steps_yearly"]),
-                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+                                                      ["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly", "set_total_cost_pwa_segments"])
 
     def constraint_pwa_total_cost_global_cum_capacity_segment_block(self):
         """Ensures that the sum of all segment capacities is the capacity installed in that year. Needed for PWA
