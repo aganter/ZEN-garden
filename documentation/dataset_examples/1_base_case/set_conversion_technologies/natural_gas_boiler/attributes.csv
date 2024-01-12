@@ -6,7 +6,7 @@ capacity_limit_default,inf,GW
 min_load_default,0,1
 max_load_default,1,1
 lifetime_default,25,1
-opex_specific_variable_default,0,kiloEuro/GWh
+opex_specific_variable_default,0,kiloEuro/kWh
 reference_carrier,heat,GW
 carbon_intensity_default,0,kilotons/GWh
 construction_time_default,0,1

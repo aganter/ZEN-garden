@@ -1,2 +1,7 @@
-year,carbon_emissions_overshoot
-0,0.0
+carrier,node,time_operation,demand
+ammonia,CH04,0,0.1
+ammonia,CH05,0,0.1
+electricity,CH04,0,0.0
+electricity,CH05,0,0.0
+natural_gas,CH04,0,0.0
+natural_gas,CH05,0,0.0
