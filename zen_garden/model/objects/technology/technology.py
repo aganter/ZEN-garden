@@ -17,6 +17,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from linopy.constraints import AnonymousConstraint
+#todo: remove this later
+from matplotlib import pyplot as plt
 
 from zen_garden.utils import lp_sum
 from ..component import ZenIndex, IndexSet
@@ -317,9 +319,20 @@ class Technology(Element):
             interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
                                                                                      num_interpolation_points)
 
+            # todo: change this, in case not in the first segment, this gives wrong initial cost, overestimates
             pwa_initial_total_global_cost = intersect[0] + slope[0] * global_initial_capacity
 
-            return interpolated_q, intersect, slope, pwa_initial_total_global_cost, initial_cost
+            # todo: remove this later, only to validate values
+            plt.subplots()
+            plt.plot(q_values, function(q_values), label=f'Tech: {self.name}', linestyle='--', color='orange')
+            plt.plot(interpolated_q, interpolated_TC, label='PWA', color='red')
+            plt.scatter(interpolated_q, interpolated_TC, color='red')
+            plt.scatter(global_initial_capacity, pwa_initial_total_global_cost, color='green', label='Initial Total Cost')
+            plt.legend()
+            plt.show()
+
+
+            return interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost
 
         # Same for power and energy-rated
         learning_rate = self.learning_rate
@@ -332,7 +345,8 @@ class Technology(Element):
         max_capacity = self.capacity_limit.sum()
         capacity_existing = self.capacity_existing.sum()
 
-        [interpolated_q, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
+        [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
+
 
         self.total_cost_pwa_points_lower_bound = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
         self.total_cost_pwa_points_upper_bound = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
@@ -348,7 +362,7 @@ class Technology(Element):
             max_capacity = self.capacity_limit_energy.sum()
             capacity_existing = self.capacity_existing_energy.sum()
 
-            [interpolated_q, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
+            [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
 
             self.total_cost_pwa_points_lower_bound_energy = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
             self.total_cost_pwa_points_upper_bound_energy = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
@@ -2481,7 +2495,6 @@ class TechnologyRules(GenericRule):
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
-            term_neg_annuity_cost_capex_previous = []
             if year == 0:
                 # todo: change the way initital total cost is defined
                 # todo: change the way technologies ecisting is chechked

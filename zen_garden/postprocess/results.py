@@ -1866,32 +1866,29 @@ if __name__ == "__main__":
     else:
         logging.critical("No results folder found!")
 
+    # anyaxie
+    # Start of result analysis
     r.plot(component="capacity_addition", tech_type="conversion")
     r.plot(component="capacity", tech_type="conversion")
-    r.plot(component="capacity_addition")
-    r.plot(component="capacity")
+    r.plot(component="cost_capex")
+
+    # Endogenous
+    r.plot(component="capex_yearly_all_positions")
+    r.plot(component="total_cost_pwa_global_cost")
+    # Calculate the PWA result of the total cost function
+    r.get_df("total_cost_pwa_cum_capacity_segment_position").loc["photovoltaics","power", :, :]
+    r.get_df("total_cost_pwa_segment_selection").loc["photovoltaics","power", :, :]
+    r.get_df("total_cost_pwa_global_cost").loc["photovoltaics",:,:,:]
+    r.get_df("capacity").loc["photovoltaics",:,:,:]
+
 
     # todo: cost_capex not plottable when endogenous learning on
     # todo: capex_yearly not plottable when endogenous learning on
     r.plot(component="net_present_cost")
-    r.plot(component="cost_total")
-    r.plot(component="cost_capex_total")
-    r.plot(component="cost_opex_total")
-    r.plot(component="cost_carrier_total")
-    r.plot(component="cost_carbon_emissions_total")
 
 
-    # Endogenous
-    r.plot(component="capex_yearly_all_positions")
-    # Exogenous
-    r.plot(component="capex_yearly")
-    r.plot(component="cost_capex")
-    r.plot(component="capex_approximation")
 
-    r.plot("capacity", node_edit="all")
-    r.plot("capacity", tech_type="conversion", node_edit="all")
-    r.plot("capacity", tech_type="transport", node_edit="all")
-    r.plot("capacity", tech_type="storage", node_edit="all")
+    r.plot("global_cumulative_capacity")
 
     print("Done with result analysis")
 
