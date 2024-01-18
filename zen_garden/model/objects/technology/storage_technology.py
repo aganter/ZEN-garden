@@ -67,9 +67,6 @@ class StorageTechnology(Technology):
         self.capex_specific_energy = self.data_input.extract_input_data("capex_specific_energy", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
         self.opex_specific_fixed_energy = self.data_input.extract_input_data("opex_specific_fixed_energy", index_sets=["set_nodes", "set_time_steps_yearly"],
                                                                             time_steps=set_time_steps_yearly)
-        #anyaxie
-        if self.optimization_setup.system["use_endogenous_learning"]:
-            self.perform_total_cost_pwa(capacity_types=True)
 
         # original
         self.convert_to_fraction_of_capex()
@@ -79,6 +76,9 @@ class StorageTechnology(Technology):
         # add min load max load time series for energy
         self.raw_time_series["min_load_energy"] = self.data_input.extract_input_data("min_load_energy", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
         self.raw_time_series["max_load_energy"] = self.data_input.extract_input_data("max_load_energy", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
+        #anyaxie
+        if self.optimization_setup.system["use_endogenous_learning"]:
+            self.perform_total_cost_pwa(capacity_types=True)
 
     def convert_to_fraction_of_capex(self):
         """ this method converts the total capex to fraction of capex, depending on how many hours per year are calculated """

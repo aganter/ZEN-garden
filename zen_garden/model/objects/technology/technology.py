@@ -236,7 +236,6 @@ class Technology(Element):
             :param learning_rate: Learning Rate
             :return: Total cumulative cot
             """
-            # todo: fix the formulation of the total cost function? This is only the case if integrate from zero
             alpha = c_initial / np.power(q_initial, learning_rate)
             exp = 1 + learning_rate
             TC = alpha / exp * ( np.power(u, exp) )
@@ -291,15 +290,13 @@ class Technology(Element):
             learning_rate = self.learning_rate
             global_share_factor = self.global_share_factor
 
-
-            # todo: how to treat this case?
-            # todo: This must be treated differently when calculating the investment cost
             # In case there is no existing capacity, set the global initial capacity to 1
             if hasattr(self, 'set_technologies_existing') and capacity_existing > 0:
                 # global initial capacity, capex and capacity limit for power-rated technologies
                 global_initial_capacity = (1 / global_share_factor) * capacity_existing
             else:
                 global_initial_capacity = self.global_initial_capacity
+                logging.warning("Global initial capacity must be given as attribute.") # TODO: Implement case for capacity existing = 0
 
             # todo: implement case for lower bound of PWA
             # Lower and Upper bound for global cumulative capacity
@@ -829,7 +826,6 @@ class Technology(Element):
             ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
                                bounds=(0, np.inf), doc='size of invested technology at location l and time t')
         # anyaxie:
-        # todo: remove this if possible?
         if not optimization_setup.system["use_endogenous_learning"]:
             # capex of building capacity
             variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(
@@ -2333,7 +2329,6 @@ class TechnologyRules(GenericRule):
        :return: List of constraints
        """
 
-        # todo: remove hardcode
         ### index sets
         index_values, index_names = Element.create_custom_set(
             ["set_technologies", "set_location", "set_capacity_types", "set_time_steps_yearly"], self.optimization_setup)
@@ -2347,7 +2342,6 @@ class TechnologyRules(GenericRule):
         # we loop over technologies and time steps, because we need to cycle over the lifetime range of the technology
         # which requires the technology and the year, we vectorize over capacity types and locations
         constraints = []
-        # todo: implement aggregated and active capacity
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
 
             ### auxiliary calculations
@@ -2362,10 +2356,11 @@ class TechnologyRules(GenericRule):
             else:
                 # Case for aggregated cumulative technologies with decomissioning
                 # sum up over all previous years and all nodes
-                # todo: How do I handle technologies built in the future?
+                logging.warning("Not yet implemented for special case of future technologies.")  # TODO: implement for future capacities
                 time_for_sum = range(year+1)
                 term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
                     dim=["set_location", "set_technologies_existing"])
+
 
             # Sum up all capacity additions over the selected time horizon
             for previous_year in time_for_sum:
@@ -2499,8 +2494,7 @@ class TechnologyRules(GenericRule):
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             if year == 0:
-                # todo: change the way initital total cost is defined
-                # todo: change the way technologies ecisting is chechked
+                # todo: change the way technologies existing is checked
                 # todo: how to implement decommissioning here?
                 cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
                                                        - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])

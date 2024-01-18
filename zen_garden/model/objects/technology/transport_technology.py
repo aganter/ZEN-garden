@@ -51,13 +51,13 @@ class TransportTechnology(Technology):
         self.transport_loss_factor = self.data_input.extract_attribute("transport_loss_factor")["value"]
         # get capex of transport technology
         self.get_capex_transport()
-        # anyaxie
-        if self.optimization_setup.system['use_endogenous_learning']:
-            self.perform_total_cost_pwa()
         # annualize capex
         self.convert_to_fraction_of_capex()
         # calculate capex of existing capacity
         self.capex_capacity_existing = self.calculate_capex_of_capacities_existing()
+        # anyaxie
+        if self.optimization_setup.system['use_endogenous_learning']:
+            self.perform_total_cost_pwa()
 
     def get_capex_transport(self):
         """get capex of transport technology"""
