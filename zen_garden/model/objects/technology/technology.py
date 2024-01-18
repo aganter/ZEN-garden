@@ -17,8 +17,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from linopy.constraints import AnonymousConstraint
-#todo: remove this later
-from matplotlib import pyplot as plt
 
 from zen_garden.utils import lp_sum
 from ..component import ZenIndex, IndexSet
@@ -241,8 +239,8 @@ class Technology(Element):
             # todo: fix the formulation of the total cost function? This is only the case if integrate from zero
             alpha = c_initial / np.power(q_initial, learning_rate)
             exp = 1 + learning_rate
-            v = alpha / exp * np.power(u, exp)
-            return v
+            TC = alpha / exp * ( np.power(u, exp) )
+            return TC
 
         def linear_interpolation(x_values, y_function, num_interpolation_points):
             """
@@ -326,15 +324,6 @@ class Technology(Element):
                 (interpolated_q[:-1] <= global_initial_capacity) & (global_initial_capacity < interpolated_q[1:]))[0][0]
             pwa_initial_total_global_cost = intersect[index_segment] + slope[index_segment] * global_initial_capacity
 
-            # todo: remove this later, only to validate values
-            plt.subplots()
-            plt.plot(q_values, function(q_values), label=f'Tech: {self.name}', linestyle='--', color='orange')
-            plt.plot(interpolated_q, interpolated_TC, label='PWA', color='red')
-            plt.scatter(interpolated_q, interpolated_TC, color='red')
-            plt.scatter(global_initial_capacity, pwa_initial_total_global_cost, color='green', label='Initial Total Cost')
-            plt.legend()
-            plt.show()
-
 
             return interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost
 
@@ -351,6 +340,8 @@ class Technology(Element):
 
         self.total_cost_pwa_points_lower_bound = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
         self.total_cost_pwa_points_upper_bound = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
+        self.total_cost_pwa_TC_lower_bound = pd.Series(index=index_tech, data=interpolated_TC[:-1], dtype=float)
+        self.total_cost_pwa_TC_upper_bound = pd.Series(index=index_tech, data=interpolated_TC[1:], dtype=float)
         self.total_cost_pwa_slope = pd.Series(slope, index=self.set_total_cost_pwa_segments)
         self.total_cost_pwa_intersect = pd.Series(index=index_tech, data=intersect, dtype=float)
         self.total_cost_pwa_initial_global_cost = pwa_initial_total_global_cost
@@ -371,6 +362,7 @@ class Technology(Element):
             self.total_cost_pwa_intersect_energy = pd.Series(index=index_tech, data=intersect, dtype=float)
             self.total_cost_pwa_initial_global_cost_energy = pwa_initial_total_global_cost
             self.total_cost_pwa_initial_unit_cost_energy = initial_cost
+
 
     ### --- classmethods
     @classmethod
@@ -718,6 +710,16 @@ class Technology(Element):
                                                         doc='Parameter which specifies the lower bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_upper_bound",
                                                         data=optimization_setup.initialize_component(cls,"total_cost_pwa_points_upper_bound",
+                                                        index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
+                                                        capacity_types=True),
+                                                        doc='Parameter which specifies the upper bound of the pwa of total cost function')
+            optimization_setup.parameters.add_parameter(name="total_cost_pwa_TC_lower_bound",
+                                                        data=optimization_setup.initialize_component(cls,"total_cost_pwa_TC_lower_bound",
+                                                        index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
+                                                        capacity_types=True),
+                                                        doc='Parameter which specifies the lower bound of the pwa of total cost function')
+            optimization_setup.parameters.add_parameter(name="total_cost_pwa_TC_upper_bound",
+                                                        data=optimization_setup.initialize_component(cls,"total_cost_pwa_TC_upper_bound",
                                                         index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"],
                                                         capacity_types=True),
                                                         doc='Parameter which specifies the upper bound of the pwa of total cost function')
