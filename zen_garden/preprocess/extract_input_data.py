@@ -59,9 +59,9 @@ class DataInput:
         # generic time steps
         yearly_variation = False
         if not time_steps:
-            time_steps = self.energy_system.set_base_time_steps
+            time_steps = "set_base_time_steps"
         # if time steps are the yearly base time steps
-        elif time_steps is self.energy_system.set_base_time_steps_yearly:
+        elif time_steps == "set_base_time_steps_yearly":
             yearly_variation = True
             self.extract_yearly_variation(file_name, index_sets)
 
@@ -313,7 +313,7 @@ class DataInput:
             df_output = df_output * scenario_factor
             setattr(self, name_yearly_variation, df_output)
 
-    def extract_locations(self, extract_nodes=True):
+    def extract_locations(self, extract_nodes=True, extract_coordinates=False):
         """ reads input data to extract nodes or edges.
 
         :param extract_nodes: boolean to switch between nodes and edges """
@@ -348,7 +348,7 @@ class DataInput:
             else:
                 raise FileNotFoundError(f"Input file set_edges.csv is missing from {self.folder_path}")
 
-    def extract_carriers(self):
+    def extract_carriers(self, carrier_type):
         """ reads input data and extracts conversion carriers
 
         :return carrier_list: list with input, output or reference carriers of technology """
@@ -419,7 +419,7 @@ class DataInput:
             # get reference year
             reference_year = self.system["reference_year"]
             # calculate remaining lifetime
-            df_output[df_output > 0] = - reference_year + df_output[df_output > 0] + self.element.lifetime
+            df_output[df_output > 0] = - reference_year + df_output[df_output > 0] + self.element.lifetime[0]
         # apply scenario factor
         return df_output*scenario_factor
 
@@ -549,7 +549,8 @@ class DataInput:
                 has_unit = True
         return df_input, has_unit
 
-    def create_default_output(self, index_sets, unit_category, file_name=None, time_steps=None, manual_default_value=None, subelement=None):
+    def create_default_output(self, index_sets, unit_category, file_name=None, time_steps=None,
+                              manual_default_value=None, subelement=None):
         """ creates default output dataframe
 
         :param index_sets: index sets of attribute. Creates (multi)index. Corresponds to order in pe.Set/pe.Param
@@ -581,6 +582,11 @@ class DataInput:
         # create output Series filled with default value
         if default_value is None:
             df_output = pd.Series(index=index_multi_index, dtype=float)
+        # use distances computed with node coordinates as default values
+        elif file_name == "distance":
+            df_output = pd.Series(index=index_multi_index, dtype=float)
+            for key, value in default_value["value"].items():
+                df_output[key] = value
         else:
             df_output = pd.Series(index=index_multi_index, data=default_value["value"], dtype=float)
         # save unit of attribute of element converted to base unit
@@ -626,7 +632,7 @@ class DataInput:
         for index in index_sets:
             index_name_list.append(self.index_names[index])
             if "set_time_steps" in index and time_steps:
-                index_list.append(time_steps)
+                index_list.append(getattr(self.energy_system, time_steps))
             elif index == "set_technologies_existing":
                 index_list.append(self.element.set_technologies_existing)
             elif index in self.system:

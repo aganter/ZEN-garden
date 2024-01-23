@@ -43,7 +43,7 @@ class Technology(Element):
 
     def store_carriers(self):
         """ retrieves and stores information on reference """
-        self.reference_carrier = [self.data_input.extract_attribute("reference_carrier", skip_warning=True)]
+        self.reference_carrier = self.data_input.extract_carriers(carrier_type="reference_carrier")
         self.energy_system.set_technology_of_carrier(self.name, self.reference_carrier)
 
     def store_input_data(self):
@@ -75,16 +75,16 @@ class Technology(Element):
         self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
         # anyaxie
         # endogenous learning input data
-        # if self.optimization_setup.system["use_endogenous_learning"]:
         # segments for pwa of cumulative cost for each technology
-        self.set_total_cost_pwa_segments = list(
-            range(int(self.data_input.extract_attribute("num_pwa_segments")["value"])))
-        self.learning_rate = self.data_input.extract_attribute("learning_rate")["value"]
-        self.global_share_factor = self.data_input.extract_attribute("global_share")["value"]
-        self.learning_curve_lb = self.data_input.extract_attribute("learning_curve_lower_bound")["value"]
-        self.learning_curve_ub = self.data_input.extract_attribute("learning_curve_upper_bound")["value"]
-        self.learning_curve_npts = self.data_input.extract_attribute("learning_curve_npts")["value"]
-        self.global_initial_capacity_default = self.data_input.extract_attribute("global_initial_capacity")["value"]
+        if self.optimization_setup.system["use_endogenous_learning"]:
+            self.set_total_cost_pwa_segments = list(
+                range(int(self.data_input.extract_attribute("num_pwa_segments", unit_category={})["value"])))
+            self.learning_rate = self.data_input.extract_attribute("learning_rate", unit_category={})["value"]
+            self.global_share_factor = self.data_input.extract_attribute("global_share", unit_category={})["value"]
+            self.learning_curve_lb = self.data_input.extract_attribute("learning_curve_lower_bound", unit_category={})["value"]
+            self.learning_curve_ub = self.data_input.extract_attribute("learning_curve_upper_bound", unit_category={})["value"]
+            self.learning_curve_npts = self.data_input.extract_attribute("learning_curve_npts", unit_category={})["value"]
+            self.global_initial_capacity_default = self.data_input.extract_attribute("global_initial_capacity", unit_category={})["value"]
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities

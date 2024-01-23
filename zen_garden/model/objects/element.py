@@ -63,7 +63,7 @@ class Element:
                     class_label = set_name
                     break
         # get input path for current class_label
-        self.input_path = paths[class_label][self.name]["folder"]
+        self.input_path = Path(paths[class_label][self.name]["folder"])
 
     def store_scenario_dict(self):
         """ stores scenario dict in each data input object """
