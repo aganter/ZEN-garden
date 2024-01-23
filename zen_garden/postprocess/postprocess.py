@@ -80,6 +80,11 @@ class Postprocess:
 
         # extract and save sequence time steps, we transform the arrays to lists
         self.dict_sequence_time_steps = self.flatten_dict(self.energy_system.time_steps.get_sequence_time_steps_dict())
+
+        if include_year2operation:
+            self.dict_sequence_time_steps["time_steps_year2operation"] = self.get_time_steps_year2operation()
+            self.dict_sequence_time_steps["time_steps_year2storage"] = self.get_time_steps_year2storage()
+
         self.save_sequence_time_steps(scenario=scenario_name)
 
         # case where we should run the post-process as normal
@@ -420,3 +425,17 @@ class Postprocess:
             if index in self.analysis["header_data_inputs"].keys():
                 index_list_final.append(self.analysis["header_data_inputs"][index])  # else:  #     pass  #     # index_list_final.append(index)
         return index_list_final
+
+    def get_time_steps_year2operation(self):
+        """ Returns a HDF5-Serializable version of the dict_time_steps_year2operation dictionary."""
+        ans = {}
+        for year, time_steps in self.energy_system.time_steps.time_steps_year2operation.items():
+            ans[str(year)] = time_steps
+        return ans
+
+    def get_time_steps_year2storage(self):
+        """ Returns a HDF5-Serializable version of the dict_time_steps_year2storage dictionary."""
+        ans = {}
+        for year, time_steps in self.energy_system.time_steps.time_steps_year2storage.items():
+            ans[str(year)] = time_steps
+        return ans
