@@ -18,6 +18,9 @@ import pandas as pd
 import xarray as xr
 from linopy.constraints import AnonymousConstraint
 
+#anyaxie
+import piecewise_regression
+
 from zen_garden.utils import lp_sum
 from ..component import ZenIndex, IndexSet
 from ..element import Element, GenericRule
@@ -280,12 +283,81 @@ class Technology(Element):
 
             return interpolated_x, y_values, intersect, slope
 
-        def perform_pwa(capacity_existing, initial_cost, max_capacity, segments):
+        def linear_interpolation_dynamic(x_values, y_function, min_segments, max_segments):
+            """
+            Linear interpolation of a function with dynamically spaced segments
+            Requires piecewise regression package
+            """
+            # Initialize lists to store coefficients and y values
+            intersect = []
+            slope = []
+            interpolated_x = []
+            TC_interpolated = []
+            y_values = []
+
+            # Calculate y values using the provided function
+            for x in x_values:
+                y_values.append(y_function(x))
+
+            # Initialize number of segments
+            n = min_segments
+            while n <= max_segments:
+                pw_fit = piecewise_regression.Fit(x, y, n_breakpoints=n)
+                # check if successful fit
+                if pw_fit.get_params()["converged"]:
+                    print(f"Successful fit with {n} breakpoints.")
+                    y_hat = pw_fit.predict(x_values)
+                    mean_sq_error = np.mean(np.power((y_hat - np.array(y_values)), 2))
+                    if mean_sq_error < 0.05:
+                        print(f"Mean squared error is {mean_sq_error}")
+                        break
+                    else:
+                        n += 1
+                else:
+                    print(f"Failed fit with {n} breakpoints.")
+                    n -= 1
+                    pw_fit = piecewise_regression.Fit(x_values, y_values, n_breakpoints=n)
+                    break
+
+            # Extract the PWA parameters
+            raw_params = pw_fit.best_muggeo.best_fit.raw_params
+            breakpoints = pw_fit.best_muggeo.best_fit.next_breakpoints
+
+            # Find the interpolated_x
+            interpolated_x_first = np.array([x_values[0]])
+            interpolated_x_next = breakpoints
+            interpolated_x = np.concatenate((interpolated_x_first, interpolated_x_next))
+
+            # Find TC_interpolated
+            TC_interpolated_first = np.array([raw_params[0]])
+            TC_interpolated_next = pw_fit.predict(breakpoints)
+            TC_interpolated = np.concatenate((TC_interpolated_first, TC_interpolated_next))
+
+            # Find the y-intersects
+            tossed_params = raw_params[1:]
+
+            # Initialize with the second entry
+            result = raw_params[1]
+
+            # List to store intermediate results
+            slope = [result]
+
+            # Iteratively sum each pair of values in tossed_params with the result from the previous sum
+            for i in range(0, len(breakpoints)):
+                result += tossed_params[i + 1]
+                slope.append(result)
+
+            # Determine the intersect
+            intersect = TC_interpolated - slope * interpolated_x
+
+            return interpolated_x, TC_interpolated, intersect, slope
+
+
+        def perform_pwa(capacity_existing, initial_cost, max_capacity, segments, dynamic=False):
             """
             perform pwa approximation for total cost
-            :return: slope and intersect of each segment, interpolation points
+            :return: slope and intersect of each segment, interpolation points # TODO: Implement case for preprocessing
             """
-
             # Same for power and energy-rated
             learning_rate = self.learning_rate
             global_share_factor = self.global_share_factor
@@ -309,13 +381,16 @@ class Technology(Element):
                 ub = (1/global_share_factor)*max_capacity
 
             q_values = np.linspace(lb, ub, npts)
-
-            num_interpolation_points = len(segments) + 1
-
             function = lambda u: fun_total_cost(u, initial_cost, global_initial_capacity, learning_rate)
 
-            interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function,
-                                                                                     num_interpolation_points)
+            # todo: remove hardcode -> get from system
+            if dynamic:
+                min_segments = 1
+                max_segments = 10
+                linear_interpolation_dynamic(q_values, function, min_segments, max_segments)
+            else:
+                num_interpolation_points = len(segments) + 1
+                interpolated_q, interpolated_TC, intersect, slope = linear_interpolation(q_values, function, num_interpolation_points)
             # Determines which segment the initial capacity is on, to calculate total global initial cost
             index_segment = np.where(
                 (interpolated_q[:-1] <= global_initial_capacity) & (global_initial_capacity < interpolated_q[1:]))[0][0]
@@ -351,7 +426,7 @@ class Technology(Element):
             max_capacity = self.capacity_limit_energy.sum()
             capacity_existing = self.capacity_existing_energy.sum()
 
-            [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(learning_rate, capacity_existing, global_share_factor, initial_cost, max_capacity, segments)
+            [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(capacity_existing, initial_cost, max_capacity, segments)
 
             self.total_cost_pwa_points_lower_bound_energy = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
             self.total_cost_pwa_points_upper_bound_energy = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
