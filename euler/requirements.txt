@@ -20,3 +20,4 @@ mpmath
 tsam
 tables
 filelock
+piecewise-regression
