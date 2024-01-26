@@ -1,0 +1,56 @@
+[
+  {
+    "carbon_emissions_annual_limit": {
+      "default_value": "inf",
+      "unit": "Mtons"
+    }
+  },
+  {
+    "carbon_emissions_budget": {
+      "default_value": "inf",
+      "unit": "Mtons"
+    }
+  },
+  {
+    "carbon_emissions_cumulative_existing": {
+      "default_value": 0.0,
+      "unit": "tons"
+    }
+  },
+  {
+    "price_carbon_emissions": {
+      "default_value": 0.0,
+      "unit": "kEuro/ktons"
+    }
+  },
+  {
+    "price_carbon_emissions_annual_overshoot": {
+      "default_value": "inf",
+      "unit": "kEuro/ktons"
+    }
+  },
+  {
+    "price_carbon_emissions_budget_overshoot": {
+      "default_value": "inf",
+      "unit": "kEuro/ktons"
+    }
+  },
+  {
+    "market_share_unbounded": {
+      "default_value": 0.02,
+      "unit": "1"
+    }
+  },
+  {
+    "knowledge_spillover_rate": {
+      "default_value": 0.07,
+      "unit": "1"
+    }
+  },
+  {
+    "discount_rate": {
+      "default_value": 0.06,
+      "unit": "1"
+    }
+  }
+]
