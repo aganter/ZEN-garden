@@ -3,7 +3,7 @@ glpk
 geopandas
 gurobipy
 hdfdict
-pyyaml==6.0
+pyyaml
 pandas
 pip
 ordered-set
