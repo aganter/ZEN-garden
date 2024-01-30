@@ -369,8 +369,8 @@ class Technology(Element):
             if equidistant and initial_cost != 0:
                 # Use given set of segments
                 segments = self.num_pwa_segments
-                index_tech = pd.Index(segments, name="set_total_cost_pwa_segments")
-                num_interpolation_points = len(segments) + 1
+                index_tech = pd.Index(list(range(segments)), name="set_total_cost_pwa_segments")
+                num_interpolation_points = segments + 1
                 # todo: remove the time logger later
                 t0 = time.perf_counter()
                 interpolated_q, interpolated_TC, intersect, slope = pwa_equidistant(q_values, function, num_interpolation_points)
