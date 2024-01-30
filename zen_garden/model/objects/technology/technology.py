@@ -261,7 +261,7 @@ class Technology(Element):
 
             return interpolated_x, y_values, intersect, slope
 
-        def pwa_non_equidistant(x_values, y_function, min_segments, max_segments):
+        def pwa_non_equidistant(x_values, y_function, min_num_segments, max_num_segments):
             """
             Linear interpolation of a function with dynamically spaced segments
             Requires piecewise regression package
@@ -277,9 +277,9 @@ class Technology(Element):
             for x in x_values:
                 y_values.append(y_function(x))
 
-            # Initialize number of segments
-            n = min_segments
-            while n <= max_segments:
+            # Initialize number of intermediary breakpoints
+            n = min_num_segments-1
+            while n <= max_num_segments-1:
                 pw_fit = piecewise_regression.Fit(x_values, y_values, n_breakpoints=n)
                 # check if successful fit
                 if pw_fit.get_params()["converged"]:
@@ -297,32 +297,27 @@ class Technology(Element):
                     pw_fit = piecewise_regression.Fit(x_values, y_values, n_breakpoints=n)
                     break
 
-            # Extract the PWA parameters
             raw_params = pw_fit.best_muggeo.best_fit.raw_params
             breakpoints = pw_fit.best_muggeo.best_fit.next_breakpoints
 
             # Find the interpolated_x
             interpolated_x_first = np.array([x_values[0]])
             interpolated_x_next = breakpoints
-            interpolated_x = np.concatenate((interpolated_x_first, interpolated_x_next))
+            interpolated_x_last = np.array([x_values[-1]])
+            interpolated_x = np.concatenate((interpolated_x_first, interpolated_x_next, interpolated_x_last))
 
             # Find TC_interpolated
-            TC_interpolated_first = np.array([raw_params[0]])
-            TC_interpolated_next = pw_fit.predict(breakpoints)
-            TC_interpolated = np.concatenate((TC_interpolated_first, TC_interpolated_next))
+            TC_interpolated = pw_fit.predict(interpolated_x)
 
             # Find the y-intersects
             tossed_params = raw_params[1:]
 
-            # Initialize with the second entry
-            result = raw_params[1]
-
-            # List to store intermediate results
-            slope = [result]
-
+            # Initialise list of slope with first raw param from fit
+            slope = []
             # Iteratively sum each pair of values in tossed_params with the result from the previous sum
-            for i in range(0, len(breakpoints)-1):
-                result += tossed_params[i + 1]
+            result = 0
+            for i in range(0, len(breakpoints) + 1):
+                result += tossed_params[i]
                 slope.append(result)
 
             # Determine intersect
@@ -335,7 +330,7 @@ class Technology(Element):
             return interpolated_x, TC_interpolated, intersect, slope, index_tech
 
 
-        def perform_pwa(capacity_existing, initial_cost, max_capacity, equidistant=True):
+        def perform_pwa(capacity_existing, initial_cost, max_capacity):
             """
             perform pwa approximation for total cost
             :return: slope and intersect of each segment, interpolation points # TODO: Implement case for preprocessing
@@ -365,18 +360,31 @@ class Technology(Element):
             q_values = np.linspace(lb, ub, npts)
             function = lambda u: fun_total_cost(u, initial_cost, global_initial_capacity, learning_rate)
 
-            # todo: remove hardcode -> get from system
+
+            if self.optimization_setup.system["equidistant_total_cost_pwa"]:
+                equidistant = True
+            else:
+                equidistant = False
+
             if equidistant and initial_cost != 0:
                 # Use given set of segments
                 segments = self.num_pwa_segments
                 index_tech = pd.Index(segments, name="set_total_cost_pwa_segments")
                 num_interpolation_points = len(segments) + 1
+                # todo: remove the time logger later
+                t0 = time.perf_counter()
                 interpolated_q, interpolated_TC, intersect, slope = pwa_equidistant(q_values, function, num_interpolation_points)
+                t1 = time.perf_counter()
+                logging.info(f"Time to perform equidistant pwa for tech {self.name}: {t1 - t0:0.4f} seconds")
             elif not equidistant and initial_cost != 0:
                 # Use given max number of segments
-                min_segments = 2
-                max_segments = 10
-                interpolated_q, interpolated_TC, intersect, slope, index_tech = pwa_non_equidistant(q_values, function, min_segments, max_segments)
+                min_num_segments = self.optimization_setup.system["min_num_segments"]
+                max_num_segments = self.optimization_setup.system["max_num_segments"]
+                # todo: remove the time logger later
+                t0 = time.perf_counter()
+                interpolated_q, interpolated_TC, intersect, slope, index_tech = pwa_non_equidistant(q_values, function, min_num_segments, max_num_segments)
+                t1 = time.perf_counter()
+                logging.info(f"Time to perform non-equidistant pwa for tech {self.name}: {t1 - t0:0.4f} seconds")
             else:
                 # If technology for free
                 interpolated_q, interpolated_TC, intersect, slope, index_tech = pwa_zero(q_values, function)
@@ -392,10 +400,11 @@ class Technology(Element):
 
         # Different for energy-rated and power-rated
         initial_cost = self.capex_specific.loc[:, 0].sum() / len(self.capex_specific.loc[:, 0])
-        max_capacity = self.capacity_limit.sum()  # todo: Implement case for when capacity_limit in nodes = 0
-        capacity_existing = self.capacity_existing.sum()
+        # Take the year with the maximum capacity limit across the nodes as the maximum capacity
+        max_capacity = self.capacity_limit.groupby('year').sum().max() # todo: Implement case for when capacity_limit in nodes = 0
+        capacity_existing = self.capacity_existing.sum() # todo: Implement case for decomissioning
 
-        [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost, index_tech] = perform_pwa(capacity_existing, initial_cost, max_capacity, equidistant=False)
+        [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost, index_tech] = perform_pwa(capacity_existing, initial_cost, max_capacity)
 
         self.total_cost_pwa_points_lower_bound = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
         self.total_cost_pwa_points_upper_bound = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)
@@ -411,10 +420,10 @@ class Technology(Element):
         if capacity_types:
             # Different for energy-rated and power-rated
             initial_cost = self.capex_specific_energy.loc[:, 0].sum() / len(self.capex_specific_energy.loc[:, 0])
-            max_capacity = self.capacity_limit_energy.sum()
+            max_capacity = self.capacity_limit_energy.groupby('year').sum().max()
             capacity_existing = self.capacity_existing_energy.sum()
 
-            [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(capacity_existing, initial_cost, max_capacity,equidistant=False)
+            [interpolated_q, interpolated_TC, intersect, slope, pwa_initial_total_global_cost, initial_cost] = perform_pwa(capacity_existing, initial_cost, max_capacity,equidistant)
 
             self.total_cost_pwa_points_lower_bound_energy = pd.Series(index=index_tech, data=interpolated_q[:-1], dtype=float)
             self.total_cost_pwa_points_upper_bound_energy = pd.Series(index=index_tech, data=interpolated_q[1:], dtype=float)

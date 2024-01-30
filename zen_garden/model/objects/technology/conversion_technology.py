@@ -66,6 +66,7 @@ class ConversionTechnology(Technology):
         if self.optimization_setup.system["use_endogenous_learning"]:
             self.perform_total_cost_pwa()
 
+
     def get_conversion_factor(self):
         """retrieves and stores conversion_factor """
         # df_input_linear, has_unit_linear = self.data_input.read_pwa_files("conversion_factor")
