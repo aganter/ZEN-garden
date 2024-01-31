@@ -36,9 +36,14 @@ if __name__ == "__main__":
 
     # Run endog and exog models
     t0 = time.perf_counter()
-    optimization_setup = endog(config=config, folder_path=folder_path, data_set_name=data_set_name)
-    optimization_setup = exog(config=config, folder_path=folder_path, data_set_name=data_set_name)
-    t1 = time.perf_counter()
+    try:
+        optimization_setup = endog(config=config, folder_path=folder_path, data_set_name=data_set_name)
+        optimization_setup = exog(config=config, folder_path=folder_path, data_set_name=data_set_name)
+        t1 = time.perf_counter()
+        message = f'Optimization completed after {(t1-t0)/60:0.2f} min for dataset {data_set_name} :)'
+    except:
+        t1 = time.perf_counter()
+        message = f'Optimization failed after {(t1-t0)/60:0.2f} min for dataset {data_set_name} :('
 
     import asyncio
     from telegram import Bot
@@ -47,5 +52,4 @@ if __name__ == "__main__":
     bot = Bot(token=botToken)
 
     chatId = '5778346437'
-    message = f'Optimization completed after {(t1-t0)/60:0.2f} min for dataset {data_set_name} :)'
     asyncio.run(bot.send_message(chat_id=chatId, text=message))
