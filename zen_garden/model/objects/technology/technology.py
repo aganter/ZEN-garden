@@ -802,15 +802,20 @@ class Technology(Element):
         # invested_capacity technology
         variables.add_variable(model, name="capacity_investment", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of invested technology at location l and time t')
-        # capex of building capacity
-        variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
-            bounds=(0,np.inf), doc='capex for building technology at location l and time t')
+        # anyaxie:
+        if not optimization_setup.system["use_endogenous_learning"]:
+            # capex of building capacity
+            variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+                bounds=(0, np.inf), doc='capex for building technology at location l and time t')
+        else:
+            variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"],optimization_setup),
+                bounds=(0, np.inf), doc='capex for building technology at location l and time t')
         # annual capex of having capacity
         variables.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
-            bounds=(0,np.inf), doc='annual capex for having technology at location l')
+                bounds=(0, np.inf), doc='annual capex for having technology at location l')
         # total capex
         variables.add_variable(model, name="cost_capex_total", index_sets=sets["set_time_steps_yearly"],
-            bounds=(0,np.inf), doc='total capex for installing all technologies in all locations at all times')
+               bounds=(0, np.inf), doc='total capex for installing all technologies in all locations at all times')
         # opex
         variables.add_variable(model, name="cost_opex", index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_operation"], optimization_setup),
             bounds=(0,np.inf), doc="opex for operating technology at location l and time t")
