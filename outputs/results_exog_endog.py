@@ -165,7 +165,7 @@ def empty_plot_with_text(text, background_color='white'):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240118_Hydrogen"
+data_set_name = "20240118_Hydrogen_8760"
 res_exog = Results(os.path.join(folder_path, data_set_name + "_exog"))
 res_endog = Results(os.path.join(folder_path, data_set_name + "_endog"))
 
@@ -223,6 +223,7 @@ par_learning_rate = res_endog.get_df("learning_rate")
 var_capacity_addition.groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
 var_segment_position.groupby(['set_technologies', 'set_capacity_types', 'set_time_steps_yearly']).sum().reset_index()
 par_capacity_limit.groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
+var_global_capacity.groupby(['technology', 'capacity_type']).sum().reset_index()
 
 flag_check1 = False
 flag_check2 = False

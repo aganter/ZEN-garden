@@ -9,6 +9,7 @@ Description:  Analysis of results of exog vs. endog model
 
 import os
 from zen_garden._internal import main
+import time
 
 
 def endog(config, folder_path, data_set_name):
@@ -34,7 +35,17 @@ if __name__ == "__main__":
     data_set_name = "20240118_Hydrogen"
 
     # Run endog and exog models
+    t0 = time.perf_counter()
     optimization_setup = endog(config=config, folder_path=folder_path, data_set_name=data_set_name)
     optimization_setup = exog(config=config, folder_path=folder_path, data_set_name=data_set_name)
+    t1 = time.perf_counter()
 
+    import asyncio
+    from telegram import Bot
 
+    botToken = '6585556167:AAGDTMRiK9BZEsjjTBT1_m57c-92USqVdRI'
+    bot = Bot(token=botToken)
+
+    chatId = '5778346437'
+    message = f'Optimization completed after {(t1-t0)/60:0.2f} min for dataset {data_set_name} :)'
+    asyncio.run(bot.send_message(chat_id=chatId, text=message))
