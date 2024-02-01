@@ -32,7 +32,7 @@ if __name__ == "__main__":
     config.solver["keep_files"] = False
     folder_path = os.path.dirname(__file__)
 
-    data_set_name = "20240118_Hydrogen"
+    data_set_name = "20240201_Hydrogen_8760_cap_addition_max"
 
     # Run endog and exog models
     t0 = time.perf_counter()

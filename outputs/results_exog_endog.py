@@ -179,7 +179,7 @@ res_exog.plot(component="capex_yearly")
 res_exog.plot(component="net_present_cost")
 
 # PLOT1: Plot capacity_additions and capacity seperated for output carriers with demand
-res_exog.standard_plots()
+res_exog.standard_plots(save_fig=True, file_type="png")
 
 # PRE-CHECK: Random variabes i like to look at
 res_exog.get_df("capacity_addition").groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
@@ -197,7 +197,7 @@ res_endog.plot(component="total_cost_pwa_global_cost")
 res_endog.plot(component="net_present_cost")
 
 # PLOT1: Plot capacity_additions and capacity seperated for output carriers with demand
-res_endog.standard_plots()
+res_endog.standard_plots(save_fig=True, file_type="png")
 
 ################################ Calculations for closer validation ################################
 # Read Variable results
