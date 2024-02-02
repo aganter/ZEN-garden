@@ -280,10 +280,9 @@ class Technology(Element):
                 # check if successful fit
                 if pw_fit.get_params()["converged"]:
                     print(f"Successful fit with {n} breakpoints.")
-                    y_hat = pw_fit.predict(x_values)
-                    mean_sq_error = np.mean(np.power((y_hat - np.array(y_values)), 2))
-                    if mean_sq_error < 0.05:
-                        print(f"Mean squared error is {mean_sq_error}")
+                    error = 1 - pw_fit.best_muggeo.best_fit.r_squared
+                    if error < 0.01:
+                        print(f"R squared error is {error}")
                         break
                     else:
                         n += 1
