@@ -162,116 +162,48 @@ def empty_plot_with_text(text, background_color='white'):
     ax.text(0.5, 0.5, text, ha='center', va='center', fontsize=16)
     plt.show()
 
-
-# I. Read the results of the two models
-folder_path = os.path.dirname(__file__)
-data_set_name = "20240118_Hydrogen_8760"
-res_exog = Results(os.path.join(folder_path, data_set_name + "_exog"))
-res_endog = Results(os.path.join(folder_path, data_set_name + "_endog"))
-
-# II. Plot the results individually
-# II.a Exogenous
-empty_plot_with_text("Exogenous Model", background_color='lightgray')
-res_exog.plot(component="capacity", tech_type="conversion")
-res_exog.plot(component="capacity_addition", tech_type="conversion")
-res_exog.plot(component="cost_capex")
-res_exog.plot(component="capex_yearly")
-res_exog.plot(component="net_present_cost")
-
-# PLOT1: Plot capacity_additions and capacity seperated for output carriers with demand
-res_exog.standard_plots(save_fig=True, file_type="png")
-
 # PRE-CHECK: Random variabes i like to look at
-res_exog.get_df("capacity_addition").groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
+def pre_check(res, scenario=None):
+    res.get_df("capacity_addition", scenario=scenario).groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
+    res.get_df("total_cost_pwa_cum_capacity_segment_position", scenario=scenario).groupby(['set_technologies', 'set_capacity_types', 'set_time_steps_yearly']).sum().reset_index()
+    res.get_df("capacity_limit", scenario=scenario).groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
+    res.get_df("global_cumulative_capacity", scenario=scenario).groupby(['technology', 'capacity_type']).sum().reset_index()
 
-# II.b Endogenous
-empty_plot_with_text("Endogenous Model", background_color='lightblue')
-
-################################ Plot some variables for visual validation ################################
-res_endog.plot(component="capacity", tech_type="conversion")
-res_endog.plot(component="capacity_addition", tech_type="conversion")
-res_endog.plot(component="capacity_addition")
-res_endog.plot(component="cost_capex")
-res_endog.plot(component="capex_yearly_all_positions")
-res_endog.plot(component="total_cost_pwa_global_cost")
-res_endog.plot(component="net_present_cost")
-
-# PLOT1: Plot capacity_additions and capacity seperated for output carriers with demand
-res_endog.standard_plots(save_fig=True, file_type="png")
-
-################################ Calculations for closer validation ################################
-# Read Variable results
-var_segment_position = res_endog.get_df("total_cost_pwa_cum_capacity_segment_position")
-var_segment_selection = res_endog.get_df("total_cost_pwa_segment_selection")
-var_total_global_cost = res_endog.get_df("total_cost_pwa_global_cost")
-var_capacity = res_endog.get_df("capacity")
-var_capacity_addition = res_endog.get_df("capacity_addition")
-var_cost_capex = res_endog.get_df("cost_capex")
-var_global_capacity = res_endog.get_df("global_cumulative_capacity")
-var_demand = res_endog.get_df("demand")
-
-# Read Parameters
-par_slope = res_endog.get_df("total_cost_pwa_slope")
-par_intersect = res_endog.get_df("total_cost_pwa_intersect")
-par_global_share = res_endog.get_df("global_share_factor")
-par_total_cost_pwa_points_lower_bound = res_endog.get_df("total_cost_pwa_points_lower_bound")
-par_total_cost_pwa_points_upper_bound = res_endog.get_df("total_cost_pwa_points_upper_bound")
-par_total_cost_pwa_TC_upper_bound = res_endog.get_df("total_cost_pwa_TC_upper_bound")
-par_total_cost_pwa_TC_lower_bound = res_endog.get_df("total_cost_pwa_TC_lower_bound")
-par_total_cost_pwa_initial_global_cost = res_endog.get_df("total_cost_pwa_initial_global_cost")
-par_total_cost_pwa_initial_unit_cost = res_endog.get_df("total_cost_pwa_initial_unit_cost")
-par_capacity_existing = res_endog.get_df("capacity_existing")
-par_global_initial_capacity = res_endog.get_df("global_initial_capacity")
-par_capacity_limit = res_endog.get_df("capacity_limit")
-par_learning_rate = res_endog.get_df("learning_rate")
-
-# PRE-CHECK: Random variabes i like to look at
-var_capacity_addition.groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
-var_segment_position.groupby(['set_technologies', 'set_capacity_types', 'set_time_steps_yearly']).sum().reset_index()
-par_capacity_limit.groupby(['technology', 'capacity_type', 'year']).sum().reset_index()
-var_global_capacity.groupby(['technology', 'capacity_type']).sum().reset_index()
-
-flag_check1 = False
-flag_check2 = False
-flag_check3 = False
-flag_check4 = False
-flag_check5 = False
-flag_check6 = False
-flag_check7 = False
 
 # CHECK 1:  Compare it with the total cost obtained
 # Calculate the PWA result of the total cost function
-if flag_check1:
-    calc_total_cost = (var_segment_selection*par_intersect + var_segment_position*par_slope).groupby(level=[0,1,3]).sum()
-    diff_total_cost = (var_total_global_cost - calc_total_cost.rename_axis(index={'set_time_steps_yearly': 'year'})).sum()
+def check1(res, scenario=None):
+    calc_total_cost = (res.get_df("total_cost_pwa_segment_selection", scenario=scenario)*res.get_df("total_cost_pwa_intersect", scenario=scenario) + res.get_df("total_cost_pwa_segment_selection", scenario=scenario)*res.get_df("total_cost_pwa_slope", scenario=scenario)).groupby(level=[0,1,3]).sum()
+    diff_total_cost = (res.get_df("total_cost_pwa_global_cost", scenario=scenario) - calc_total_cost.rename_axis(index={'set_time_steps_yearly': 'year'})).sum()
     print(f"The difference between the variable total cost and the calculated total cost is {round(diff_total_cost,4)}.")
+
 
 
 # CHECK 2: See if results on total cost function
 # for each technology and each capacity type
-if flag_check2:
-    for tech in var_capacity.index.get_level_values("technology").unique():
-        for capacity_type in var_capacity.loc[tech].index.get_level_values("capacity_type").unique():
+def check2(res, scenario=None):
+    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             # get the global share factor
-            gsf = par_global_share.loc[tech]
+            gsf = res.get_df("global_share_factor", scenario=scenario).loc[tech]
 
-            interpolated_q = res_endog.get_df("total_cost_pwa_points_lower_bound").loc[tech, capacity_type, :].values
-            interpolated_q = np.append(interpolated_q, res_endog.get_df("total_cost_pwa_points_upper_bound").loc[tech, capacity_type, :].values[-1])
+            interpolated_q = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
+            interpolated_q = np.append(interpolated_q, res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
 
-            interpolated_TC = res_endog.get_df("total_cost_pwa_TC_lower_bound").loc[tech, capacity_type, :].values
-            interpolated_TC = np.append(interpolated_TC, res_endog.get_df("total_cost_pwa_TC_upper_bound").loc[tech, capacity_type, :].values[-1])
+            interpolated_TC = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
+            interpolated_TC = np.append(interpolated_TC, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
 
 
-            res_capacity = (1/gsf)*var_capacity.groupby(level=[0,1,3]).sum().loc[tech, capacity_type, :].values
-            res_TC = var_total_global_cost.loc[tech, capacity_type, :]
+            res_capacity = (1/gsf)*res.get_df("capacity", scenario=scenario).groupby(level=[0,1,3]).sum().loc[tech, capacity_type, :].values
+            res_TC = res.get_df("total_cost_pwa_global_cost", scenario=scenario).loc[tech, capacity_type, :]
 
-            initial_capacity = (1/gsf)*par_global_initial_capacity.loc[tech]
+            initial_capacity = (1/gsf)*res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
 
             # plot the total cost function
             plt.plot(interpolated_q, interpolated_TC, label=f'PWA: {tech}', color='red')
             plt.scatter(interpolated_q, interpolated_TC, color='red')
             plt.scatter(res_capacity, res_TC, label=f'Model Results {tech}', color='blue')
-            plt.scatter(initial_capacity, par_total_cost_pwa_initial_global_cost.loc[tech], label=f'Initial Capacity {tech}', color='green')
+            plt.scatter(initial_capacity, res.get_df("total_cost_pwa_initial_global_cost", scenario=scenario).loc[tech], label=f'Initial Capacity {tech}', color='green')
             plt.legend()
             plt.show()
 
@@ -280,50 +212,83 @@ if flag_check2:
 
 # CHECK 3:  Check if cost capex equal to differenc between total cost in each step
 # for each technology and each capacity type
-if flag_check3:
-    for tech in var_capacity.index.get_level_values("technology").unique():
-        for capacity_type in var_capacity.loc[tech].index.get_level_values("capacity_type").unique():
+def check3(res, scenario=None):
+    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             calc_cost_capex = []
-            for year in var_capacity.index.get_level_values("year").unique():
+            for year in res.get_df("capacity", scenario=scenario).index.get_level_values("year").unique():
                 if year==0:
-                    calc_cost_capex.append(var_total_global_cost.loc[tech, :, year] - par_total_cost_pwa_initial_global_cost.loc[tech])
+                    calc_cost_capex.append(res.get_df("total_cost_pwa_global_cost", scenario=scenario).loc[tech, :, year] - res.get_df("total_cost_pwa_initial_global_cost", scenario=scenario).loc[tech])
                 else:
-                    calc_cost_capex.append(var_total_global_cost.loc[tech, :,year] - var_total_global_cost.loc[tech,:,year-1])
+                    calc_cost_capex.append(res.get_df("total_cost_pwa_global_cost", scenario=scenario).loc[tech, :,year] - res.get_df("total_cost_pwa_global_cost", scenario=scenario).loc[tech,:,year-1])
 
-            diff_calc_cost_capex = (pd.concat(calc_cost_capex).values - var_cost_capex.loc[tech, capacity_type].values).sum().round(4)
+            diff_calc_cost_capex = (pd.concat(calc_cost_capex).values - res.get_df("cost_capex", scenario=scenario).loc[tech, capacity_type].values).sum().round(4)
             print(f"The difference between the calculated cost capex and the variable cost capex for"
                   f" {tech}-{capacity_type} is {diff_calc_cost_capex}.")
 
 
 # CHECK 4: Check if capacity addition
-if flag_check4:
-    for tech in var_capacity.index.get_level_values("technology").unique():
-        for capacity_type in var_capacity.loc[tech].index.get_level_values("capacity_type").unique():
+def check4(res, scenario=None):
+    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             calc_capacity_addition = []
-            for year in var_capacity.index.get_level_values("year").unique():
+            for year in res.get_df("capacity", scenario=scenario).index.get_level_values("year").unique():
                 if year==0:
-                    calc_capacity_addition.append(1/par_global_share.loc[tech]*(var_total_global_cost.loc[tech, :, year] - par_capacity_existing.loc[tech, capacity_type].sum()))
+                    calc_capacity_addition.append(1/res.get_df("global_share_factor", scenario=scenario).loc[tech]*(res.get_df("total_cost_pwa_global_cost", scenario=scenario).loc[tech, :, year] - res.get_df("capacity_existing", scenario=scenario).loc[tech, capacity_type].sum()))
                 else:
-                    calc_capacity_addition.append(1/par_global_share.loc[tech]*(var_global_capacity.loc[tech, :,year] - var_global_capacity.loc[tech,:,year-1]))
+                    calc_capacity_addition.append(1/res.get_df("global_share_factor", scenario=scenario).loc[tech]*(res.get_df("global_cumulative_capacity", scenario=scenario).loc[tech, :,year] - res.get_df("global_cumulative_capacity", scenario=scenario).loc[tech,:,year-1]))
 
-            diff_calc_capacity_addition = pd.concat(calc_capacity_addition).values - var_capacity_addition.loc[tech, capacity_type].groupby(level=[1]).sum().values.round(4)
+            diff_calc_capacity_addition = pd.concat(calc_capacity_addition).values - res.get_df("capacity_addition", scenario=scenario).loc[tech, capacity_type].groupby(level=[1]).sum().values.round(4)
             print(f"The difference between the calculated capacity addition and the variable capacity addition for"
-                  f" {tech}-{capacity_type} is {diff_calc_cost_capex}.")
+                  f" {tech}-{capacity_type} is {diff_calc_capacity_addition}.")
 
 
 
 # CHECK 5: Check if capacity meets demand
-if flag_check5:
-    for carrier in var_demand.index.get_level_values("carrier").unique():
-        for year in var_demand.index.get_level_values("time_operation").unique(): # will be an issue when intra-year demand
-            calc_cum_capacity = 1/par_global_share[0]*var_global_capacity.loc[:, :, year].sum() # simplified: assuming all techs supply this one carrier and global share equal for both = 1
-            diff_demand = (var_demand.loc[carrier, :, year].sum() - calc_cum_capacity).round(4)
+def check5(res, scenario=None):
+    for carrier in res.get_df("demand", scenario=scenario).index.get_level_values("carrier").unique():
+        for year in res.get_df("demand", scenario=scenario).index.get_level_values("time_operation").unique(): # will be an issue when intra-year demand
+            calc_cum_capacity = 1/res.get_df("global_share_factor", scenario=scenario)[0]*res.get_df("global_cumulative_capacity", scenario=scenario).loc[:, :, year].sum() # simplified: assuming all techs supply this one carrier and global share equal for both = 1
+            diff_demand = (res.get_df("demand", scenario=scenario).loc[carrier, :, year].sum() - calc_cum_capacity).round(4)
 
             print(f"The difference between the demand and installed capacity for year {year} and carrier {carrier} is {diff_demand}.")
 
 
-# CHECK 6: Plot all learning curves
-if flag_check6:
+
+# CHECK 7: Plot all cost curves of all technologies over the years
+
+# PLOT1: STANDARD PLOTS: Plot all standard plots for all scenarios
+def standard_plots_AX(res, scenario=None, save_fig=False, file_type=None):
+    # Create Standard Plots for all scenarios
+    for scenario in res.scenarios:
+        empty_plot_with_text(scenario, background_color='lightyellow')
+        demand = res.get_df("demand", scenario=scenario)
+        # remove carriers without demand
+        demand = demand.loc[(demand != 0), :]
+        for carrier in demand.index.levels[0].values:
+            if carrier in demand:
+                res.plot("capacity", yearly=True, tech_type="conversion", reference_carrier=carrier,
+                         plot_strings={
+                             "title": f"Capacities of {carrier.capitalize()} Generating Conversion Technologies",
+                             "ylabel": "Capacity"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+                res.plot("capacity_addition", yearly=True, tech_type="conversion", reference_carrier=carrier,
+                         plot_strings={
+                             "title": f"Capacity Addition of {carrier.capitalize()} Generating Conversion Technologies",
+                             "ylabel": "Capacity"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+                res.plot("flow_conversion_input", yearly=True, reference_carrier=carrier, plot_strings={
+                    "title": f"Input Flows of {carrier.capitalize()} Generating Conversion Technologies",
+                    "ylabel": "Input Flow"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+                res.plot("flow_conversion_output", yearly=True, reference_carrier=carrier, plot_strings={
+                    "title": f"Output Flows of {carrier.capitalize()} Generating Conversion Technologies",
+                    "ylabel": "Output Flow"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+
+        res.plot("cost_capex_total", yearly=True, plot_strings={"title": "Total Capex", "ylabel": "Capex"},
+                 save_fig=save_fig, file_type=file_type, scenario=scenario)
+        res.plot("cost_carrier", yearly=True, plot_strings={"title": "Carrier Cost", "ylabel": "Cost"},
+                 save_fig=save_fig, file_type=file_type, scenario=scenario)
+
+# PLOT2: LEARNING CURVES: Plot all learning curves
+def learning_curve_plots(res, scenario=None):
     def fun_total_cost(u, c_initial: float, q_initial: float,
                        learning_rate: float) -> object:  # u is a vector
         """
@@ -352,14 +317,14 @@ if flag_check6:
         v = alpha * np.power(u, learning_rate)
         return v
 
-    for tech in var_capacity.index.get_level_values("technology").unique():
-        for capacity_type in var_capacity.loc[tech].index.get_level_values("capacity_type").unique():
+    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
 
             # Plot interpolation points
-            capacity_values = par_total_cost_pwa_points_lower_bound.loc[tech, capacity_type, :].values
-            capacity_values = np.append(capacity_values, par_total_cost_pwa_points_upper_bound.loc[tech, capacity_type, :].values[-1])
-            total_cost_values = par_total_cost_pwa_TC_lower_bound.loc[tech, capacity_type, :].values
-            total_cost_values = np.append(total_cost_values, par_total_cost_pwa_TC_upper_bound.loc[tech, capacity_type, :].values[-1])
+            capacity_values = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
+            capacity_values = np.append(capacity_values, res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
+            total_cost_values = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
+            total_cost_values = np.append(total_cost_values, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
 
             plt.plot(capacity_values, total_cost_values, label=f'{tech}-{capacity_type}')
             plt.legend()
@@ -369,21 +334,21 @@ if flag_check6:
 
     plt.show()
 
-    for tech in var_capacity.index.get_level_values("technology").unique():
-        for capacity_type in var_capacity.loc[tech].index.get_level_values("capacity_type").unique():
+    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             # get lower bound of x values
-            lb = par_total_cost_pwa_points_lower_bound.loc[tech, capacity_type, :].values[0]
+            lb = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
             # get upper bound of x values
-            ub = par_total_cost_pwa_points_upper_bound.loc[tech, capacity_type, :].values[-1]
+            ub = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
             # get parameters of each tech and capacity type
             capacity_values = np.linspace(lb, ub, 1000)
 
             # get initial cost
-            c_initial = par_total_cost_pwa_initial_unit_cost.loc[tech, capacity_type]
+            c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
             # get initial capacity
-            q_initial = par_global_initial_capacity.loc[tech]
+            q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
             # get learning rate
-            learning_rate = par_learning_rate.loc[tech]
+            learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
 
             unit_cost_values = unit_cost(capacity_values, c_initial, q_initial, learning_rate)
 
@@ -392,14 +357,42 @@ if flag_check6:
             plt.xlabel('Capacity')
             plt.ylabel('Unit Cost')
             plt.title('Unit cost curve for all technologies')
-            plt.ylim(0, 0.3)
-            plt.xlim(0,150)
+            # plt.ylim(0, 0.3)
+            # plt.xlim(0,150)
 
     plt.show()
 
+############################################## Result anaylsis ##############################################
 
-# CHECK 7: Plot all cost curves of all technologies over the years
+# I. Read the results of the two models
+folder_path = os.path.dirname(__file__)
+data_set_name = "20240202_Hydrogen_8760_debug_endog"
+
+res = Results(os.path.join(folder_path, data_set_name))
+# res_scenario1 = Results(os.path.join(folder_path, data_set_name), scenarios="1")
+
+save_fig = True
+file_type = "png"
+
+# Create custom standard_plots for all scenarios
+standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
+
+# Create individual plots for scenarios
+learning_curve_plots(res, scenario="scenario_2")
+
+# Do indivudal checks for the scenarios
+check1(res, scenario="scenario_")
+check2(res, scenario="scenario_")
+check2(res, scenario="scenario_1")
+check2(res, scenario="scenario_2")
+check1(res, scenario="scenario_2")
+
+check4(res, scenario="scenario_2")
+check5(res, scenario="scenario_2")
 
 
 
 print("Done with result analysis")
+
+
+
