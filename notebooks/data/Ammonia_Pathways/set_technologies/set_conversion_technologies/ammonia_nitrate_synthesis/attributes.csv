@@ -1,0 +1,26 @@
+index,value,unit
+min_built_capacity_default,0,GW
+max_built_capacity_default,inf,GW
+min_load_default,0,1
+max_load_default,0.95,1
+lifetime_default,25,1
+opex_specific_default,0,kiloEuro/MWh
+capex_specific_default,840,kiloEuro/MW
+reference_carrier,urea,1
+input_carrier,ammonia carbon,1
+output_carrier,urea,1
+conversion_factor_default,,1
+capacity_limit_default,15,GW
+existing_capacity_default,0,GW
+existing_invested_capacity_default,0,GW
+construction_time_default,2,1
+carbon_intensity_default,0,ton/MWh
+max_diffusion_rate_default,inf,1
+capacity_limit_country_default,inf,GW
+capacity_addition_min_default,0,GW
+capacity_addition_max_default,inf,GW
+capacity_addition_unbounded_default,0,GW
+opex_specific_variable_default,40,kiloEuro/MW
+opex_specific_fixed_default,0,kiloEuro/MW
+capacity_existing_default,0,MW
+capacity_investment_existing_default,0,GW

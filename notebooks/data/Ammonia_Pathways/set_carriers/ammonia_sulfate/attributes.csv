@@ -1,0 +1,10 @@
+index,value,unit
+carbon_intensity_default,1.0,tonne/tonne
+demand_default,0,MW
+price_shed_demand_default,inf,kiloEuro/tonne
+availability_import_default,0.0,tonne
+availability_export_default,0.0,tonne
+availability_import_yearly_default,inf,tonne
+availability_export_yearly_default,inf,tonne
+price_export_default,0.0,kiloEuro/tonne
+price_import_default,0,kiloEuro/tonne

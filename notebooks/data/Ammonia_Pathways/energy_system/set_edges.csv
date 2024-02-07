@@ -1,0 +1,8 @@
+edge,node_from,node_to
+FS-AM,FS,AM
+AM-CO2,AM,CO2
+AM-FTP,AM,FTP
+FTP-CO2,FTP,CO2
+CO2-FTP,CO2,FTP
+FTP-FTA,FTP,FTA
+
