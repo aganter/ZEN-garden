@@ -195,6 +195,7 @@ def check2(res, scenario=None):
 
 
             res_capacity = (1/gsf)*res.get_df("capacity", scenario=scenario).groupby(level=[0,1,3]).sum().loc[tech, capacity_type, :].values
+            cum_capacity = res.get_df("global_cumulative_capacity", scenario=scenario).loc[tech, capacity_type, :].values
             res_TC = res.get_df("total_cost_pwa_global_cost", scenario=scenario).loc[tech, capacity_type, :]
 
             initial_capacity = (1/gsf)*res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
@@ -203,6 +204,7 @@ def check2(res, scenario=None):
             plt.plot(interpolated_q, interpolated_TC, label=f'PWA: {tech}', color='red')
             plt.scatter(interpolated_q, interpolated_TC, color='red')
             plt.scatter(res_capacity, res_TC, label=f'Model Results {tech}', color='blue')
+            plt.scatter(cum_capacity, res_TC, label=f'Cumulative Capacity {tech}', color='orange')
             plt.scatter(initial_capacity, res.get_df("total_cost_pwa_initial_global_cost", scenario=scenario).loc[tech], label=f'Initial Capacity {tech}', color='green')
             plt.legend()
             plt.show()
@@ -362,6 +364,23 @@ def learning_curve_plots(res, scenario=None):
 
     plt.show()
 
+
+# PLOT 3: GLOBAL CAPACITY: Plot of global cum capacity compared to actual active capacity
+def compare_global_capacity_plots(res, scenario=None):
+    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
+            gsf = res.get_df("global_share_factor", scenario=scenario).loc[tech]
+            active_capacity = (1/gsf)*res.get_df("capacity", scenario="scenario_2").loc[tech,capacity_type,:,:].groupby(level=[1]).sum()
+            global_capacity = res.get_df("global_cumulative_capacity", scenario="scenario_2").loc[tech,capacity_type,:]
+
+            plt.plot(active_capacity.values, label=f'Active capacity {tech}-{capacity_type}')
+            plt.plot(global_capacity.values, label=f'Global cumulative capacity {tech}-{capacity_type}')
+            plt.xlabel('Year')
+            plt.ylabel('Capacity')
+            plt.legend()
+            plt.show()
+
+
 ############################################## Result anaylsis ##############################################
 
 # I. Read the results of the two models
@@ -379,6 +398,7 @@ standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
 
 # Create individual plots for scenarios
 learning_curve_plots(res, scenario="scenario_2")
+compare_global_capacity_plots(res, scenario="scenario_2")
 
 # Do indivudal checks for the scenarios
 check1(res, scenario="scenario_")
