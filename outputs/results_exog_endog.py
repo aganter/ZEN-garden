@@ -385,7 +385,7 @@ def compare_global_capacity_plots(res, scenario=None):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240202_Hydrogen_8760_debug_endog"
+data_set_name = "20240202_Hydrogen_8760_base_exog"
 
 res = Results(os.path.join(folder_path, data_set_name))
 # res_scenario1 = Results(os.path.join(folder_path, data_set_name), scenarios="1")
