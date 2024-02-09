@@ -105,7 +105,7 @@ class DataInput:
         :param time_steps: specific time_steps of element
         :return df_output: filled output dataframe """
 
-        df_input = self.convert_real_to_generic_time_indices(df_input,time_steps,file_name, index_name_list)
+        df_input = self.convert_real_to_generic_time_indices(df_input, time_steps, file_name, index_name_list)
 
         assert df_input.columns is not None, f"Input file '{file_name}' has no columns"
         # set index by index_name_list
@@ -308,7 +308,7 @@ class DataInput:
             df_output, default_value, index_name_list = self.create_default_output(index_sets, unit_category=None, file_name=file_name, manual_default_value=1)
             # set yearly variation attribute to df_output
             name_yearly_variation = file_name
-            df_output = self.extract_general_input_data(df_input, df_output, file_name, index_name_list, default_value, time_steps=self.energy_system.set_time_steps_yearly)
+            df_output = self.extract_general_input_data(df_input, df_output, file_name, index_name_list, default_value, time_steps="set_time_steps_yearly")
             # apply the scenario_factor
             df_output = df_output * scenario_factor
             setattr(self, name_yearly_variation, df_output)
@@ -316,7 +316,9 @@ class DataInput:
     def extract_locations(self, extract_nodes=True, extract_coordinates=False):
         """ reads input data to extract nodes or edges.
 
-        :param extract_nodes: boolean to switch between nodes and edges """
+        :param extract_nodes: boolean to switch between nodes and edges
+        :param extract_coordinates: boolean to switch between nodes and nodes + coordinates
+        """
         if extract_nodes:
             set_nodes_config = self.system["set_nodes"]
             df_nodes_w_coords = self.read_input_csv("set_nodes")
@@ -549,8 +551,7 @@ class DataInput:
                 has_unit = True
         return df_input, has_unit
 
-    def create_default_output(self, index_sets, unit_category, file_name=None, time_steps=None,
-                              manual_default_value=None, subelement=None):
+    def create_default_output(self, index_sets, unit_category, file_name=None, time_steps=None, manual_default_value=None, subelement=None):
         """ creates default output dataframe
 
         :param index_sets: index sets of attribute. Creates (multi)index. Corresponds to order in pe.Set/pe.Param
@@ -654,7 +655,7 @@ class DataInput:
         """
         # check if input data is time-dependent and has yearly time steps
         idx_name_year = self.index_names["set_time_steps_yearly"]
-        if time_steps is self.energy_system.set_time_steps_yearly or time_steps is self.energy_system.set_time_steps_yearly_entire_horizon:
+        if time_steps == "set_time_steps_yearly" or time_steps == "set_time_steps_yearly_entire_horizon":
             # check if temporal header of input data is still given as 'time' instead of 'year'
             if "time" in df_input.axes[1]:
                 logging.warning(
@@ -669,7 +670,7 @@ class DataInput:
                     return df_input
                 df_input = df_input.set_index(idx_name_list)
                 df_input = df_input.rename(columns={col: int(col) for col in df_input.columns if col.isnumeric()})
-                requested_index_values = set(time_steps)
+                requested_index_values = set(getattr(self.energy_system, time_steps))
                 requested_index_values_years = set(self.energy_system.set_time_steps_years)
                 requested_index_values_in_columns = requested_index_values.intersection(df_input.columns)
                 requested_index_values_years_in_columns = requested_index_values_years.intersection(df_input.columns)
@@ -731,7 +732,7 @@ class DataInput:
             # remove data of years that won't be simulated
             df_input = df_input[df_input[temporal_header].isin(self.energy_system.set_time_steps_years)]
             # convert yearly time indices to generic ones
-            year2step = {year: step for year, step in zip(self.energy_system.set_time_steps_years, time_steps)}
+            year2step = {year: step for year, step in zip(self.energy_system.set_time_steps_years, getattr(self.energy_system, time_steps))}
             df_input[temporal_header] = df_input[temporal_header].apply(lambda year: year2step[year])
         return df_input
 

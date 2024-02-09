@@ -60,7 +60,6 @@ class TransportTechnology(Technology):
 
     def get_capex_transport(self):
         """get capex of transport technology"""
-        set_time_steps_yearly = self.energy_system.set_time_steps_yearly
         # check if there are separate capex for capacity and distance
         if self.optimization_setup.system['double_capex_transport']:
             # both capex terms must be specified

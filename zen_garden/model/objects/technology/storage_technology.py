@@ -50,8 +50,6 @@ class StorageTechnology(Technology):
         """ retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes """
         # get attributes from class <Technology>
         super().store_input_data()
-        set_base_time_steps_yearly = self.energy_system.set_base_time_steps_yearly
-        set_time_steps_yearly = self.energy_system.set_time_steps_yearly
         # set attributes for parameters of child class <StorageTechnology>
         self.efficiency_charge = self.data_input.extract_input_data("efficiency_charge", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={})
         self.efficiency_discharge = self.data_input.extract_input_data("efficiency_discharge", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={})
