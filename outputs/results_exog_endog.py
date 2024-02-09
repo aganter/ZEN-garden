@@ -385,7 +385,7 @@ def compare_global_capacity_plots(res, scenario=None):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240202_Hydrogen_8760_base_exog"
+data_set_name = "20240209_Hydrogen_exog"
 
 res = Results(os.path.join(folder_path, data_set_name))
 # res_scenario1 = Results(os.path.join(folder_path, data_set_name), scenarios="1")
@@ -401,15 +401,50 @@ learning_curve_plots(res, scenario="scenario_2")
 compare_global_capacity_plots(res, scenario="scenario_2")
 
 # Do indivudal checks for the scenarios
-check1(res, scenario="scenario_")
-check2(res, scenario="scenario_")
-check2(res, scenario="scenario_1")
-check2(res, scenario="scenario_2")
-check1(res, scenario="scenario_2")
 
-check4(res, scenario="scenario_2")
-check5(res, scenario="scenario_2")
+############################################## Sanity Checks ##############################################
 
+scenario = None
+
+
+# 1. Look at demand of each carrier across all nodes
+res.get_df("demand", scenario=scenario).groupby(["carrier"]).sum()
+
+# 2. Look at conversion output flows of all technologies
+res.get_df("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
+
+# 3. Look at exports of carriers
+res.get_df("flow_export", scenario=scenario).groupby(["carrier"]).sum()
+
+#4. Look at emissions of technologies
+res.get_df("carbon_emissions_annual", scenario=scenario)
+
+# Look at capacities of all technologies
+res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum()
+
+# 4. Look at average price of conversion technologies that create same output carrier
+capacity = res.get_df("capacity", scenario=scenario)
+demand = res.get_df("demand", scenario=scenario)
+# remove carriers without demand
+demand = demand.loc[(demand != 0), :]
+for carrier in demand.index.levels[0].values:
+    if carrier in demand:
+        data_total = res.get_total("capex_specific_conversion", scenario=scenario)
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        df_capex_specific = data_extract.groupby(["technology"]).mean().T
+        plt.plot(df_capex_specific)
+        plt.title(f"Capex specific of {carrier.capitalize()} Generating Conversion Technologies")
+        plt.xlabel("Year")
+        plt.ylabel("Capex")
+        plt.legend(df_capex_specific.columns, loc='center right')
+        plt.xticks(range(len(df_capex_specific.index)))
+        plt.show()
+
+
+# Look at the average price of imports of the carriers
+res.get_total("price_import").groupby(["carrier"]).mean()
+plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
+plt.show()
 
 
 print("Done with result analysis")
