@@ -388,41 +388,16 @@ folder_path = os.path.dirname(__file__)
 data_set_name = "20240209_Hydrogen_exog"
 
 res = Results(os.path.join(folder_path, data_set_name))
-# res_scenario1 = Results(os.path.join(folder_path, data_set_name), scenarios="1")
 
-save_fig = True
-file_type = "png"
-
-# Create custom standard_plots for all scenarios
-standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
-
-# Create individual plots for scenarios
-learning_curve_plots(res, scenario="scenario_2")
-compare_global_capacity_plots(res, scenario="scenario_2")
-
-# Do indivudal checks for the scenarios
-
-############################################## Sanity Checks ##############################################
 
 scenario = None
 
+############################################## EXPECTED OUTCOME ##############################################
 
-# 1. Look at demand of each carrier across all nodes
+# Look at demand of each carrier across all nodes
 res.get_df("demand", scenario=scenario).groupby(["carrier"]).sum()
 
-# 2. Look at conversion output flows of all technologies
-res.get_df("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
-
-# 3. Look at exports of carriers
-res.get_df("flow_export", scenario=scenario).groupby(["carrier"]).sum()
-
-#4. Look at emissions of technologies
-res.get_df("carbon_emissions_annual", scenario=scenario)
-
-# Look at capacities of all technologies
-res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum()
-
-# 4. Look at average price of conversion technologies that create same output carrier
+# Look at average price of conversion technologies that create same output carrier
 capacity = res.get_df("capacity", scenario=scenario)
 demand = res.get_df("demand", scenario=scenario)
 # remove carriers without demand
@@ -446,6 +421,47 @@ res.get_total("price_import").groupby(["carrier"]).mean()
 plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
 plt.show()
 
+# Look at existing capacities
+res.get_df("capacity_existing", scenario=scenario).groupby(["technology","capacity_type"]).sum()
+
+
+############################################## ACTUAL OUTCOME ##############################################
+
+# 2. Look at conversion output flows of all technologies
+res.get_df("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
+
+# 3. Look at exports of carriers
+res.get_df("flow_export", scenario=scenario).groupby(["carrier"]).sum()
+
+#4. Look at emissions of technologies
+res.get_df("carbon_emissions_annual", scenario=scenario)
+
+# Look at capacities of all technologies
+res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum()
+
+# Biomethane post-processing
+res.get_df("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum()
+res.get_df("flow_import", scenario=scenario).groupby(["carrier"]).sum()
+# Check if the numbers add up
+res.get_df("flow_import", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"]
+# If we substract the biomethane from the natural gas flow conversion input then we should get the "real" natural gas
+# The "real" natural gas should correspond to the flow imports of natural gas
+res.get_df("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"] - res.get_df("flow_conversion_output").groupby(["carrier"]).sum().loc["natural_gas"]
+
+
+############################################## PLOTS ##############################################
+
+save_fig = True
+file_type = "png"
+
+# Create custom standard_plots for all scenarios
+standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
+
+# Create individual plots for scenarios
+learning_curve_plots(res, scenario="scenario_2")
+compare_global_capacity_plots(res, scenario="scenario_2")
+
+# Do indivudal checks for the scenarios
 
 print("Done with result analysis")
 
