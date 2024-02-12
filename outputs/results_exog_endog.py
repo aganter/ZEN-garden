@@ -290,7 +290,7 @@ def standard_plots_AX(res, scenario=None, save_fig=False, file_type=None):
                  save_fig=save_fig, file_type=file_type, scenario=scenario)
 
 # PLOT2: LEARNING CURVES: Plot all learning curves
-def learning_curve_plots(res, scenario=None):
+def learning_curve_plots(res, tech_carrier, scenario=None):
     def fun_total_cost(u, c_initial: float, q_initial: float,
                        learning_rate: float) -> object:  # u is a vector
         """
@@ -319,7 +319,7 @@ def learning_curve_plots(res, scenario=None):
         v = alpha * np.power(u, learning_rate)
         return v
 
-    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+    for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
 
             # Plot interpolation points
@@ -336,7 +336,7 @@ def learning_curve_plots(res, scenario=None):
 
     plt.show()
 
-    for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
+    for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             # get lower bound of x values
             lb = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
@@ -359,8 +359,8 @@ def learning_curve_plots(res, scenario=None):
             plt.xlabel('Capacity')
             plt.ylabel('Unit Cost')
             plt.title('Unit cost curve for all technologies')
-            # plt.ylim(0, 0.3)
-            # plt.xlim(0,150)
+            # plt.ylim(0, 2000)
+            plt.xlim(0,30)
 
     plt.show()
 
@@ -370,8 +370,8 @@ def compare_global_capacity_plots(res, scenario=None):
     for tech in res.get_df("capacity", scenario=scenario).index.get_level_values("technology").unique():
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             gsf = res.get_df("global_share_factor", scenario=scenario).loc[tech]
-            active_capacity = (1/gsf)*res.get_df("capacity", scenario="scenario_2").loc[tech,capacity_type,:,:].groupby(level=[1]).sum()
-            global_capacity = res.get_df("global_cumulative_capacity", scenario="scenario_2").loc[tech,capacity_type,:]
+            active_capacity = (1/gsf)*res.get_df("capacity", scenario=scenario).loc[tech,capacity_type,:,:].groupby(level=[1]).sum()
+            global_capacity = res.get_df("global_cumulative_capacity", scenario=scenario).loc[tech,capacity_type,:]
 
             plt.plot(active_capacity.values, label=f'Active capacity {tech}-{capacity_type}')
             plt.plot(global_capacity.values, label=f'Global cumulative capacity {tech}-{capacity_type}')
@@ -385,18 +385,18 @@ def compare_global_capacity_plots(res, scenario=None):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240209_Hydrogen_exog"
+data_set_name = "20240209_Hydrogen_endog"
 
 res = Results(os.path.join(folder_path, data_set_name))
-
 
 scenario = None
 
 ############################################## EXPECTED OUTCOME ##############################################
 
 # Look at demand of each carrier across all nodes
-res.get_df("demand", scenario=scenario).groupby(["carrier"]).sum()
+res.get_total("demand", scenario=scenario).groupby(["carrier"]).sum()
 
+# EXOG Price
 # Look at average price of conversion technologies that create same output carrier
 capacity = res.get_df("capacity", scenario=scenario)
 demand = res.get_df("demand", scenario=scenario)
@@ -424,14 +424,34 @@ plt.show()
 # Look at existing capacities
 res.get_df("capacity_existing", scenario=scenario).groupby(["technology","capacity_type"]).sum()
 
+# ENDOG Learning Curve
+demand = res.get_df("demand", scenario=scenario)
+# remove carriers without demand
+demand = demand.loc[(demand != 0), :]
+for carrier in demand.index.levels[0].values:
+    if carrier in demand:
+        data_total = res.get_total("capacity", scenario=scenario)
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        data_extract = data_extract.groupby(["technology"]).mean().T
+        tech_carrier = data_extract.columns
+        learning_curve_plots(res, tech_carrier=tech_carrier, scenario=scenario)
 
+plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
+plt.legend(res.get_total("price_import").groupby(["carrier"]).mean().T.columns, loc='center left')
+plt.show()
+
+res.get_total("carbon_emissions_technology").groupby(["technology"]).sum()
+
+plt.plot(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T)
+plt.legend(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T.columns, loc='center left')
+plt.show()
 ############################################## ACTUAL OUTCOME ##############################################
 
 # 2. Look at conversion output flows of all technologies
-res.get_df("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
+res.get_total("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
 
 # 3. Look at exports of carriers
-res.get_df("flow_export", scenario=scenario).groupby(["carrier"]).sum()
+res.get_total("flow_export", scenario=scenario).groupby(["carrier"]).sum()
 
 #4. Look at emissions of technologies
 res.get_df("carbon_emissions_annual", scenario=scenario)
@@ -458,10 +478,101 @@ file_type = "png"
 standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
 
 # Create individual plots for scenarios
-learning_curve_plots(res, scenario="scenario_2")
-compare_global_capacity_plots(res, scenario="scenario_2")
+compare_global_capacity_plots(res, scenario=scenario)
 
 # Do indivudal checks for the scenarios
+check2(res, scenario)
+
+
+# Plot the unit cost of technologies in each optimization year
+# Maybe show it on the learning curve
+demand = res.get_df("demand", scenario=scenario)
+# remove carriers without demand
+demand = demand.loc[(demand != 0), :]
+for carrier in demand.index.levels[0].values:
+    if carrier in demand:
+        data_total_cap_add = res.get_total("capacity_addition", scenario=scenario)
+        data_extract_cap_add = res.extract_reference_carrier(data_total_cap_add, carrier, scenario)
+        data_extract_cap_add = data_extract_cap_add.groupby(["technology","capacity_type"]).sum().T
+
+        data_total_cap = res.get_total("global_cumulative_capacity", scenario=scenario)
+        data_extract_cap = res.extract_reference_carrier(data_total_cap, carrier, scenario)
+        data_extract_cap = data_extract_cap.groupby(["technology","capacity_type"]).sum().T
+
+        data_total_cost = res.get_total("cost_capex", scenario=scenario)
+        data_extract_cost = res.extract_reference_carrier(data_total_cost, carrier, scenario)
+        data_extract_cost = data_extract_cost.groupby(["technology","capacity_type"]).sum().T
+
+        # Plot the unit cost over the years
+        unit_cost_of_investment_T = data_extract_cost/data_extract_cap_add
+        # unit_cost_of_investment_T = unit_cost_of_investment_T.interpolate(limit_direction='both')
+        plt.figure(figsize=(8, 6))
+        plt.plot(unit_cost_of_investment_T, marker='.')
+        plt.legend(unit_cost_of_investment_T.columns, loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.xlabel("Year")
+        plt.ylabel("Unit Cost of Technology")
+        plt.title("Cost Evolution of Technologies over the years")
+        plt.xticks(range(len(unit_cost_of_investment_T.index)))
+        plt.tight_layout()
+        plt.show()
+
+        # Plot the unit cost on the learning curve
+        def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
+            """
+            Exponential regression for Learning Curve
+            Input: Cumulative Capacity u
+            Parameters: c_initial, q_initial, learning_rate
+            Output: Unit cost of technology
+                :rtype:
+                """
+            alpha = c_initial / np.power(q_initial, learning_rate)
+            v = alpha * np.power(u, learning_rate)
+            return v
+
+
+        for tech in tech_carrier:
+            for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values(
+                    "capacity_type").unique():
+                # get lower bound of x values
+                lb = \
+                res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
+                # get upper bound of x values
+                ub = \
+                res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[
+                    -1]
+                # get parameters of each tech and capacity type
+                capacity_values = np.linspace(lb, ub, 1000)
+
+                # get initial cost
+                c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
+                # get initial capacity
+                q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+                # get learning rate
+                learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+
+                unit_cost_values = unit_cost(capacity_values, c_initial, q_initial, learning_rate)
+
+                cap_tech = data_extract_cap.T.loc[tech,capacity_type]
+                point_on_curve = unit_cost(cap_tech, c_initial, q_initial, learning_rate)
+
+                plt.plot(capacity_values, unit_cost_values, label=f'{tech}-{capacity_type}')
+                plt.scatter(cap_tech, point_on_curve)
+                plt.legend()
+                plt.xlabel('Capacity')
+                plt.ylabel('Unit Cost')
+                plt.title('Unit cost curve for all technologies')
+                # plt.ylim(0, 2000)
+                plt.xlim(0, 60)
+
+        plt.show()
+
+
+
+
+
+
+
+# Exogenous
 
 print("Done with result analysis")
 

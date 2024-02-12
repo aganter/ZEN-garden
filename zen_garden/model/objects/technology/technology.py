@@ -281,7 +281,7 @@ class Technology(Element):
                 if pw_fit.get_params()["converged"]:
                     print(f"Successful fit with {n} breakpoints.")
                     error = 1 - pw_fit.best_muggeo.best_fit.r_squared
-                    if error < 0.01:
+                    if error < 0.001:
                         print(f"R squared error is {error}")
                         break
                     else:
