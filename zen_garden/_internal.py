@@ -107,7 +107,7 @@ def main(config, dataset_path=None, base_scenarios=None, oos_scenario=None):
         else:
             base_scenario_list = config.scenarios.keys()
         for scenario in base_scenario_list:
-            base_scenarios[scenario] = {tech: ["capacity_existing"] for tech in config.system["set_technologies"]}
+            base_scenarios[scenario] = {tech: {"capacity_existing": scenario} for tech in config.system["set_technologies"]}
 
     # update base scenario
     for base_scenario, elements in base_scenarios.items():
