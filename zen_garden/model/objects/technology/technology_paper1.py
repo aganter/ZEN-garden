@@ -159,227 +159,121 @@ class Technology(Element):
                 setattr(self, "capacity_investment_existing" + _energy_string, _capacity_investment_existing.stack())
 
     ### --- classmethods
-    # @classmethod
-    # def get_lifetime_range(cls, optimization_setup, tech, time, time_step_type: str = None):
-    #     """ returns lifetime range of technology. If time_step_type, then converts the yearly time step 'time' to time_step_type """
-    #     if time_step_type:
-    #         time_step_year = optimization_setup.energy_system.time_steps.convert_time_step_operation2year(tech,time)
-    #     else:
-    #         time_step_year = time
-    #     t_start, t_end = cls.get_start_end_time_of_period(optimization_setup, tech, time_step_year)
-    #
-    #     return range(t_start, t_end + 1)
+    @classmethod
+    def get_lifetime_range(cls, optimization_setup, tech, time, time_step_type: str = None):
+        """ returns lifetime range of technology. If time_step_type, then converts the yearly time step 'time' to time_step_type """
+        if time_step_type:
+            time_step_year = optimization_setup.energy_system.time_steps.convert_time_step_operation2year(tech,time)
+        else:
+            time_step_year = time
+        t_start, t_end = cls.get_start_end_time_of_period(optimization_setup, tech, time_step_year)
+
+        return range(t_start, t_end + 1)
 
     @classmethod
-    def get_available_existing_quantity(cls, optimization_setup, tech, capacity_type, loc, year, type_existing_quantity):
+    def get_available_existing_quantity(cls, optimization_setup, tech, capacity_type, loc, time, type_existing_quantity, time_step_type: str = None):
         """ returns existing quantity of 'tech', that is still available at invest time step 'time'.
         Either capacity or capex.
-
         :param optimization_setup: The OptimizationSetup the element is part of
         :param tech: name of technology
         :param capacity_type: type of capacity
         :param loc: location (node or edge) of existing capacity
-        :param year: current yearly time step
+        :param time: current time
         :param type_existing_quantity: capex or capacity
+        :param time_step_type: type of time steps
         :return existing_quantity: existing capacity or capex of existing capacity
         """
-        model = optimization_setup.model
         params = optimization_setup.parameters
+        system = optimization_setup.system
+        discount_rate = optimization_setup.analysis["discount_rate"]
+        if time_step_type:
+            time_step_year = optimization_setup.energy_system.time_steps.convert_time_step_operation2year(tech,time)
+        else:
+            time_step_year = time
+
+        model = optimization_setup.model
         existing_quantity = 0
         if type_existing_quantity == "capacity":
             existing_variable = params.capacity_existing
-        elif type_existing_quantity == "cost_capex":
+        elif type_existing_quantity == "capex":
             existing_variable = params.capex_capacity_existing
         else:
             raise KeyError(f"Wrong type of existing quantity {type_existing_quantity}")
 
-        for id_capacity_existing in  model.set_technologies_existing[tech]:
-            is_existing = cls.get_if_capacity_still_existing(optimization_setup, tech, year, loc=loc, id_capacity_existing=id_capacity_existing)
+        for id_capacity_existing in model.set_technologies_existing[tech]:
+            t_start = cls.get_start_end_time_of_period(optimization_setup, tech, time_step_year, id_capacity_existing=id_capacity_existing, loc=loc)
             # if still available at first base time step, add to list
-            if is_existing:
+            if t_start == model.set_base_time_steps.at(1) or t_start == time_step_year:
                 existing_quantity += existing_variable[tech, capacity_type, loc, id_capacity_existing]
         return existing_quantity
 
     @classmethod
-    def get_if_capacity_still_existing(cls, optimization_setup, tech, year, loc, id_capacity_existing):
-        """
-        returns boolean if capacity still exists at yearly time step 'year'.
-        :param optimization_setup: The optimization setup to add everything
+    def get_start_end_time_of_period(cls, optimization_setup, tech, time_step_year, period_type="lifetime", clip_to_first_time_step=True, id_capacity_existing=None, loc=None):
+        """ counts back the period (either lifetime of construction_time) back to get the start invest time step and returns start_time_step_year
+        :param energy_system: The Energy system to add everything
         :param tech: name of technology
-        :param year: yearly time step
-        :param loc: location
+        :param time_step_year: current investment time step
+        :param period_type: "lifetime" if lifetime is counted backwards, "construction_time" if construction time is counted backwards
+        :param clip_to_first_time_step: boolean to clip the time step to first time step if time step too far in the past
         :param id_capacity_existing: id of existing capacity
-        :return: boolean if still existing
-        """
-        # get params and system
+        :param loc: location (node or edge) of existing capacity
+        :return beganInPast: boolean if the period began before the first optimization step
+        :return start_time_step_year,end_time_step_year: start and end of period in invest time step domain"""
+
+        # get model and system
+        energy_system = optimization_setup.energy_system
         params = optimization_setup.parameters
+        model = optimization_setup.model
         system = optimization_setup.system
-        # get lifetime of existing capacity
-        lifetime_existing = params.lifetime_existing[tech, loc, id_capacity_existing]
-        lifetime = params.lifetime[tech]
-        delta_lifetime = lifetime_existing - lifetime
-        # reference year of current optimization horizon
-        current_year_horizon = optimization_setup.energy_system.set_time_steps_yearly[0]
-        if delta_lifetime >= 0:
-            cutoff_year = (year - current_year_horizon) * system["interval_between_years"]
-            return cutoff_year >= delta_lifetime
+        # get which period to count backwards
+        if period_type == "lifetime":
+            period_time = params.lifetime
+        elif period_type == "construction_time":
+            period_time = params.construction_time
         else:
-            cutoff_year = (year - current_year_horizon + 1) * system["interval_between_years"]
-            return cutoff_year <= lifetime_existing
+            raise NotImplemented(f"get_start_end_time_of_period not yet implemented for {period_type}")
+        # get end_time_step_year
+        if not isinstance(time_step_year, np.ndarray):
+            end_time_step_year = time_step_year
+        elif len(time_step_year) == 1:
+            end_time_step_year = time_step_year[0]
+        # if more than one investment time step
+        else:
+            end_time_step_year = time_step_year[-1]
+            time_step_year = time_step_year[0]
+        # convert period to interval of base time steps
+        if id_capacity_existing is None:
+            period_yearly = period_time[tech]
+        else:
+            delta_lifetime = params.lifetime_existing[tech, loc, id_capacity_existing] - period_time[tech]
+            if delta_lifetime >= 0:
+                if delta_lifetime <= (time_step_year - model.set_time_steps_yearly.at(1)) * system["interval_between_years"]:
+                    return time_step_year
+                else:
+                    return -1
+            period_yearly = params.lifetime_existing[tech, loc, id_capacity_existing]
+        base_period = period_yearly / system["interval_between_years"] * system["unaggregated_time_steps_per_year"]
+        base_period = round(base_period, optimization_setup.solver["rounding_decimal_points"])
+        if int(base_period) != base_period:
+            logging.warning(f"The period {period_type} of {tech} does not translate to an integer time interval in the base time domain ({base_period})")
+        # decode to base time steps
+        base_time_steps = energy_system.time_steps.decode_time_step(tech, time_step_year, time_step_type="yearly")
+        if len(base_time_steps) == 0:
+            return model.set_base_time_steps.at(1), model.set_base_time_steps.at(1) - 1
+        base_time_step = base_time_steps[0]
 
-    @classmethod
-    def get_lifetime_range(cls, optimization_setup, tech, year):
-        """ returns lifetime range of technology.
+        # if start_base_time_step is further in the past than first base time step, use first base time step
+        if clip_to_first_time_step:
+            start_base_time_step = int(max(model.set_base_time_steps.at(1), base_time_step - base_period + 1))
+        else:
+            start_base_time_step = int(base_time_step - base_period + 1)
+        start_base_time_step = min(start_base_time_step, model.set_base_time_steps.at(-1))
+        # if period of existing capacity, then only return the start base time step
+        if id_capacity_existing is not None:
+            return start_base_time_step
+        start_time_step_year = energy_system.time_steps.encode_time_step(tech, start_base_time_step, time_step_type="yearly", yearly=True)[0]
 
-        :param optimization_setup: OptimizationSetup the technology is part of
-        :param tech: name of the technology
-        :param year: yearly time step
-        :return: lifetime range of technology
-        """
-        first_lifetime_year = cls.get_first_lifetime_time_step(optimization_setup, tech, year)
-        first_lifetime_year = max(first_lifetime_year, optimization_setup.model.set_time_steps_yearly.at(1))
-        return range(first_lifetime_year, year + 1)
-
-    @classmethod
-    def get_first_lifetime_time_step(cls, optimization_setup, tech, year):
-        """
-        returns first lifetime time step of technology,
-        i.e., the earliest time step in the past whose capacity is still available at the current time step
-        :param optimization_setup: The optimization setup to add everything
-        :param tech: name of technology
-        :param year: yearly time step
-        :return: first lifetime step
-        """
-        # get params and system
-        params = optimization_setup.parameters
-        system = optimization_setup.system
-        lifetime = params.lifetime[tech]
-        # conservative estimate of lifetime (floor)
-        del_lifetime = int(np.floor(lifetime / system["interval_between_years"])) - 1
-        return year - del_lifetime
-
-    @classmethod
-    def get_investment_time_step(cls, optimization_setup, tech, year):
-        """
-        returns investment time step of technology, i.e., the time step in which the technology is invested considering the construction time
-        :param optimization_setup: The optimization setup to add everything
-        :param tech: name of technology
-        :param year: yearly time step
-        :return: investment time step
-        """
-        # get params and system
-        params = optimization_setup.parameters
-        system = optimization_setup.system
-        construction_time = params.construction_time[tech]
-        # conservative estimate of construction time (ceil)
-        del_construction_time = int(np.ceil(construction_time / system["interval_between_years"]))
-        return year - del_construction_time
-
-
-    # @classmethod
-    # def get_available_existing_quantity(cls, optimization_setup, tech, capacity_type, loc, time, type_existing_quantity, time_step_type: str = None):
-    #     """ returns existing quantity of 'tech', that is still available at invest time step 'time'.
-    #     Either capacity or capex.
-    #     :param optimization_setup: The OptimizationSetup the element is part of
-    #     :param tech: name of technology
-    #     :param capacity_type: type of capacity
-    #     :param loc: location (node or edge) of existing capacity
-    #     :param time: current time
-    #     :param type_existing_quantity: capex or capacity
-    #     :param time_step_type: type of time steps
-    #     :return existing_quantity: existing capacity or capex of existing capacity
-    #     """
-    #     params = optimization_setup.parameters
-    #     system = optimization_setup.system
-    #     discount_rate = optimization_setup.analysis["discount_rate"]
-    #     if time_step_type:
-    #         time_step_year = optimization_setup.energy_system.time_steps.convert_time_step_operation2year(tech,time)
-    #     else:
-    #         time_step_year = time
-    #
-    #     model = optimization_setup.model
-    #     existing_quantity = 0
-    #     if type_existing_quantity == "capacity":
-    #         existing_variable = params.capacity_existing
-    #     elif type_existing_quantity == "capex":
-    #         existing_variable = params.capex_capacity_existing
-    #     else:
-    #         raise KeyError(f"Wrong type of existing quantity {type_existing_quantity}")
-    #
-    #     for id_capacity_existing in model.set_technologies_existing[tech]:
-    #         t_start = cls.get_start_end_time_of_period(optimization_setup, tech, time_step_year, id_capacity_existing=id_capacity_existing, loc=loc)
-    #         # if still available at first base time step, add to list
-    #         if t_start == model.set_base_time_steps.at(1) or t_start == time_step_year:
-    #             existing_quantity += existing_variable[tech, capacity_type, loc, id_capacity_existing]
-    #     return existing_quantity
-    #
-    # @classmethod
-    # def get_start_end_time_of_period(cls, optimization_setup, tech, time_step_year, period_type="lifetime", clip_to_first_time_step=True, id_capacity_existing=None, loc=None):
-    #     """ counts back the period (either lifetime of construction_time) back to get the start invest time step and returns start_time_step_year
-    #     :param energy_system: The Energy system to add everything
-    #     :param tech: name of technology
-    #     :param time_step_year: current investment time step
-    #     :param period_type: "lifetime" if lifetime is counted backwards, "construction_time" if construction time is counted backwards
-    #     :param clip_to_first_time_step: boolean to clip the time step to first time step if time step too far in the past
-    #     :param id_capacity_existing: id of existing capacity
-    #     :param loc: location (node or edge) of existing capacity
-    #     :return beganInPast: boolean if the period began before the first optimization step
-    #     :return start_time_step_year,end_time_step_year: start and end of period in invest time step domain"""
-    #
-    #     # get model and system
-    #     energy_system = optimization_setup.energy_system
-    #     params = optimization_setup.parameters
-    #     model = optimization_setup.model
-    #     system = optimization_setup.system
-    #     # get which period to count backwards
-    #     if period_type == "lifetime":
-    #         period_time = params.lifetime
-    #     elif period_type == "construction_time":
-    #         period_time = params.construction_time
-    #     else:
-    #         raise NotImplemented(f"get_start_end_time_of_period not yet implemented for {period_type}")
-    #     # get end_time_step_year
-    #     if not isinstance(time_step_year, np.ndarray):
-    #         end_time_step_year = time_step_year
-    #     elif len(time_step_year) == 1:
-    #         end_time_step_year = time_step_year[0]
-    #     # if more than one investment time step
-    #     else:
-    #         end_time_step_year = time_step_year[-1]
-    #         time_step_year = time_step_year[0]
-    #     # convert period to interval of base time steps
-    #     if id_capacity_existing is None:
-    #         period_yearly = period_time[tech]
-    #     else:
-    #         delta_lifetime = params.lifetime_existing[tech, loc, id_capacity_existing] - period_time[tech]
-    #         if delta_lifetime >= 0:
-    #             if delta_lifetime <= (time_step_year - model.set_time_steps_yearly.at(1)) * system["interval_between_years"]:
-    #                 return time_step_year
-    #             else:
-    #                 return -1
-    #         period_yearly = params.lifetime_existing[tech, loc, id_capacity_existing]
-    #     base_period = period_yearly / system["interval_between_years"] * system["unaggregated_time_steps_per_year"]
-    #     base_period = round(base_period, optimization_setup.solver["rounding_decimal_points"])
-    #     if int(base_period) != base_period:
-    #         logging.warning(f"The period {period_type} of {tech} does not translate to an integer time interval in the base time domain ({base_period})")
-    #     # decode to base time steps
-    #     base_time_steps = energy_system.time_steps.decode_time_step(tech, time_step_year, time_step_type="yearly")
-    #     if len(base_time_steps) == 0:
-    #         return model.set_base_time_steps.at(1), model.set_base_time_steps.at(1) - 1
-    #     base_time_step = base_time_steps[0]
-    #
-    #     # if start_base_time_step is further in the past than first base time step, use first base time step
-    #     if clip_to_first_time_step:
-    #         start_base_time_step = int(max(model.set_base_time_steps.at(1), base_time_step - base_period + 1))
-    #     else:
-    #         start_base_time_step = int(base_time_step - base_period + 1)
-    #     start_base_time_step = min(start_base_time_step, model.set_base_time_steps.at(-1))
-    #     # if period of existing capacity, then only return the start base time step
-    #     if id_capacity_existing is not None:
-    #         return start_base_time_step
-    #     start_time_step_year = energy_system.time_steps.encode_time_step(tech, start_base_time_step, time_step_type="yearly", yearly=True)[0]
-    #
-    #     return start_time_step_year, end_time_step_year
+        return start_time_step_year, end_time_step_year
 
     ### --- classmethods to construct sets, parameters, variables, and constraints, that correspond to Technology --- ###
     @classmethod
@@ -735,7 +629,7 @@ class TechnologyRules:
         """ construction time of technology, i.e., time that passes between investment and availability"""
         # get parameter object
         params = self.optimization_setup.parameters
-        start_time_step = Technology.get_investment_time_step(self.optimization_setup, tech, time)
+        start_time_step, _ = Technology.get_start_end_time_of_period(self.optimization_setup, tech, time, period_type="construction_time", clip_to_first_time_step=False)
         if start_time_step in model.set_time_steps_yearly:
             return (model.capacity_addition[tech, capacity_type, loc, time] == model.capacity_investment[tech, capacity_type, loc, start_time_step])
         elif start_time_step in model.set_time_steps_yearly_entire_horizon:
@@ -747,7 +641,8 @@ class TechnologyRules:
         """limited lifetime of the technologies"""
         # determine existing capacities
         capacities_existing = Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, time, type_existing_quantity="capacity")
-        return (model.capacity[tech, capacity_type, loc, time] == capacities_existing + sum(model.capacity_addition[tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, time)))
+        return (model.capacity[tech, capacity_type, loc, time] == capacities_existing + sum(
+            model.capacity_addition[tech, capacity_type, loc, previous_time] for previous_time in Technology.get_lifetime_range(self.optimization_setup, tech, time)))
 
     def constraint_technology_diffusion_limit_rule(self, model, tech, capacity_type, country, time):
         """limited technology diffusion based on the existing capacity in the previous year """
@@ -905,8 +800,12 @@ class TechnologyRules:
         annuity = ((1+discount_rate)**lifetime * discount_rate)/((1+discount_rate)**lifetime - 1)
         return (model.capex_yearly[tech, capacity_type, loc, year] == annuity * (
             sum(model.cost_capex[tech, capacity_type, loc, previous_year]
-                for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year))
-            + Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, year, type_existing_quantity="cost_capex")))
+                for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly"))
+            + Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, year, type_existing_quantity="capex",time_step_type="yearly")))
+        # return (model.capex_yearly[tech, capacity_type, loc, year] == (1 + discount_rate) ** (system["interval_between_years"] * (year - model.set_time_steps_yearly.at(1))) * (sum(
+        #     model.cost_capex[tech, capacity_type, loc, time] * (1 / (1 + discount_rate)) ** (system["interval_between_years"] * (time - model.set_time_steps_yearly.at(1))) for time in
+        #     Technology.get_lifetime_range(self.optimization_setup, tech, year, time_step_type="yearly"))) + Technology.get_available_existing_quantity(self.optimization_setup, tech, capacity_type, loc, year, type_existing_quantity="capex",
+        #                                                                                                                       time_step_type="yearly"))
     
     def constraint_cost_capex_total_rule(self, model, year):
         """ sums over all technologies to calculate total capex """

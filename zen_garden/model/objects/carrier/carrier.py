@@ -163,6 +163,10 @@ class Carrier(Element):
         # limit export flow by availability
         optimization_setup.constraints.add_constraint(model, name="constraint_availability_export", index_sets=cls.create_custom_set(["set_carriers", "set_nodes", "set_time_steps_operation"], optimization_setup),
             rule=rules.constraint_availability_export_rule, doc='node- and time-dependent carrier availability to export to outside the system boundaries', )
+        # limit export flow by technology
+        #optimization_setup.constraints.add_constraint(model, name="constraint_technology_export", index_sets=cls.create_custom_set(["set_carriers", "set_nodes", "set_time_steps_operation"],optimization_setup),
+        #    rule=rules.constraint_technology_export_rule, doc='node- and time-dependent carrier export limited by excess production', )
+
         # limit import flow by availability for each year
         optimization_setup.constraints.add_constraint(model, name="constraint_availability_import_yearly", index_sets=cls.create_custom_set(["set_carriers", "set_nodes", "set_time_steps_yearly"], optimization_setup),
             rule=rules.constraint_availability_import_yearly_rule, doc='node- and time-dependent carrier availability to import from outside the system boundaries summed over entire year', )
@@ -239,6 +243,19 @@ class CarrierRules:
             return (model.flow_export[carrier, node, time] <= params.availability_export[carrier, node, time])
         else:
             return pe.Constraint.Skip
+
+    #def constraint_technology_export_rule(self, model, carrier, node, time):
+    #    """limit node- and time-dependent carrier export to excess carrier production to avoid production without demand"""
+    #    # get parameter object
+    #    if carrier=="electricity":
+    #        flow_term = 0
+    #        for tech in model.set_conversion_technologies:
+    #            output_carriers = model.set_output_carriers[tech]
+    #            if len(output_carriers)>1 and len([c for c in output_carriers if c == "electricity"]):
+    #                flow_term += model.flow_conversion_output[tech, carrier, node, time]
+    #        return (model.flow_export[carrier, node, time] <= flow_term)
+    #    else:
+    #        return pe.Constraint.Skip
 
     def constraint_availability_import_yearly_rule(self, model, carrier, node, year):
         """node- and year-dependent carrier availability to import from outside the system boundaries"""
