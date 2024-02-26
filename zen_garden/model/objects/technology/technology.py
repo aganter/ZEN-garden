@@ -2162,17 +2162,18 @@ class TechnologyRules(GenericRule):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             term_neg_previous_capacity_additions = []
 
+            existing_time = self.sets["set_technologies_existing"][tech]
             # Case for active cumulative technologies with decomissioning
             # sum up over all previous years and all nodes
             if self.system["global_active_capacity"]:
                 time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.existing_capacities.loc[tech, :, :, year].sum(dim=["set_location"])
+                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, existing_time].sum(dim=["set_location"])
             else:
                 # Case for aggregated cumulative technologies with decomissioning
                 # sum up over all previous years and all nodes
                 logging.warning("Not yet implemented for special case of future technologies.")  # TODO: implement for future capacities
                 time_for_sum = range(year+1)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
+                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, existing_time].sum(
                     dim=["set_location", "set_technologies_existing"])
 
 
