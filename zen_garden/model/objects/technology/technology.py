@@ -588,64 +588,64 @@ class Technology(Element):
 
         # existing capacity
         optimization_setup.parameters.add_parameter(name="capacity_existing",
-            data=optimization_setup.initialize_component(cls, "capacity_existing", index_names=["set_technologies", "set_capacity_types", "set_location", "set_technologies_existing"], capacity_types=True),
-            doc='Parameter which specifies the existing technology size')
+                                                    data=optimization_setup.initialize_component(cls, "capacity_existing", index_names=["set_technologies", "set_capacity_types", "set_location", "set_technologies_existing"], capacity_types=True),
+                                                    doc='Parameter which specifies the existing technology size')
         # existing capacity
         optimization_setup.parameters.add_parameter(name="capacity_investment_existing",
-            data=optimization_setup.initialize_component(cls, "capacity_investment_existing", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly_entire_horizon"],
-                                                   capacity_types=True), doc='Parameter which specifies the size of the previously invested capacities')
+                                                    data=optimization_setup.initialize_component(cls, "capacity_investment_existing", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly_entire_horizon"],
+                                                                                                 capacity_types=True), doc='Parameter which specifies the size of the previously invested capacities')
         # minimum capacity addition
         optimization_setup.parameters.add_parameter(name="capacity_addition_min",
-            data=optimization_setup.initialize_component(cls, "capacity_addition_min", index_names=["set_technologies", "set_capacity_types"], capacity_types=True),
-            doc='Parameter which specifies the minimum capacity addition that can be installed')
+                                                    data=optimization_setup.initialize_component(cls, "capacity_addition_min", index_names=["set_technologies", "set_capacity_types"], capacity_types=True),
+                                                    doc='Parameter which specifies the minimum capacity addition that can be installed')
         # maximum capacity addition
         optimization_setup.parameters.add_parameter(name="capacity_addition_max",
-            data=optimization_setup.initialize_component(cls, "capacity_addition_max", index_names=["set_technologies", "set_capacity_types"], capacity_types=True),
-            doc='Parameter which specifies the maximum capacity addition that can be installed')
+                                                    data=optimization_setup.initialize_component(cls, "capacity_addition_max", index_names=["set_technologies", "set_capacity_types"], capacity_types=True),
+                                                    doc='Parameter which specifies the maximum capacity addition that can be installed')
         # unbounded capacity addition
         optimization_setup.parameters.add_parameter(name="capacity_addition_unbounded",
-            data=optimization_setup.initialize_component(cls, "capacity_addition_unbounded", index_names=["set_technologies"]),
-            doc='Parameter which specifies the unbounded capacity addition that can be added each year (only for delayed technology deployment)')
+                                                    data=optimization_setup.initialize_component(cls, "capacity_addition_unbounded", index_names=["set_technologies"]),
+                                                    doc='Parameter which specifies the unbounded capacity addition that can be added each year (only for delayed technology deployment)')
         # lifetime existing technologies
         optimization_setup.parameters.add_parameter(name="lifetime_existing",
-            data=optimization_setup.initialize_component(cls, "lifetime_existing", index_names=["set_technologies", "set_location", "set_technologies_existing"]),
-            doc='Parameter which specifies the remaining lifetime of an existing technology')
+                                                    data=optimization_setup.initialize_component(cls, "lifetime_existing", index_names=["set_technologies", "set_location", "set_technologies_existing"]),
+                                                    doc='Parameter which specifies the remaining lifetime of an existing technology')
         # lifetime existing technologies
         optimization_setup.parameters.add_parameter(name="capex_capacity_existing",
-            data=optimization_setup.initialize_component(cls, "capex_capacity_existing", index_names=["set_technologies", "set_capacity_types", "set_location", "set_technologies_existing"],
-                                                   capacity_types=True), doc='Parameter which specifies the total capex of an existing technology which still has to be paid')
+                                                    data=optimization_setup.initialize_component(cls, "capex_capacity_existing", index_names=["set_technologies", "set_capacity_types", "set_location", "set_technologies_existing"],
+                                                                                                 capacity_types=True), doc='Parameter which specifies the total capex of an existing technology which still has to be paid')
         # variable specific opex
         optimization_setup.parameters.add_parameter(name="opex_specific_variable",
-            data=optimization_setup.initialize_component(cls, "opex_specific_variable",index_names=["set_technologies","set_location","set_time_steps_operation"]),
-            doc='Parameter which specifies the variable specific opex')
+                                                    data=optimization_setup.initialize_component(cls, "opex_specific_variable",index_names=["set_technologies","set_location","set_time_steps_operation"]),
+                                                    doc='Parameter which specifies the variable specific opex')
         # fixed specific opex
         optimization_setup.parameters.add_parameter(name="opex_specific_fixed",
-            data=optimization_setup.initialize_component(cls, "opex_specific_fixed",index_names=["set_technologies", "set_capacity_types","set_location","set_time_steps_yearly"], capacity_types=True),
-            doc='Parameter which specifies the fixed annual specific opex')
+                                                    data=optimization_setup.initialize_component(cls, "opex_specific_fixed",index_names=["set_technologies", "set_capacity_types","set_location","set_time_steps_yearly"], capacity_types=True),
+                                                    doc='Parameter which specifies the fixed annual specific opex')
         # lifetime newly built technologies
         optimization_setup.parameters.add_parameter(name="lifetime", data=optimization_setup.initialize_component(cls, "lifetime", index_names=["set_technologies"]),
-            doc='Parameter which specifies the lifetime of a newly built technology')
+                                                    doc='Parameter which specifies the lifetime of a newly built technology')
         # construction_time newly built technologies
         optimization_setup.parameters.add_parameter(name="construction_time", data=optimization_setup.initialize_component(cls, "construction_time", index_names=["set_technologies"]),
-            doc='Parameter which specifies the construction time of a newly built technology')
+                                                    doc='Parameter which specifies the construction time of a newly built technology')
         # maximum diffusion rate, i.e., increase in capacity
         optimization_setup.parameters.add_parameter(name="max_diffusion_rate", data=optimization_setup.initialize_component(cls, "max_diffusion_rate", index_names=["set_technologies", "set_time_steps_yearly"]),
-            doc="Parameter which specifies the maximum diffusion rate which is the maximum increase in capacity between investment steps")
+                                                    doc="Parameter which specifies the maximum diffusion rate which is the maximum increase in capacity between investment steps")
         # capacity_limit of technologies
         optimization_setup.parameters.add_parameter(name="capacity_limit",
-            data=optimization_setup.initialize_component(cls, "capacity_limit", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], capacity_types=True),
-            doc='Parameter which specifies the capacity limit of technologies')
+                                                    data=optimization_setup.initialize_component(cls, "capacity_limit", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], capacity_types=True),
+                                                    doc='Parameter which specifies the capacity limit of technologies')
         # minimum load relative to capacity
         optimization_setup.parameters.add_parameter(name="min_load",
-            data=optimization_setup.initialize_component(cls, "min_load", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], capacity_types=True),
-            doc='Parameter which specifies the minimum load of technology relative to installed capacity')
+                                                    data=optimization_setup.initialize_component(cls, "min_load", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], capacity_types=True),
+                                                    doc='Parameter which specifies the minimum load of technology relative to installed capacity')
         # maximum load relative to capacity
         optimization_setup.parameters.add_parameter(name="max_load",
-            data=optimization_setup.initialize_component(cls, "max_load", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], capacity_types=True),
-            doc='Parameter which specifies the maximum load of technology relative to installed capacity')
+                                                    data=optimization_setup.initialize_component(cls, "max_load", index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_operation"], capacity_types=True),
+                                                    doc='Parameter which specifies the maximum load of technology relative to installed capacity')
         # carbon intensity
         optimization_setup.parameters.add_parameter(name="carbon_intensity_technology", data=optimization_setup.initialize_component(cls, "carbon_intensity_technology", index_names=["set_technologies", "set_location"]),
-            doc='Parameter which specifies the carbon intensity of each technology')
+                                                    doc='Parameter which specifies the carbon intensity of each technology')
         # calculate additional existing parameters
         optimization_setup.parameters.add_parameter(name="existing_capacities", data=cls.get_existing_quantity(optimization_setup, type_existing_quantity="capacity"),
                                                     doc="Parameter which specifies the total available capacity of existing technologies at the beginning of the optimization")
@@ -653,93 +653,37 @@ class Technology(Element):
                                                     doc="Parameter which specifies the total capex of existing technologies at the beginning of the optimization")
         # anyaxie
         if optimization_setup.system["use_endogenous_learning"]:
-            optimization_setup.parameters.add_parameter(name="learning_rate",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "learning_rate",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies"]),
+            optimization_setup.parameters.add_parameter(name="learning_rate", data=optimization_setup.initialize_component(cls,"learning_rate",index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the learning rate of the technology')
             optimization_setup.parameters.add_parameter(name="global_share_factor",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "global_share_factor",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies"]),
+                                                        data=optimization_setup.initialize_component(cls,"global_share_factor", index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the global share factor of the technology')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_lower_bound",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_points_lower_bound",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types",
-                                                                                                         "set_total_cost_pwa_segments"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_points_lower_bound", index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], capacity_types=True),
                                                         doc='Parameter which specifies the lower bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_points_upper_bound",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_points_upper_bound",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types",
-                                                                                                         "set_total_cost_pwa_segments"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_points_upper_bound", index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], capacity_types=True),
                                                         doc='Parameter which specifies the upper bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_TC_lower_bound",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_TC_lower_bound",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types",
-                                                                                                         "set_total_cost_pwa_segments"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_TC_lower_bound", index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], capacity_types=True),
                                                         doc='Parameter which specifies the lower bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_TC_upper_bound",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_TC_upper_bound",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types",
-                                                                                                         "set_total_cost_pwa_segments"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls,"total_cost_pwa_TC_upper_bound", index_names=["set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], capacity_types=True),
                                                         doc='Parameter which specifies the upper bound of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_intersect",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_intersect",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types",
-                                                                                                         "set_total_cost_pwa_segments"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_intersect", index_names=[ "set_technologies", "set_capacity_types", "set_total_cost_pwa_segments"], capacity_types=True),
                                                         doc='Parameter which specifies the intersect of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_slope",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_slope",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types",
-                                                                                                         "set_total_cost_pwa_segments"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_slope", index_names=["set_technologies","set_capacity_types","set_total_cost_pwa_segments"], capacity_types=True),
                                                         doc='Parameter which specifies the slope of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_initial_global_cost",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_initial_global_cost",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_initial_global_cost", index_names=[ "set_technologies", "set_capacity_types"], capacity_types=True),
                                                         doc='Parameter which specifies the initital total global cost of the pwa of total cost function')
             optimization_setup.parameters.add_parameter(name="total_cost_pwa_initial_unit_cost",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "total_cost_pwa_initial_unit_cost",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies",
-                                                                                                         "set_capacity_types"],
-                                                                                                     capacity_types=True),
+                                                        data=optimization_setup.initialize_component(cls, "total_cost_pwa_initial_unit_cost", index_names=[ "set_technologies", "set_capacity_types"], capacity_types=True),
                                                         doc='Parameter which specifies the initital unit cost of the technology')
             optimization_setup.parameters.add_parameter(name="global_initial_capacity",
-                                                        data=optimization_setup.initialize_component(cls,
-                                                                                                     "global_initial_capacity",
-                                                                                                     index_names=[
-                                                                                                         "set_technologies"]),
+                                                        data=optimization_setup.initialize_component(cls, "global_initial_capacity", index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the global initial capacity of the technology')
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
@@ -858,6 +802,29 @@ class Technology(Element):
             variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
+
+            # yearly capex as sum over all nodes
+            variables.add_variable(model, name="cost_capex_global", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                   bounds=(0, np.inf), doc="yearly capex of technology h over all positions")
+            # European cumulative capacity
+            variables.add_variable(model, name="european_cumulative_capacity", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                   bounds=(0, np.inf), doc="learning-inducing capacity of technology h in period y")
+            # segement selection for pwa total cost binary variables of European cost
+            variables.add_variable(model, name="total_cost_pwa_segment_selection_eu", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],optimization_setup),
+                                   binary=True, doc="segment selection binary variable")
+            # segment position variable for cumulative European capacity
+            variables.add_variable(model, name="total_cost_pwa_cum_capacity_segment_position_eu",index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly","set_total_cost_pwa_segments"], optimization_setup),
+                                   bounds=(0, np.inf), doc="cumulative global capacity of technology y in year y in segment w")
+            # total European cost variable
+            variables.add_variable(model, name="total_cost_pwa_european_cost", index_sets=cls.create_custom_set(
+                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                     bounds=(0, np.inf), doc="total global cost of technology h in period y")
+
+
 
         # install technology
         # Note: binary variables are written into the lp file by linopy even if they are not relevant for the optimization,
@@ -992,8 +959,35 @@ class Technology(Element):
             # cost capex constraint
             constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
                                                          doc="Calculate european investment cost")
+            # segment capacity sum
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
+                                             constraint=rules.constraint_pwa_total_cost_european_cum_capacity_segment_block(),
+                                             doc="segment capacity sum for pwa of cumulative cost")
 
+            # segment capacity upper bounds
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound",
+                                             constraint=rules.constraint_pwa_total_cost_cum_capacity_upper_bound_eu_block(),
+                                             doc="segment capacity upper bounds for pwa of cumulative cost")
 
+            # segment capacity lower bounds
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
+                                             constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_eu_block(),
+                                             doc="segment capacity lower bounds for pwa of cumulative cost")
+
+            # segment selection pwa of total cost
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_segment_selection",
+                                             constraint=rules.constraint_pwa_total_cost_segment_selection_eu_block(),
+                                             doc="segment selection with binary variable for pwa of cumulative cost")
+
+            # pwa approximation for total cumulative cost
+            constraints.add_constraint_block(model, name="constraint_approximate_total_global_cost",
+                                             constraint=rules.constraint_approximate_total_european_cost_block(),
+                                             doc="approximation of cumulative cost with pwa")
+
+            # constraint for cumulative global capacity
+            constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
+                                             constraint=rules.constraint_european_addition(),
+                                             doc="constraint for cumulative global capacity")
 
 
         # disjunct if technology is on
@@ -2178,7 +2172,7 @@ class TechnologyRules(GenericRule):
                 term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
                     dim=["set_location", "set_technologies_existing"])
 
-
+            # todo: add exogenous capacity additions of ROW
             # Sum up all capacity additions over the selected time horizon
             for previous_year in time_for_sum:
                 term_neg_previous_capacity_additions.append(
