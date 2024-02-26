@@ -2291,7 +2291,6 @@ class TechnologyRules(GenericRule):
         :return:
         """
         ### index sets
-        ### index sets
         index_values, index_names = Element.create_custom_set(
             ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
             self.optimization_setup)

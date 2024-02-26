@@ -264,7 +264,24 @@ def check5(res, scenario=None):
 
 
 
-# CHECK 7: Plot all cost curves of all technologies over the years
+# CHECK 7: Check if any technology reaches its capacity limit
+def check7(res, endogenous=True, scenario=None):
+    cap_installed= res.get_df("capacity").groupby(["technology","capacity_type", "location"]).tail(1).groupby(["technology","capacity_type"]).sum()
+    global_cap_installed = res.get_df("global_cumulative_capacity").groupby(level=[0,1]).tail(1)
+    global_cap_installed.index = global_cap_installed.index.droplevel(-1)
+    if endogenous:
+        cap_limit = res.get_df("total_cost_pwa_points_upper_bound",scenario=scenario).groupby(level=[0,1]).tail(1)
+    else:
+        cap_limit = res.get_df("capacity_limit").groupby(["technology","capacity_type"]).sum()
+    cap_limit.index = cap_limit.index.droplevel(-1)
+    for tech in cap_installed.index.get_level_values("technology").unique():
+        for capacity_type in cap_installed.index.get_level_values("capacity_type").unique():
+            diff = (global_cap_installed.loc[tech, capacity_type] - cap_limit.loc[tech, capacity_type]).round(4)
+            if diff >= 0:
+                print(f"The difference between the global cum. capacity and the capacity limit for"
+                  f" {tech}-{capacity_type} is {diff}.")
+
+
 
 # PLOT1: STANDARD PLOTS: Plot all standard plots for all scenarios
 def standard_plots_AX(res, save_fig=False, file_type=None):
@@ -394,10 +411,15 @@ def compare_global_capacity_plots(res, scenario=None):
 # PLOT 4: SANKEY DIAGRAM: Plot of Sankey Diagram
 import plotly.graph_objects as go
 import plotly.express as px
-def generate_sankey_diagram(folder_path, target_technologies, intermediate_technologies, year, title):
-    file_path_input = os.path.join(folder_path, f"flow_conversion_input_grouped_{scenario}.csv")
+def generate_sankey_diagram(scenario, target_technologies, intermediate_technologies, year, title):
+
+    path = os.path.join(os.getcwd(), "outputs")
+    path = os.path.join(path, os.path.basename(res.results[scenario]["analysis"]["dataset"]))
+    path = os.path.join(path, "result_plots")
+
+    file_path_input = os.path.join(path, f"flow_conversion_input_grouped_{scenario}.csv")
     inputs_df = pd.read_csv(file_path_input)
-    file_path_output = os.path.join(folder_path, f"flow_conversion_output_grouped_{scenario}.csv")
+    file_path_output = os.path.join(path, f"flow_conversion_output_grouped_{scenario}.csv")
     outputs_df = pd.read_csv(file_path_output)
 
     input_techs_target = inputs_df[inputs_df['technology'].isin(target_technologies)]
@@ -461,32 +483,36 @@ def generate_sankey_diagram(folder_path, target_technologies, intermediate_techn
     displayed_year = year * 2 + 2024
     fig.update_layout(title_text=f"{title} {displayed_year}", font_size=18)
 
-    fig.write_html('first_figure.html', auto_open=True)
+    fig.write_html(os.path.join(path, f"sankey_diagram_{year}.html"), auto_open=True)
 
-def save_total(res, folder_path, scenario):
+def save_total(res, scenario=None):
 
-    os.makedirs(folder_path, exist_ok=True)
+    path = os.path.join(os.getcwd(), "outputs")
+    path = os.path.join(path, os.path.basename(res.results[scenario]["analysis"]["dataset"]))
+    path = os.path.join(path, "result_plots")
+
+    os.makedirs(path, exist_ok=True)
 
     flow_conversion_input = res.get_total("flow_conversion_input", scenario=scenario)
-    file_path = os.path.join(folder_path, f"flow_conversion_input_{scenario}.csv")
+    file_path = os.path.join(path, f"flow_conversion_input_{scenario}.csv")
     flow_conversion_input.to_csv(file_path)
 
     flow_conversion_output = res.get_total("flow_conversion_output", scenario=scenario)
-    file_path = os.path.join(folder_path, f"flow_conversion_output_{scenario}.csv")
+    file_path = os.path.join(path, f"flow_conversion_output_{scenario}.csv")
     flow_conversion_output.to_csv(file_path)
 
-    file_path = os.path.join(folder_path, f"flow_conversion_input_{scenario}.csv")
+    file_path = os.path.join(path, f"flow_conversion_input_{scenario}.csv")
     total_input = pd.read_csv(file_path)
     total_input = total_input.drop('node', axis=1)
     total_input = total_input.groupby(['technology', 'carrier']).sum()
-    file_path = os.path.join(folder_path, f"flow_conversion_input_grouped_{scenario}.csv")
+    file_path = os.path.join(path, f"flow_conversion_input_grouped_{scenario}.csv")
     total_input.to_csv(file_path)
 
-    file_path = os.path.join(folder_path, f"flow_conversion_output_{scenario}.csv")
+    file_path = os.path.join(path, f"flow_conversion_output_{scenario}.csv")
     total_output = pd.read_csv(file_path)
     total_output = total_output.drop('node', axis=1)
     total_output = total_output.groupby(['technology', 'carrier']).sum()
-    file_path = os.path.join(folder_path, f"flow_conversion_output_grouped_{scenario}.csv")
+    file_path = os.path.join(path, f"flow_conversion_output_grouped_{scenario}.csv")
     total_output.to_csv(file_path)
 
 # PLOT 5: COST CURVE: Plot of cost curve
@@ -536,6 +562,8 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
     data_extract = data_extract.groupby(["technology"]).mean().T
     tech_carrier = data_extract.columns
 
+    fig1, ax1 = plt.subplots()
+    fig2, ax2 = plt.subplots()
     for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values(
                 "capacity_type").unique():
@@ -545,6 +573,10 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
             # get learning rate
             learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+            # PWA range
+            pwa_lower_bound = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
+            pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc["SMR", "power", :].values[-1]
+            pwa_range = np.linspace(pwa_lower_bound, pwa_upper_bound, 1000)
 
             data_total_cap = res.get_total("global_cumulative_capacity", scenario=scenario)
             data_extract_cap = res.extract_reference_carrier(data_total_cap, carrier, scenario)
@@ -553,123 +585,53 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             cap_tech = data_extract_cap.T.loc[tech, capacity_type]
             point_on_curve = unit_cost(cap_tech, c_initial, q_initial, learning_rate)
 
-            plt.plot(point_on_curve, marker='.', label=f'{tech}-{capacity_type}')
-            plt.legend()
-            plt.xlabel('Years')
-            plt.ylabel('Unit Cost')
-            plt.title('Cost Evolution of Technologies over the years')
+            learning_curve = unit_cost(pwa_range, c_initial, q_initial, learning_rate)
+
+            ax1.plot(point_on_curve, marker='.', label=f'{tech}-{capacity_type}')
+            ax1.legend()
+            ax1.set_xlabel('Years')
+            ax1.set_ylabel('Unit Cost')
+            ax1.set_title('Cost Evolution of Technologies over the years')
             # plt.ylim(0, 2000)
             # plt.xlim(0, 60)
+
+            ax2.scatter(cap_tech, point_on_curve, marker='.')
+            ax2.plot(pwa_range, learning_curve, label=f'{tech}-{capacity_type}')
+            ax2.legend()
+            ax2.set_xlabel('Cum. Global Capacity')
+            ax2.set_ylabel('Unit Cost')
+            ax2.set_title('Cost Evolution of Technologies over cumulative global capacity')
+
     plt.show()
+
+
+
+
+
 
 ############################################## Result anaylsis ##############################################
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240209_Hydrogen_exog"
+data_set_name = "20240209_Hydrogen_endog"
 
 res = Results(os.path.join(folder_path, data_set_name))
 
 scenario = None
-
-############################################## EXPECTED OUTCOME ##############################################
-
-# Look at demand of each carrier across all nodes
-# res.get_total("demand", scenario=scenario).groupby(["carrier"]).sum()
-#
-# # EXOG Price
-# # Look at average price of conversion technologies that create same output carrier
-# capacity = res.get_df("capacity", scenario=scenario)
-# demand = res.get_df("demand", scenario=scenario)
-# # remove carriers without demand
-# demand = demand.loc[(demand != 0), :]
-# for carrier in demand.index.levels[0].values:
-#     if carrier in demand:
-#         data_total = res.get_total("capex_specific_conversion", scenario=scenario)
-#         data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
-#         df_capex_specific = data_extract.groupby(["technology"]).mean().T
-#         plt.plot(df_capex_specific)
-#         plt.title(f"Capex specific of {carrier.capitalize()} Generating Conversion Technologies")
-#         plt.xlabel("Year")
-#         plt.ylabel("Capex")
-#         plt.legend(df_capex_specific.columns, loc='center right')
-#         plt.xticks(range(len(df_capex_specific.index)))
-#         plt.show()
-#
-#
-# # Look at the average price of imports of the carriers
-# res.get_total("price_import").groupby(["carrier"]).mean()
-# plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
-# plt.show()
-# #
-# # # Look at existing capacities
-# # res.get_df("capacity_existing", scenario=scenario).groupby(["technology","capacity_type"]).sum()
-# #
-# # ENDOG Learning Curve
-# demand = res.get_df("demand", scenario=scenario)
-# # remove carriers without demand
-# demand = demand.loc[(demand != 0), :]
-# for carrier in demand.index.levels[0].values:
-#     if carrier in demand:
-#         data_total = res.get_total("capacity", scenario=scenario)
-#         data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
-#         data_extract = data_extract.groupby(["technology"]).mean().T
-#         tech_carrier = data_extract.columns
-#         learning_curve_plots(res, tech_carrier=tech_carrier, scenario=scenario)
-#
-# plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
-# plt.legend(res.get_total("price_import").groupby(["carrier"]).mean().T.columns, loc='center left')
-# plt.show()
-#
-# res.get_total("carbon_emissions_technology").groupby(["technology"]).sum()
-#
-# plt.plot(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T)
-# plt.legend(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T.columns, loc='center left')
-# plt.show()
-# ############################################## ACTUAL OUTCOME ##############################################
-#
-# # 2. Look at conversion output flows of all technologies
-# res.get_total("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
-#
-# # 3. Look at exports of carriers
-# res.get_total("flow_export", scenario=scenario).groupby(["carrier"]).sum()
-#
-# #4. Look at emissions of technologies
-# res.get_df("carbon_emissions_annual", scenario=scenario)
-# #
-# # # Look at capacities of all technologies
-# res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum()
-# #
-# # # Biomethane post-processing
-# res.get_df("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum()
-# res.get_df("flow_import", scenario=scenario).groupby(["carrier"]).sum()
-# # Check if the numbers add up
-# res.get_total("flow_import", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"]
-# # If we substract the biomethane from the natural gas flow conversion input then we should get the "real" natural gas
-# # The "real" natural gas should correspond to the flow imports of natural gas
-# res.get_total("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"] - res.get_total("flow_conversion_output").groupby(["carrier"]).sum().loc["natural_gas"]
-#
-#
-# # Net Present Cost
-# res.get_df("net_present_cost").sum()
-# # Check Emissions
-# res.get_df("net_present_cost").sum()
-# res.get_df("carbon_emissions_annual").sum()
-# res.get_df("carbon_emissions_cumulative")
-
-############################################## PLOTS ##############################################
-
 save_fig = True
 file_type = "png"
+
+############################################## PLOTS ##############################################
 
 # Create custom standard_plots for all scenarios
 standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
 
+# Do indivudal checks for the scenarios
+check2(res, scenario, save_fig=save_fig, file_type=file_type)
+
 # Create individual plots for scenarios
 compare_global_capacity_plots(res, scenario=scenario)
 
-# Do indivudal checks for the scenarios
-check2(res, scenario, save_fig=save_fig, file_type=file_type)
 
 # Plot the unit cost of technologies in each optimization year
 # Maybe show it on the learning curve
@@ -680,13 +642,17 @@ for carrier in demand.index.levels[0].values:
     if carrier in demand:
         plot_average_unit_cost(res, carrier, scenario=scenario)
 
+# Unit cost graph
+plot_unit_cost_over_time(res, "hydrogen")
+
+save_total(res, scenario=scenario)
+
 import plotly.io as pio
-pio.renderers.default = "svg"
 target_technologies = ["electrolysis", "SMR", "SMR_CCS", "gasification", "gasification_CCS"]
-intermediate_technologies = ["pv_ground", "biomethane_conversion"]
-year = "13"
-title = ["I Dont know"]
-generate_sankey_diagram("20240209_Hydrogen_exog", target_technologies, intermediate_technologies, year, title)
+intermediate_technologies = ["pv_ground", "biomethane_conversion", "anaerobic_digestion", "wind_onshore", "wind_offshore"]
+year = "5"
+title = data_set_name
+generate_sankey_diagram(scenario, target_technologies, intermediate_technologies, year, title)
 
 
 # Determine the shares of the technologies
@@ -694,7 +660,6 @@ df = res.get_df("capacity_addition", scenario=scenario)
 df_extract = res.extract_reference_carrier(df, "hydrogen", scenario).groupby(["technology"]).sum().to_frame().T
 fig = go.Figure(data=[go.Pie(labels=df_extract.columns, values=df_extract.values, textinfo='percent+label')])
 fig.show()
-
 
 
 df_extact = res.extract_reference_carrier(res.get_df("capacity_addition", scenario=scenario), "hydrogen", scenario).groupby(["technology"]).sum()
@@ -738,7 +703,91 @@ plt.show()
 
 # Exogenous
 
+
+############################################## EXPECTED OUTCOME ##############################################
+
+# Look at demand of each carrier across all nodes
+res.get_total("demand", scenario=scenario).groupby(["carrier"]).sum()
+
+# EXOG Price
+# Look at average price of conversion technologies that create same output carrier
+capacity = res.get_df("capacity", scenario=scenario)
+demand = res.get_df("demand", scenario=scenario)
+# remove carriers without demand
+demand = demand.loc[(demand != 0), :]
+for carrier in demand.index.levels[0].values:
+    if carrier in demand:
+        data_total = res.get_total("capex_specific_conversion", scenario=scenario)
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        df_capex_specific = data_extract.groupby(["technology"]).mean().T
+        plt.plot(df_capex_specific)
+        plt.title(f"Capex specific of {carrier.capitalize()} Generating Conversion Technologies")
+        plt.xlabel("Year")
+        plt.ylabel("Capex")
+        plt.legend(df_capex_specific.columns, loc='center right')
+        plt.xticks(range(len(df_capex_specific.index)))
+        plt.show()
+
+
+# Look at the average price of imports of the carriers
+res.get_total("price_import").groupby(["carrier"]).mean()
+plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
+plt.legend(res.get_total("price_import").groupby(["carrier"]).mean().T.columns, loc='center left')
+plt.show()
+#
+# # Look at existing capacities
+# res.get_df("capacity_existing", scenario=scenario).groupby(["technology","capacity_type"]).sum()
+#
+# ENDOG Learning Curve
+demand = res.get_df("demand", scenario=scenario)
+# remove carriers without demand
+demand = demand.loc[(demand != 0), :]
+for carrier in demand.index.levels[0].values:
+    if carrier in demand:
+        data_total = res.get_total("capacity", scenario=scenario)
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        data_extract = data_extract.groupby(["technology"]).mean().T
+        tech_carrier = data_extract.columns
+        learning_curve_plots(res, tech_carrier=tech_carrier, scenario=scenario)
+
+plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
+plt.legend(res.get_total("price_import").groupby(["carrier"]).mean().T.columns, loc='center left')
+plt.show()
+
+res.get_total("carbon_emissions_technology").groupby(["technology"]).sum()
+
+plt.plot(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T)
+plt.legend(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T.columns, loc='center left')
+plt.show()
+############################################## ACTUAL OUTCOME ##############################################
+
+# 2. Look at conversion output flows of all technologies
+res.get_total("flow_conversion_output", scenario=scenario).groupby(["carrier"]).sum()
+
+# 3. Look at exports of carriers
+res.get_total("flow_export", scenario=scenario).groupby(["carrier"]).sum()
+
+#4. Look at emissions of technologies
+res.get_df("carbon_emissions_annual", scenario=scenario)
+#
+# # Look at capacities of all technologies
+res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum()
+#
+# # Biomethane post-processing
+res.get_df("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum()
+res.get_df("flow_import", scenario=scenario).groupby(["carrier"]).sum()
+# Check if the numbers add up
+res.get_total("flow_import", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"]
+# If we substract the biomethane from the natural gas flow conversion input then we should get the "real" natural gas
+# The "real" natural gas should correspond to the flow imports of natural gas
+res.get_total("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"] - res.get_total("flow_conversion_output").groupby(["carrier"]).sum().loc["natural_gas"]
+
+
+# Net Present Cost
+res.get_df("net_present_cost").sum()
+# Check Emissions
+res.get_df("net_present_cost").sum()
+res.get_df("carbon_emissions_annual").sum()
+res.get_df("carbon_emissions_cumulative")
+
 print("Done with result analysis")
-
-
-
