@@ -987,8 +987,11 @@ class Technology(Element):
 
             # todo: can you remove this?
             # cost capex constraint
+            constraints.add_constraint_block(model, name="constraint_cost_capex_global", constraint=rules.constraint_cost_capex_global_block(),
+                                             doc="Calculate global investment cost")
+            # cost capex constraint
             constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
-                                             doc="Create link for cost_capex")
+                                                         doc="Calculate european investment cost")
 
 
 
@@ -2162,18 +2165,17 @@ class TechnologyRules(GenericRule):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             term_neg_previous_capacity_additions = []
 
-            existing_time = self.sets["set_technologies_existing"][tech]
             # Case for active cumulative technologies with decomissioning
             # sum up over all previous years and all nodes
             if self.system["global_active_capacity"]:
                 time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, existing_time].sum(dim=["set_location"])
+                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, year].sum(dim=["set_location"])
             else:
                 # Case for aggregated cumulative technologies with decomissioning
                 # sum up over all previous years and all nodes
                 logging.warning("Not yet implemented for special case of future technologies.")  # TODO: implement for future capacities
-                time_for_sum = range(year+1)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, existing_time].sum(
+                time_for_sum = range(index.get_unique(["set_time_steps_yearly"])[0], year+1)
+                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
                     dim=["set_location", "set_technologies_existing"])
 
 
@@ -2283,6 +2285,58 @@ class TechnologyRules(GenericRule):
                                                   index_names=["set_technologies"])
 
 
+    def constraint_cost_capex_global_block(self):
+        """ calculates the capex of each technology
+
+        .. math::
+            Cost_Capex{h,y} = TC{h,y} - TC{h,y-1}
+
+        :return:
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
+        # we vectorize over capacities and locations
+        constraints = []
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            if year == 0:
+                # todo: change the way technologies existing is checked -> probably check length
+                # todo: how to implement decommissioning here?
+                # todo: Correct this for transport technologies that have distance-related costs
+                # todo: Update TC0 for cost if no existing technologies
+                # todo: What if we calculate total_cost_pwa_global_cost_initial here??
+                if len(self.sets["set_technologies_existing"].data[tech])==1:  # if there are no existing technologies
+                    # have to add the cost for the capacity in the first step
+                    cost_capex_tech = (self.parameters.total_cost_pwa_initial_unit_cost.loc[tech, :] *
+                                       self.variables["capacity_addition"].loc[tech, :, :, year].sum(dims="set_location"))
+                else:
+                    cost_capex_tech = (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                                       - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
+
+            else:
+                cost_capex_tech = (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                                       - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1])
+
+            ### formulate constraint
+            lhs = self.variables["cost_capex_global"].loc[tech, :, year] - cost_capex_tech
+            rhs = 0
+            constraints.append(lhs == rhs)
+
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+
     def constraint_cost_capex_block(self):
         """ calculates the capex of each technology
 
@@ -2306,26 +2360,8 @@ class TechnologyRules(GenericRule):
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
-            if year == 0:
-                # todo: change the way technologies existing is checked -> probably check length
-                # todo: how to implement decommissioning here?
-                # todo: Correct this for transport technologies that have distance-related costs
-                # todo: Update TC0 for cost if no existing technologies
-                # todo: What if we calculate total_cost_pwa_global_cost_initial here??
-                if len(self.sets["set_technologies_existing"].data[tech])==1:  # if there are no existing technologies
-                    # have to add the cost for the capacity in the first step
-                    cost_capex_tech = (self.parameters.total_cost_pwa_initial_unit_cost.loc[tech, :] *
-                                       self.variables["capacity_addition"].loc[tech, :, :, year].sum(dims="set_location"))
-                else:
-                    cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
-                                                       - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
-
-            else:
-                cost_capex_tech = global_share_factor* (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
-                                                       - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1])
-
             ### formulate constraint
-            lhs = self.variables["cost_capex"].loc[tech, :, year] - cost_capex_tech
+            lhs = self.variables["cost_capex"].loc[tech, :, :] - global_share_factor * self.variables["cost_capex_global"].loc[tech,:,:]
             rhs = 0
             constraints.append(lhs == rhs)
 
@@ -2336,4 +2372,258 @@ class TechnologyRules(GenericRule):
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
 
+    def constraint_european_addition(self):
+        """ Calculates the capacity addition under neglection of the ROW capacity addition
 
+        .. math::
+            S_{h,y}^{EU} = S_{h,y-1}^{glo} + \Delta S_{h,y}
+
+        :return:
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
+        # we vectorize over capacities and locations
+        constraints = []
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            if year == 0:
+                lhs = (self.variables["european_cumulative_capacity"].loc[tech, :, year]
+                       - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
+            else:
+                lhs = (self.variables["european_cumulative_capacity"]
+                       - self.variables["global_cumulative_capacity"].loc[tech, :, :, year-1]
+                       - self.variables["capacity_addition"].loc[tech, :, :, year])
+                rhs = 0
+                constraints.append(lhs == rhs)
+
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+
+
+    def constraint_approximate_total_european_cost_block(self):
+        """Approximate total cumulative cost for each technology.
+
+        .. math::
+            \\tilde{TC}_{h,y} = \\sum_{w\\in \\mathcal{W}} \\kappa_{h,w} \\cdot Z_{h,y,w} + \\sigma_{h,w} \\cdot
+            S^{\\mathrm{seg}}_{h,y,w}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies and timesteps for the conditions and vectorize over the rest
+
+        # Initialize an empty list to store the constraints
+        constraints = []
+        # Iterate over technologies
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            # Get the unique segments for the current technology
+            segments = index.get_unique(["set_total_cost_pwa_segments"])
+
+            # todo: what if only one segment?
+            # Calculate the linear combination for Z and S using pwa parameters intersect and slope
+            term_Z = sum(self.parameters.total_cost_pwa_intersect.loc[tech, :, segment]
+                         * self.variables['total_cost_pwa_segment_selection_eu'].loc[tech, :, year, segment]
+                         for segment in segments)
+
+            term_X = sum(self.parameters.total_cost_pwa_slope.loc[tech, :, segment]
+                * self.variables['total_cost_pwa_cum_capacity_segment_position_eu'].loc[tech, :, year, segment]
+                for segment in segments)
+
+            # Formulate the constraint
+            lhs = (self.variables['total_cost_pwa_european_cost'].loc[tech, :, year]
+                   - term_Z
+                   - term_X)
+            rhs = 0
+
+            # Append the constraint to the list
+            constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+
+    def constraint_pwa_total_cost_segment_selection_eu_block(self):
+        """Ensure that for each technology and each year, the sum over segments of Z equals 1.
+
+        . math::
+            \sum_{w\in\mathcal{W}}&Z_{h,y,w} = 1
+
+        :return: List of constraints
+        """
+
+        ### index sets
+        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types",
+                                                               "set_time_steps_yearly", "set_total_cost_pwa_segments"],
+                                                              self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # Initialize an empty list to store the constraints
+        constraints = []
+
+        # Iterate over technologies
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            # Get the unique segments for the current technology
+            segments = index.get_unique(["set_total_cost_pwa_segments"])
+
+            # Sum up all binary variables for the segment selection for each timestep and each technology
+            sum_segments_z = sum(self.variables['total_cost_pwa_segment_selection_eu']
+                                 .loc[tech, :, year, segment] for segment in segments)
+
+            # Formulate the constraint
+            lhs = sum_segments_z
+            rhs = 1
+
+            # Append the constraint to the list
+            constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly",
+                                                       "set_total_cost_pwa_segments"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly",
+                                                               "set_total_cost_pwa_segments"])
+
+    def constraint_pwa_total_cost_cum_capacity_upper_bound_eu_block(self):
+        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+
+        . math::
+            S^{\mathrm{seg}}_{h,y,w} \leq \overline{s}_{h,w}^{\mathrm{glo}}\cdot Z_{h,y,w}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # Initialize an empty list to store the constraints
+        constraints = []
+        for tech, year, segment in index.get_unique(["set_technologies",
+                                                     "set_time_steps_yearly", "set_total_cost_pwa_segments"]):
+            lhs = (self.variables['total_cost_pwa_cum_capacity_segment_position_eu'].loc[tech, :, year, segment]
+                   - self.parameters.total_cost_pwa_points_upper_bound.loc[tech, :, segment]
+                   * self.variables['total_cost_pwa_segment_selection_eu'].loc[tech, :, year, segment])
+            rhs = 0
+
+            # Append the constraint to the list
+            constraints.append(lhs <= rhs)
+
+        # Return the list of constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly",
+                                                       "set_total_cost_pwa_segments"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly",
+                                                               "set_total_cost_pwa_segments"])
+
+    def constraint_pwa_total_cost_cum_capacity_lower_bound_eu_block(self):
+        """Ensure that for each technology and each year, the segment capacity is within the interpolation points.
+
+        . math::
+            {s}_{h,w}^{\mathrm{glo}}\cdot Z_{h,y,w} \leq S^{\mathrm{seg}}_{h,y,w}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # Initialize an empty list to store the constraints
+        constraints = []
+        for tech, year, segment in index.get_unique(["set_technologies", "set_time_steps_yearly",
+                                                     "set_total_cost_pwa_segments"]):
+            lhs = (self.parameters.total_cost_pwa_points_lower_bound.loc[tech, :, segment]
+                   * self.variables['total_cost_pwa_segment_selection_eu'].loc[tech, :, year, segment]
+                   - self.variables['total_cost_pwa_cum_capacity_segment_position_eu'].loc[tech, :, year, segment])
+            rhs = 0
+
+            # Append the constraint to the list
+            constraints.append(lhs <= rhs)
+
+        # Return the list of constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly",
+                                                       "set_total_cost_pwa_segments"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly",
+                                                               "set_total_cost_pwa_segments"])
+
+    def constraint_pwa_total_cost_european_cum_capacity_segment_block(self):
+        """Ensures that the sum of all segment capacities is the capacity installed in that year. Needed for PWA
+
+        . math::
+            \sum_{w\in\mathcal{W}}S^{\mathrm{seg}}_{h,y,w}=S_{h,y}^{\mathrm{glo}}
+
+        :return: List of constraints
+        """
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly", "set_total_cost_pwa_segments"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        constraints = []
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            # Get the unique segments for the current technology
+            segments = self.sets["set_total_cost_pwa_segments"][tech]
+
+            # Iterate over the segments
+            lhs = (self.variables['european_cumulative_capacity'].loc[tech, :, year]
+                   - sum(self.variables['total_cost_pwa_cum_capacity_segment_position_eu'].loc[tech, :, year, segment] for
+                         segment in segments))
+            rhs = 0
+
+            constraints.append(lhs == rhs)
+
+        # Return the list of constraints
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
