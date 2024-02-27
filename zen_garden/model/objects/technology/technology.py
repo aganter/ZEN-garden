@@ -960,32 +960,32 @@ class Technology(Element):
             constraints.add_constraint_block(model, name="constraint_cost_capex_global", constraint=rules.constraint_cost_capex_global_block(),
                                              doc="Calculate global investment cost")
             # segment capacity sum
-            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_european_cum_capacity_segment",
                                              constraint=rules.constraint_pwa_total_cost_european_cum_capacity_segment_block(),
                                              doc="segment capacity sum for pwa of cumulative cost")
 
             # segment capacity upper bounds
-            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound",
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_upper_bound_eu",
                                              constraint=rules.constraint_pwa_total_cost_cum_capacity_upper_bound_eu_block(),
                                              doc="segment capacity upper bounds for pwa of cumulative cost")
 
             # segment capacity lower bounds
-            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound",
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_cum_capacity_lower_bound_eu",
                                              constraint=rules.constraint_pwa_total_cost_cum_capacity_lower_bound_eu_block(),
                                              doc="segment capacity lower bounds for pwa of cumulative cost")
 
             # segment selection pwa of total cost
-            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_segment_selection",
+            constraints.add_constraint_block(model, name="constraint_pwa_total_cost_segment_selection_eu",
                                              constraint=rules.constraint_pwa_total_cost_segment_selection_eu_block(),
                                              doc="segment selection with binary variable for pwa of cumulative cost")
 
             # pwa approximation for total cumulative cost
-            constraints.add_constraint_block(model, name="constraint_approximate_total_global_cost",
+            constraints.add_constraint_block(model, name="constraint_approximate_total_european_cost",
                                              constraint=rules.constraint_approximate_total_european_cost_block(),
                                              doc="approximation of cumulative cost with pwa")
             # constraint for cumulative global capacity
-            constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
-                                             constraint=rules.constraint_european_addition(),
+            constraints.add_constraint_block(model, name="constraint_european_addition",
+                                             constraint=rules.constraint_european_addition_block(),
                                              doc="constraint for cumulative global capacity")
             # cost capex constraint
             constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
@@ -2163,31 +2163,35 @@ class TechnologyRules(GenericRule):
 
             # Case for active cumulative technologies with decomissioning
             # sum up over all previous years and all nodes
-            #   todo: Correct global share factor here, should be european existing capacities if we dont use global share
             if self.system["global_active_capacity"]:
                 time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, year].sum(dim=["set_location"])
+                european_existing_capacities = self.parameters.capacity_existing.loc[tech, :, :, year].sum(dim=["set_location"])
             else:
                 # Case for aggregated cumulative technologies with decomissioning
                 # sum up over all previous years and all nodes
                 logging.warning("Not yet implemented for special case of future technologies.")  # TODO: implement for future capacities
                 time_for_sum = range(index.get_unique(["set_time_steps_yearly"])[0], year+1)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
-                    dim=["set_location", "set_technologies_existing"])
+                european_existing_capacities = self.parameters.capacity_existing.loc[tech, :, :, :].sum(dim=["set_location", "set_technologies_existing"])
 
-            # Sum up all capacity additions over the selected time horizon
-            for previous_year in time_for_sum:
-                term_neg_previous_capacity_additions.append(
-                    (-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
-
-            # todo: add exogenous capacity additions of ROW
-            term_cappacity_additions_row = self.parameters.capacity_additions_row.loc[tech, year]
+            # todo: need to update for myopic foresight
+            if self.system["use_exogenous_cap_add_row"]:
+                # global exisiting capacities is sum of european and row
+                term_global_existing_capacities = european_existing_capacities + self.parameters.capacity_additions_row.sel(set_technologies=tech, set_time_steps_yearly=time_for_sum).sum(dim=['set_time_steps_yearly'])
+                # capacity additions are just European additions
+                for previous_year in time_for_sum:
+                    term_neg_previous_capacity_additions.append(-1.0* self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
+            else:
+                # global exisiting capacities are european capacities times global share factor
+                term_global_existing_capacities  = (1/global_share_factor) * european_existing_capacities
+                # Sum up all capacity additions over the selected time horizon
+                for previous_year in time_for_sum:
+                    term_neg_previous_capacity_additions.append((-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
 
             # Case for
             ### formulate constraint
             lhs = lp_sum([1.0 * self.variables["global_cumulative_capacity"].loc[tech, :, year],
                           *term_neg_previous_capacity_additions])
-            rhs = term_global_existing_capacities + term_cappacity_additions_row
+            rhs = term_global_existing_capacities
             constraints.append(lhs == rhs)
 
         # Return the list of constraints
@@ -2354,13 +2358,13 @@ class TechnologyRules(GenericRule):
         # not necessary
 
         ### index loop
-        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
-        # we vectorize over capacities and locations
+        # we loop over all technologies because we need to get the global share factor
+        # we vectorize over capacity types and years
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             ### formulate constraint
-            lhs = self.variables["cost_capex"].loc[tech, :, :] - global_share_factor * self.variables["cost_capex_global"].loc[tech,:,:]
+            lhs = 1.0 * self.variables["cost_capex"].loc[tech, :, year] - global_share_factor * self.variables["cost_capex_global"].loc[tech,:,year]
             rhs = 0
             constraints.append(lhs == rhs)
 
@@ -2371,7 +2375,7 @@ class TechnologyRules(GenericRule):
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
 
-    def constraint_european_addition(self):
+    def constraint_european_addition_block(self):
         """ Calculates the capacity addition under neglection of the ROW capacity addition
 
         .. math::
@@ -2397,8 +2401,8 @@ class TechnologyRules(GenericRule):
                 lhs = (self.variables["european_cumulative_capacity"].loc[tech, :, year]
                        - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
             else:
-                lhs = (self.variables["european_cumulative_capacity"]
-                       - self.variables["global_cumulative_capacity"].loc[tech, :, :, year-1]
+                lhs = (self.variables["european_cumulative_capacity"].loc[tech,:,year]
+                       - self.variables["global_cumulative_capacity"].loc[tech, :, year-1]
                        - self.variables["capacity_addition"].loc[tech, :, :, year])
                 rhs = 0
                 constraints.append(lhs == rhs)
@@ -2438,7 +2442,6 @@ class TechnologyRules(GenericRule):
             # Get the unique segments for the current technology
             segments = index.get_unique(["set_total_cost_pwa_segments"])
 
-            # todo: what if only one segment?
             # Calculate the linear combination for Z and S using pwa parameters intersect and slope
             term_Z = sum(self.parameters.total_cost_pwa_intersect.loc[tech, :, segment]
                          * self.variables['total_cost_pwa_segment_selection_eu'].loc[tech, :, year, segment]

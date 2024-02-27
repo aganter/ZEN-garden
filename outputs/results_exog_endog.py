@@ -613,7 +613,7 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240209_Hydrogen_exog"
+data_set_name = "20240209_Hydrogen_endog"
 
 res = Results(os.path.join(folder_path, data_set_name))
 
