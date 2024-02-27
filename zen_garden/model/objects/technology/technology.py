@@ -84,6 +84,7 @@ class Technology(Element):
             self.learning_curve_ub = self.data_input.extract_attribute("learning_curve_upper_bound", unit_category={"energy_quantity": 1, "time": -1})["value"]
             self.learning_curve_npts = self.data_input.extract_attribute("learning_curve_npts", unit_category={})["value"]
             self.global_initial_capacity= self.data_input.extract_attribute("global_initial_capacity", unit_category={"energy_quantity": 1, "time": -1})["value"]
+            self.capacity_additions_row = self.data_input.extract_input_data("capacity_additions_row", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -685,6 +686,9 @@ class Technology(Element):
             optimization_setup.parameters.add_parameter(name="global_initial_capacity",
                                                         data=optimization_setup.initialize_component(cls, "global_initial_capacity", index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the global initial capacity of the technology')
+            optimization_setup.parameters.add_parameter(name="capacity_additions_row", # todo: Add capacity types? Same capacity addition energy and power rated?
+                                                        data=optimization_setup.initialize_component(cls, "capacity_additions_row", index_names=["set_technologies", "set_time_steps_yearly"]),
+                                                        doc='Parameter which specifies the global initial capacity of the technology')
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
             subclass.construct_params(optimization_setup)
@@ -802,7 +806,6 @@ class Technology(Element):
             variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
-
             # yearly capex as sum over all nodes
             variables.add_variable(model, name="cost_capex_global", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
@@ -956,9 +959,6 @@ class Technology(Element):
             # cost capex constraint
             constraints.add_constraint_block(model, name="constraint_cost_capex_global", constraint=rules.constraint_cost_capex_global_block(),
                                              doc="Calculate global investment cost")
-            # cost capex constraint
-            constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
-                                                         doc="Calculate european investment cost")
             # segment capacity sum
             constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
                                              constraint=rules.constraint_pwa_total_cost_european_cum_capacity_segment_block(),
@@ -983,11 +983,13 @@ class Technology(Element):
             constraints.add_constraint_block(model, name="constraint_approximate_total_global_cost",
                                              constraint=rules.constraint_approximate_total_european_cost_block(),
                                              doc="approximation of cumulative cost with pwa")
-
             # constraint for cumulative global capacity
             constraints.add_constraint_block(model, name="constraint_cum_global_capacity",
                                              constraint=rules.constraint_european_addition(),
                                              doc="constraint for cumulative global capacity")
+            # cost capex constraint
+            constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
+                                                         doc="Calculate european investment cost")
 
 
         # disjunct if technology is on
@@ -2161,6 +2163,7 @@ class TechnologyRules(GenericRule):
 
             # Case for active cumulative technologies with decomissioning
             # sum up over all previous years and all nodes
+            #   todo: Correct global share factor here, should be european existing capacities if we dont use global share
             if self.system["global_active_capacity"]:
                 time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year)
                 term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, year].sum(dim=["set_location"])
@@ -2172,17 +2175,19 @@ class TechnologyRules(GenericRule):
                 term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, :].sum(
                     dim=["set_location", "set_technologies_existing"])
 
-            # todo: add exogenous capacity additions of ROW
             # Sum up all capacity additions over the selected time horizon
             for previous_year in time_for_sum:
                 term_neg_previous_capacity_additions.append(
                     (-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
 
+            # todo: add exogenous capacity additions of ROW
+            term_cappacity_additions_row = self.parameters.capacity_additions_row.loc[tech, year]
+
             # Case for
             ### formulate constraint
             lhs = lp_sum([1.0 * self.variables["global_cumulative_capacity"].loc[tech, :, year],
                           *term_neg_previous_capacity_additions])
-            rhs = term_global_existing_capacities
+            rhs = term_global_existing_capacities + term_cappacity_additions_row
             constraints.append(lhs == rhs)
 
         # Return the list of constraints

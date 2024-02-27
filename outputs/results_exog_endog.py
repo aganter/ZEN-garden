@@ -613,7 +613,7 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240209_Hydrogen_endog"
+data_set_name = "20240209_Hydrogen_exog"
 
 res = Results(os.path.join(folder_path, data_set_name))
 
@@ -650,16 +650,10 @@ save_total(res, scenario=scenario)
 import plotly.io as pio
 target_technologies = ["electrolysis", "SMR", "SMR_CCS", "gasification", "gasification_CCS"]
 intermediate_technologies = ["pv_ground", "biomethane_conversion", "anaerobic_digestion", "wind_onshore", "wind_offshore"]
-year = "5"
+year = "13"
 title = data_set_name
 generate_sankey_diagram(scenario, target_technologies, intermediate_technologies, year, title)
 
-
-# Determine the shares of the technologies
-df = res.get_df("capacity_addition", scenario=scenario)
-df_extract = res.extract_reference_carrier(df, "hydrogen", scenario).groupby(["technology"]).sum().to_frame().T
-fig = go.Figure(data=[go.Pie(labels=df_extract.columns, values=df_extract.values, textinfo='percent+label')])
-fig.show()
 
 
 df_extact = res.extract_reference_carrier(res.get_df("capacity_addition", scenario=scenario), "hydrogen", scenario).groupby(["technology"]).sum()
@@ -758,6 +752,13 @@ res.get_total("carbon_emissions_technology").groupby(["technology"]).sum()
 
 plt.plot(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T)
 plt.legend(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T.columns, loc='center left')
+plt.show()
+
+plt.plot(res.get_total("capacity").groupby(["technology"]).sum().loc[["carbon_pipeline", "dry_biomass_truck", "hydrogen_pipeline"]].T)
+plt.legend(res.get_total("capacity").groupby(["technology"]).sum().loc[["carbon_pipeline", "dry_biomass_truck", "hydrogen_pipeline"]].T.columns, loc='center left')
+plt.xlabel("Year")
+plt.ylabel("Capacity")
+plt.title("Capacity of Transport Technologies")
 plt.show()
 ############################################## ACTUAL OUTCOME ##############################################
 
