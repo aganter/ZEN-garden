@@ -2259,7 +2259,7 @@ class TechnologyRules(GenericRule):
                 # todo: What if we calculate total_cost_pwa_global_cost_initial here??
                 lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
                        - global_share_factor*self.variables["total_cost_pwa_global_cost"].loc[tech, :, year])
-                rhs = - self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
+                rhs = (-global_share_factor) * self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
 
             else:
                 lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
