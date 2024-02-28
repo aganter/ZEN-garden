@@ -333,14 +333,12 @@ class Technology(Element):
             # Same for power and energy-rated
             learning_rate = self.learning_rate
             global_share_factor = self.global_share_factor
-
-            # In case there is no existing capacity, set the global initial capacity to 1
-            if hasattr(self, 'set_technologies_existing') and capacity_existing > 0:
-                # global initial capacity, capex and capacity limit for power-rated technologies
-                global_initial_capacity = (1 / global_share_factor) * capacity_existing
-            else:
-                global_initial_capacity = self.global_initial_capacity
-                logging.warning("Global initial capacity must be given as attribute.") # TODO: Implement case for capacity existing = 0
+            global_initial_capacity = self.global_initial_capacity
+            # Update global_initial_capacity if it is smaller than capacity_existing
+            if global_initial_capacity < capacity_existing:
+                self.global_initial_capacity = capacity_existing
+                global_initial_capacity = capacity_existing
+                logging.warning("Global initial capacity must be greater than existing capacity in model.")
 
             # todo: implement case for lower bound of PWA
             # Lower and Upper bound for global cumulative capacity
@@ -853,11 +851,6 @@ class Technology(Element):
             variables.add_variable(model, name="total_cost_pwa_global_cost", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global cost of technology h in period y")
-            # todo: remove this if possible?
-            # total global initial cost variable
-            variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
-                ["set_technologies", "set_capacity_types"], optimization_setup),
-                                     bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
 
         # install technology
         # Note: binary variables are written into the lp file by linopy even if they are not relevant for the optimization,
@@ -943,11 +936,6 @@ class Technology(Element):
 
         # anyaxie
         if optimization_setup.system["use_endogenous_learning"]:
-            # todo: remove this if possible?
-            # helper constraint for variable - parameter problem
-            constraints.add_constraint_block(model, name="constraint_total_cost_pwa_initial_global_cost",
-                                             constraint=rules.constraint_total_cost_pwa_initial_global_cost_block(),
-                                             doc="helper constraint for variable - parameter problem")
             # segment capacity sum
             constraints.add_constraint_block(model, name="constraint_pwa_total_cost_global_cum_capacity_segment",
                                              constraint=rules.constraint_pwa_total_cost_global_cum_capacity_segment_block(),
@@ -2135,9 +2123,8 @@ class TechnologyRules(GenericRule):
         """Calculates the cumulative global capacity for each technology in each year
 
                . math::
-                   S_{h,y}^{\mathrm{glo}} = \frac{1}{g_h}
-                    \left( \sum_{\tilde{y}=y_0}^{y}\sum_{p\in\mathcal{P}}\Delta S_{h,p,\tilde{y}}
-                   +\sum_{\hat{y}=y_{-\infty}}^{y_0-1} \sum_{p\in\mathcal{P}}\Delta s_{h,p,\hat{y}}^{\mathrm{ex}}\right)
+                   S_{h,y}^{glo} = \sum_{\tilde{y}=y_0}^y\sum_{p\in\mathcal{P}}\Delta S_{h,p,\tilde{y}}
+                   + \sum_{\hat{y}=y_0}^{y} \Delta s_{h,\hat{y}}^{\mathrm{glo}}
 
 
        :return: List of constraints
@@ -2162,25 +2149,18 @@ class TechnologyRules(GenericRule):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
             term_neg_previous_capacity_additions = []
 
-            existing_time = self.sets["set_technologies_existing"][tech]
-            # Case for active cumulative technologies with decomissioning
-            # sum up over all previous years and all nodes
+            # Sum over all previous capacity additions
             if self.system["global_active_capacity"]:
-                time_for_sum = Technology.get_lifetime_range(self.optimization_setup, tech, year)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, existing_time].sum(dim=["set_location"])
+                # Case for active cumulative technologies with decomissioning
+                for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year):
+                    term_neg_previous_capacity_additions.append((-1/global_share_factor)*self.variables["capacity_addition"].loc[tech, :, :,previous_year].sum(dims="set_location"))
             else:
-                # Case for aggregated cumulative technologies with decomissioning
-                # sum up over all previous years and all nodes
-                logging.warning("Not yet implemented for special case of future technologies.")  # TODO: implement for future capacities
-                time_for_sum = range(year+1)
-                term_global_existing_capacities = (1 / global_share_factor) * self.parameters.capacity_existing.loc[tech, :, :, existing_time].sum(
-                    dim=["set_location", "set_technologies_existing"])
+                # No decommissioning
+                for previous_year in self.sets["set_time_steps_yearly"][:year+1]:
+                    term_neg_previous_capacity_additions.append((-1/global_share_factor)*self.variables["capacity_addition"].loc[tech, :, :,previous_year].sum(dims="set_location"))
 
-
-            # Sum up all capacity additions over the selected time horizon
-            for previous_year in time_for_sum:
-                term_neg_previous_capacity_additions.append(
-                    (-1/global_share_factor) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
+            # Initial global capacities
+            term_global_existing_capacities = self.parameters.global_initial_capacity.loc[tech]
 
             # Case for
             ### formulate constraint
@@ -2248,41 +2228,6 @@ class TechnologyRules(GenericRule):
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
 
 
-    def constraint_total_cost_pwa_initial_global_cost_block(self):
-        """ sets the variable for the initital capacity to the parameter
-
-                .. math::
-                    TC_{h,y=-1} = total_cost_pwa_initial_global_cost
-                :return:
-                """
-
-        ### index sets
-        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
-            self.optimization_setup)
-        index = ZenIndex(index_values, index_names)
-
-        ### masks
-        # not necessary
-
-        ### index loop
-        # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
-        # we vectorize over capacities and locations
-        constraints = []
-        for tech in index.get_unique(["set_technologies"]):
-
-            # todo: fix ugly numerical solution
-            ### formulate constraint
-            rhs = self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
-            lhs = self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :]
-            constraints.append(lhs == rhs)
-        ### return
-        return self.constraints.return_contraints(constraints,
-                                                  model=self.model,
-                                                  index_values=index.get_unique(
-                                                      ["set_technologies"]),
-                                                  index_names=["set_technologies"])
-
-
     def constraint_cost_capex_block(self):
         """ calculates the capex of each technology
 
@@ -2312,21 +2257,16 @@ class TechnologyRules(GenericRule):
                 # todo: Correct this for transport technologies that have distance-related costs
                 # todo: Update TC0 for cost if no existing technologies
                 # todo: What if we calculate total_cost_pwa_global_cost_initial here??
-                if len(self.sets["set_technologies_existing"].data[tech])==1:  # if there are no existing technologies
-                    # have to add the cost for the capacity in the first step
-                    cost_capex_tech = (self.parameters.total_cost_pwa_initial_unit_cost.loc[tech, :] *
-                                       self.variables["capacity_addition"].loc[tech, :, :, year].sum(dims="set_location"))
-                else:
-                    cost_capex_tech = global_share_factor*(self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
-                                                       - self.variables["total_cost_pwa_global_cost_initial"].loc[tech, :])
+                lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
+                       - global_share_factor*self.variables["total_cost_pwa_global_cost"].loc[tech, :, year])
+                rhs = self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
 
             else:
-                cost_capex_tech = global_share_factor* (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
-                                                       - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1])
+                lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
+                       - global_share_factor * (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
+                                               - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year-1]))
+                rhs = 0
 
-            ### formulate constraint
-            lhs = self.variables["cost_capex"].loc[tech, :, year] - cost_capex_tech
-            rhs = 0
             constraints.append(lhs == rhs)
 
         ### return
