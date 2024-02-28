@@ -575,7 +575,7 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
             # PWA range
             pwa_lower_bound = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
-            pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc["SMR", "power", :].values[-1]
+            pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
             pwa_range = np.linspace(pwa_lower_bound, pwa_upper_bound, 1000)
 
             data_total_cap = res.get_total("global_cumulative_capacity", scenario=scenario)

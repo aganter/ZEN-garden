@@ -2134,9 +2134,11 @@ class TechnologyRules(GenericRule):
         """Calculates the cumulative global capacity for each technology in each year
 
                . math::
-                   S_{h,y}^{\mathrm{glo}} = \frac{1}{g_h}
-                    \left( \sum_{\tilde{y}=y_0}^{y}\sum_{p\in\mathcal{P}}\Delta S_{h,p,\tilde{y}}
-                   +\sum_{\hat{y}=y_{-\infty}}^{y_0-1} \sum_{p\in\mathcal{P}}\Delta s_{h,p,\hat{y}}^{\mathrm{ex}}\right)
+                    S_{h,y}^{glo} = \sum_{\tilde{y}=y_0}^y\sum_{p\in\mathcal{P}}\Delta S_{h,p,\tilde{y}}
+                    + \sum_{\hat{y}=y}^{y_0-1}\sum_{p\in\mathcal{P}}\Delta s_{h,p,\hat{y}}^{\mathrm{ex}}
+                    + \sum_{\hat{y}=y_0}^{y} \Delta s_{h,\hat{y}}^{\mathrm{glo}}
+                    + s_{\mathrm{initial}}^{\mathrm{glo}}
+
 
 
        :return: List of constraints
@@ -2360,6 +2362,7 @@ class TechnologyRules(GenericRule):
         ### index loop
         # we loop over all technologies because we need to get the global share factor
         # we vectorize over capacity types and years
+        # todo: adjust this
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             global_share_factor = self.parameters.global_share_factor.loc[tech].item()
