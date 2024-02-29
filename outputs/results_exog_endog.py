@@ -575,7 +575,7 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
             # PWA range
             pwa_lower_bound = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
-            pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc["SMR", "power", :].values[-1]
+            pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
             pwa_range = np.linspace(pwa_lower_bound, pwa_upper_bound, 1000)
 
             data_total_cap = res.get_total("global_cumulative_capacity", scenario=scenario)
@@ -642,7 +642,11 @@ for carrier in demand.index.levels[0].values:
     if carrier in demand:
         plot_average_unit_cost(res, carrier, scenario=scenario)
 
+# Plot cost capex
+res.get_total("cost_capex").groupby(["technology"]).sum().T.plot.bar(stacked=True, width=0.8)
+
 # Unit cost graph
+plot_unit_cost_over_time(res, "electricity")
 plot_unit_cost_over_time(res, "hydrogen")
 
 save_total(res, scenario=scenario)
@@ -650,7 +654,7 @@ save_total(res, scenario=scenario)
 import plotly.io as pio
 target_technologies = ["electrolysis", "SMR", "SMR_CCS", "gasification", "gasification_CCS"]
 intermediate_technologies = ["pv_ground", "biomethane_conversion", "anaerobic_digestion", "wind_onshore", "wind_offshore"]
-year = "5"
+year = "13"
 title = data_set_name
 generate_sankey_diagram(scenario, target_technologies, intermediate_technologies, year, title)
 
