@@ -642,7 +642,11 @@ for carrier in demand.index.levels[0].values:
     if carrier in demand:
         plot_average_unit_cost(res, carrier, scenario=scenario)
 
+# Plot cost capex
+res.get_total("cost_capex").groupby(["technology"]).sum().T.plot.bar(stacked=True, width=0.8)
+
 # Unit cost graph
+plot_unit_cost_over_time(res, "electricity")
 plot_unit_cost_over_time(res, "hydrogen")
 
 save_total(res, scenario=scenario)
