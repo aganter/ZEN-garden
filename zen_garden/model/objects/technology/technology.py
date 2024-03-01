@@ -334,14 +334,12 @@ class Technology(Element):
             # Same for power and energy-rated
             learning_rate = self.learning_rate
             global_share_factor = self.global_share_factor
-
-            # In case there is no existing capacity, set the global initial capacity to 1
-            if hasattr(self, 'set_technologies_existing') and capacity_existing > 0:
-                # global initial capacity, capex and capacity limit for power-rated technologies
-                global_initial_capacity = (1 / global_share_factor) * capacity_existing
-            else:
-                global_initial_capacity = self.global_initial_capacity
-                logging.warning("Global initial capacity must be given as attribute.") # TODO: Implement case for capacity existing = 0
+            global_initial_capacity = self.global_initial_capacity
+            # Update global_initial_capacity if it is smaller than capacity_existing
+            if global_initial_capacity < capacity_existing:
+                self.global_initial_capacity = capacity_existing
+                global_initial_capacity = capacity_existing
+                logging.warning("Global initial capacity must be greater than existing capacity in model.")
 
             # todo: implement case for lower bound of PWA
             # Lower and Upper bound for global cumulative capacity
@@ -801,11 +799,6 @@ class Technology(Element):
             variables.add_variable(model, name="total_cost_pwa_global_cost", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
                                      bounds=(0, np.inf), doc="total global cost of technology h in period y")
-            # todo: remove this if possible?
-            # total global initial cost variable
-            variables.add_variable(model, name="total_cost_pwa_global_cost_initial", index_sets=cls.create_custom_set(
-                ["set_technologies", "set_capacity_types"], optimization_setup),
-                                     bounds=(0, np.inf), doc="total global initial cost of technology h in period y")
             # yearly capex as sum over all nodes
             variables.add_variable(model, name="cost_capex_global", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
