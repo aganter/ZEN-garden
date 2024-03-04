@@ -345,11 +345,7 @@ class Technology(Element):
             # Lower and Upper bound for global cumulative capacity
             npts = int(self.learning_curve_npts)
             lb = self.learning_curve_lb
-            # Set max_capacity to default value if it is infinite
-            if max_capacity == float('inf'):
-                ub = self.learning_curve_ub
-            else:
-                ub = (1/global_share_factor)*max_capacity
+            ub = self.learning_curve_ub
 
             q_values = np.linspace(lb, ub, npts)
             function = lambda u: fun_total_cost(u, initial_cost, global_initial_capacity, learning_rate)
