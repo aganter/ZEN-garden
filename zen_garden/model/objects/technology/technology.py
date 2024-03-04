@@ -180,6 +180,25 @@ class Technology(Element):
                 setattr(self, "capacity_investment_existing" + energy_string, capacity_investment_existing.stack())
 
     # anyaxie
+    def update_initial_global_cost_capacity_tech(self, total_global_cost, global_cumulative_capacity):
+        """ updates initial global cost of the technology
+
+        :param total_global_cost: pd.Series of total cost """
+
+        for type_capacity in list(set(total_global_cost.index.get_level_values(0))):
+            _global_initial_cost = total_global_cost.loc[type_capacity].iloc[-1]
+            _global_cum_capacity = global_cumulative_capacity.loc[type_capacity].iloc[-1]
+            # if power
+            if type_capacity == self.optimization_setup.system["set_capacity_types"][0]:
+                energy_string = ""
+            # if energy
+            else:
+                energy_string = "_energy"
+            # new initial cost and capacity
+            setattr(self, "total_cost_pwa_initial_global_cost" + energy_string, _global_initial_cost)
+            setattr(self, "global_initial_capacity" + energy_string, _global_cum_capacity)
+
+
     def perform_total_cost_pwa(self, capacity_types=False):
         """
         perform pwa approximation for total cost
@@ -2251,7 +2270,7 @@ class TechnologyRules(GenericRule):
         constraints = []
         if self.system["use_exogenous_cap_add_row"]:
             for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
-                if year == 0:
+                if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
                     # todo: Correct this for transport technologies that have distance-related costs
                     lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
                            - self.variables["total_cost_pwa_european_cost"].loc[tech,:,year])
@@ -2266,7 +2285,7 @@ class TechnologyRules(GenericRule):
         else:
             for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
                 global_share_factor = self.parameters.global_share_factor.loc[tech].item()
-                if year == 0:
+                if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
                     # todo: Correct this for transport technologies that have distance-related costs
                     lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
                            - global_share_factor * self.variables["total_cost_pwa_global_cost"].loc[tech, :, year])
@@ -2310,7 +2329,7 @@ class TechnologyRules(GenericRule):
         # todo: check this
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
-            if year == 0:
+            if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
                 lhs = (self.variables["european_cumulative_capacity"].loc[tech, :, year]
                        - self.variables["capacity_addition"].loc[tech, :, :, year].sum(dims="set_location"))  # European addition
                 rhs = 1.0 * self.parameters.global_initial_capacity.loc[tech]  # Global capacity

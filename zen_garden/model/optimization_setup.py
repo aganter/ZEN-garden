@@ -570,6 +570,9 @@ class OptimizationSetup(object):
         self.add_new_capacity_addition(step_horizon)
         # add cumulative carbon emissions to previous carbon emissions
         self.add_carbon_emission_cumulative(step_horizon)
+        # anyaxie
+        # overwrite initial capacity as previous capacity
+        self.update_total_cost_pwa_initial_global_cost(step_horizon)
 
     def add_new_capacity_addition(self, step_horizon):
         """ adds the newly built capacity to the existing capacity
@@ -633,6 +636,19 @@ class OptimizationSetup(object):
                 self.energy_system.carbon_emissions_cumulative_existing = self.energy_system.data_input.extract_input_data(
                     "carbon_emissions_cumulative_existing", index_sets=[], unit_category={"emissions": 1})
 
+    # anyaxie
+    def update_total_cost_pwa_initial_global_cost(self, step_horizon):
+        """ overwrite initial total cost pwa with previous total cost pwa
+
+        :param step_horizon: step of the rolling horizon """
+        if self.system["use_rolling_horizon"]:
+            if step_horizon != self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
+                for tech in self.get_all_elements(Technology):
+                    total_global_cost = self.model.solution["total_cost_pwa_global_cost"].loc[tech.name].to_series().dropna()
+                    global_cumulative_capacity = self.model.solution["global_cumulative_capacity"].loc[tech.name].to_series().dropna()
+                    tech.update_initial_global_cost_capacity_tech(total_global_cost, global_cumulative_capacity)
+                else:  # reset to initial values
+                    logging.info(f"Need to reset global capacity and global cost to initial values.") # todo
     def initialize_component(self, calling_class, component_name, index_names=None, set_time_steps=None, capacity_types=False):
         """ this method initializes a modeling component by extracting the stored input data.
 
