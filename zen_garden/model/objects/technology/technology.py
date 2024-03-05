@@ -84,7 +84,7 @@ class Technology(Element):
             self.learning_curve_ub = self.data_input.extract_attribute("learning_curve_upper_bound", unit_category={"energy_quantity": 1, "time": -1})["value"]
             self.learning_curve_npts = self.data_input.extract_attribute("learning_curve_npts", unit_category={})["value"]
             self.global_initial_capacity= self.data_input.extract_attribute("global_initial_capacity", unit_category={"energy_quantity": 1, "time": -1})["value"]
-            self.capacity_additions_row = self.data_input.extract_input_data("capacity_additions_row", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
+            self.cum_capacity_row = self.data_input.extract_input_data("cum_capacity_row", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -699,8 +699,8 @@ class Technology(Element):
             optimization_setup.parameters.add_parameter(name="global_initial_capacity",
                                                         data=optimization_setup.initialize_component(cls, "global_initial_capacity", index_names=["set_technologies"]),
                                                         doc='Parameter which specifies the global initial capacity of the technology')
-            optimization_setup.parameters.add_parameter(name="capacity_additions_row", # todo: Add capacity types? Same capacity addition energy and power rated?
-                                                        data=optimization_setup.initialize_component(cls, "capacity_additions_row", index_names=["set_technologies", "set_time_steps_yearly"]),
+            optimization_setup.parameters.add_parameter(name="cum_capacity_row", # todo: Add capacity types? Same capacity addition energy and power rated?
+                                                        data=optimization_setup.initialize_component(cls, "cum_capacity_row", index_names=["set_technologies", "set_time_steps_yearly"]),
                                                         doc='Parameter which specifies the global initial capacity of the technology')
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
@@ -2167,7 +2167,7 @@ class TechnologyRules(GenericRule):
                     if self.system["use_exogenous_cap_add_row"]:
                         term_neg_previous_capacity_additions.append((-1.0) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
                         term_global_capacities = (self.parameters.global_initial_capacity.loc[tech]
-                        + self.parameters.capacity_additions_row.sel(set_technologies=tech, set_time_steps_yearly= Technology.get_lifetime_range(self.optimization_setup, tech, year)).sum(dim=['set_time_steps_yearly']))
+                        + self.parameters.cum_capacity_row.loc[tech, year])
                     else:
                         term_neg_previous_capacity_additions.append((-1/global_share_factor)*self.variables["capacity_addition"].loc[tech, :, :,previous_year].sum(dims="set_location"))
                         term_global_capacities = self.parameters.global_initial_capacity.loc[tech]
@@ -2176,7 +2176,7 @@ class TechnologyRules(GenericRule):
                 for previous_year in self.sets["set_time_steps_yearly"][:year+1]:
                     if self.system["use_exogenous_cap_add_row"]:
                         term_neg_previous_capacity_additions.append((-1.0) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
-                        term_global_capacities = self.parameters.global_initial_capacity.loc[tech] + self.parameters.capacity_additions_row.sel(set_technologies=tech, set_time_steps_yearly=self.sets["set_time_steps_yearly"][:year+1]).sum(dim=['set_time_steps_yearly'])
+                        term_global_capacities = self.parameters.global_initial_capacity.loc[tech] + self.parameters.cum_capacity_row.loc[tech, year]
                     else:
                         term_neg_previous_capacity_additions.append((-1/global_share_factor)*self.variables["capacity_addition"].loc[tech, :, :,previous_year].sum(dims="set_location"))
                         term_global_capacities = self.parameters.global_initial_capacity.loc[tech]
