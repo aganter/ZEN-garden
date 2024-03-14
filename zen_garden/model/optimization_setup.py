@@ -571,8 +571,9 @@ class OptimizationSetup(object):
         # add cumulative carbon emissions to previous carbon emissions
         self.add_carbon_emission_cumulative(step_horizon)
         # anyaxie
-        # overwrite initial capacity as previous capacity
-        self.update_total_cost_pwa_initial_global_cost(step_horizon)
+        if self.system["use_endogenous_learning"]:
+            # overwrite initial capacity as previous capacity
+            self.update_total_cost_pwa_initial_global_cost(step_horizon)
 
     def add_new_capacity_addition(self, step_horizon):
         """ adds the newly built capacity to the existing capacity
