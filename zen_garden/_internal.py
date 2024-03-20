@@ -19,7 +19,6 @@ from .model.optimization_setup import OptimizationSetup
 from .postprocess.postprocess import Postprocess
 from .postprocess.results import Results
 from .utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
-
 from zen_garden.helper_functions import *
 
 # we setup the logger here
@@ -38,6 +37,7 @@ def main(config, dataset_path=None, job_index=None):
     if config.system['calculation_mode'] == 'ZEN-GARDEN':
         optimization_setup = main_zen(config, dataset_path, job_index)
 
+
     elif config.system['calculation_mode'] == 'ALGORITHM':
 
         # Design calculation
@@ -47,7 +47,6 @@ def main(config, dataset_path=None, job_index=None):
         # Delete everything in set carriers
         set_carrier_path = os.path.join(config.analysis['dataset'], 'set_carriers')
         elements_set_carriers = os.listdir(set_carrier_path)
-
         for folder in elements_set_carriers:
             if folder != 'natural_gas' and folder != 'wet_biomass':
                 folder_to_check = os.path.join(set_carrier_path, folder)
@@ -72,7 +71,6 @@ def main(config, dataset_path=None, job_index=None):
         years = [config.system['reference_year'] + year for year in
                  range(0, config.system['optimized_years'] * config.system['interval_between_years'],
                        config.system['interval_between_years'])]
-
         set_carrier_folder = os.path.join(run_path, 'set_carriers')
         all_carriers = result.results[None]['system']['set_carriers']
         specific_carrier_path = [os.path.join(set_carrier_folder, carrier) for carrier in all_carriers]
@@ -86,7 +84,8 @@ def main(config, dataset_path=None, job_index=None):
         # Initialize the optimizer with the Gaussian process estimator
         optimizer_edge = dict()
         for edge, name in zip(space, names):
-            optimizer_edge[name] = Optimizer(dimensions=edge, random_state=42)
+            optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="rf", n_initial_points=20,
+                                             acq_func="gp_hedge", random_state=42)
 
         # Define file paths for .log-files
         file_names = ['protocol_actual_flows.log', 'protocol_diff_flows.log', 'protocol_costs.log', 'protocol_attr.log']
@@ -130,9 +129,11 @@ def main(config, dataset_path=None, job_index=None):
         protocol_flow = dict()
         protocol_imp_dem = dict()
 
+        # Flag to check if it is the first iteration
+        flag_iter = True
+
         # Number of iterations for the optimization loop
         n_iter = 60
-        flag_iter = True
 
         for i in range(n_iter):
             # Ask the optimizer for the next point to sample
@@ -140,18 +141,18 @@ def main(config, dataset_path=None, job_index=None):
 
             # Modify input csv files with the new sample points
             avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
-            create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios)
+            create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes,
+                         nodes_scenarios, result, flag_iter)
 
             # Start optimization
             optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
-
             # Results object
+
             destination_folder = copy_resultsfolder(calculation_flag, config, iteration=i)
             res = Results(destination_folder)
 
             # Analyze all edges
             flows_in_out_protocol = []
-
             for key_edge in optimizer_edge:
                 if key_edge not in protocol_flow and key_edge not in protocol_imp_dem:
                     protocol_flow[key_edge] = []
@@ -173,22 +174,21 @@ def main(config, dataset_path=None, job_index=None):
                             scenario_index = idx
 
                     scenario_name = 'scenario_' + str(scenario_index)
+
                     # Read out the flow on the specific edge
                     val = res.get_total('flow_transport', scenario=scenario_name).round(3).loc[transport_type].loc[edge_scen][year]
-
                     flows.append(val)
                     flows_in_out_protocol.append(val)
 
                 protocol_imp_dem[key_edge].append(sample_points[key_edge])
 
                 if len(flows) == 2:
-
                     # Calculate the difference
                     flow_diff = abs(flows[0] - flows[1])
                     protocol_flow[key_edge].append(flow_diff)
-
                     # Tell the optimizer about the objective function value at the sampled point
                     optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
+
                 else:
                     error_msg = 'Error while reading out results object.'
                     raise RuntimeError(error_msg)
@@ -215,7 +215,6 @@ def main(config, dataset_path=None, job_index=None):
 
             # Import and demand values
             temp_list = []
-
             for key_prot in protocol_imp_dem:
                 avail_imp = protocol_imp_dem[key_prot][i][0]
                 demand = protocol_imp_dem[key_prot][i][1]
@@ -225,6 +224,7 @@ def main(config, dataset_path=None, job_index=None):
             attrs_str = ': '.join(map(str, temp_list))
             loggers['import_demand'].info(attrs_str)
 
+            # Change flag to False
             flag_iter = False
 
         x = 0
@@ -576,7 +576,7 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
         avail_import_data (dict): Dict with the information to the availability import for all nodes, all carriers and all years.
         demand_data (dict): Dict with the information to the demand for all nodes, all carriers and all years.
         specific_carrier_path (list): List containing the paths to all carriers.
-        set_carrier_folder (list): List containing the paths to all carriers.
+        set_carrier_folder (str): Path to 'set_carrier' folder.
         years (list): List with the years defined to optimize.
         all_nodes (list): List containing all nodes present in the specific run.
         nodes_scenarios (list): (Nested) list with lists containing the nodes of the different scenarios.
@@ -585,8 +585,19 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
         None
     """
 
-    create_new_import_files_bayesian(avail_import_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
-    create_new_demand_files_bayesian(demand_data, set_carrier_folder, years)
-    create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, years)
+    if flag_iter == True:
+        # Availability Import/Export files
+        create_new_import_files_bayesian(avail_import_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
+        create_new_export_files_bayesian(demand_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
+
+        # Price Import/Export files
+        create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years, result)
+        create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result)
+
+    elif flag_iter == False:
+        # Availability Import/Export files
+        create_new_import_files_bayesian(avail_import_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
+        create_new_export_files_bayesian(demand_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
+
 
     return None
