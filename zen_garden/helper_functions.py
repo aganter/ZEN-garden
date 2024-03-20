@@ -731,35 +731,32 @@ def modifiy_attribute_file(specific_carrier_path):
 
     for carrier_path in specific_carrier_path:
 
-        carrier = os.path.basename(carrier_path)
-        if carrier != 'hydrogen':
+        # Modify all carrier attributes
+        attribute_file = os.path.join(carrier_path, 'attributes.json')
+        attribute_file_new = os.path.join(carrier_path, 'attributes_new.json')
 
-            # Modify all carrier attributes
-            attribute_file = os.path.join(carrier_path, 'attributes.json')
-            attribute_file_new = os.path.join(carrier_path, 'attributes_new.json')
+        # Read original JSON file
+        with open(attribute_file, 'r') as file:
+            data = json.load(file)
 
-            # Read original JSON file
-            with open(attribute_file, 'r') as file:
-                data = json.load(file)
+        # Check if file exist
+        if os.path.exists(attribute_file_new):
+            os.remove(attribute_file_new)
 
-            # Check if file exist
-            if os.path.exists(attribute_file_new):
-                os.remove(attribute_file_new)
+        for entry in data:
+            if 'availability_import' == entry:
+                data[entry]['default_value'] = 'inf'
+            elif 'availability_export' == entry:
+                data[entry]['default_value'] = 'inf'
+            elif 'availability_import_yearly' == entry:
+                data[entry]['default_value'] = '0'
+            elif 'availability_export_yearly' == entry:
+                data[entry]['default_value'] = '0'
+        new_data = data
 
-            for entry in data:
-                if 'availability_import' == entry:
-                    data[entry]['default_value'] = 'inf'
-                elif 'availability_export' == entry:
-                    data[entry]['default_value'] = 'inf'
-                elif 'availability_import_yearly' == entry:
-                    data[entry]['default_value'] = '0'
-                elif 'availability_export_yearly' == entry:
-                    data[entry]['default_value'] = '0'
-            new_data = data
-
-            # Save the modified data back to new CSV file
-            with open(attribute_file_new, 'w', newline='') as file:
-                json.dump(new_data, file, indent=4)
+        # Save the modified data back to new CSV file
+        with open(attribute_file_new, 'w', newline='') as file:
+            json.dump(new_data, file, indent=4)
 
     return None
 
@@ -1203,7 +1200,6 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
         for carrier_path in specific_carrier_path:
             avail_export_path = os.path.join(carrier_path, 'availability_export.csv')
             avail_export_yearly_path = os.path.join(carrier_path, 'availability_export_yearly_variation.csv')
-            avail_export_path_new = os.path.join(carrier_path, 'availability_export_new_' + str(missing_scen) + '.csv')
             avail_export_yearly_path_new = os.path.join(carrier_path, 'availability_export_yearly_new_' + str(missing_scen) + '.csv')
 
             # Check if 'availability_import.csv'-file exists and read the data
@@ -1286,24 +1282,24 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
                     for new_row in dummy_nodes:
                         writer.writerow(new_row)
 
-                if os.path.exists(avail_export_path_new):
-                    os.remove(avail_export_path_new)
-
-                with open(avail_export_path_new, mode="w", newline="") as file:
-                    writer = csv.writer(file)
-                    writer.writerow(['node', 'availability_export'])
-
-                    for realnode in all_nodes:
-                        writer.writerow([realnode, 0])
-
-                    # Add info for the dummy nodes.
-                    dummy_nodes = []
-                    for node in nodes_involved:
-                        if 'dummy' in node:
-                            dummy_nodes.append([node, 0])
-
-                    for new_row in dummy_nodes:
-                        writer.writerow(new_row)
+                # if os.path.exists(avail_export_path_new):
+                #     os.remove(avail_export_path_new)
+                #
+                # with open(avail_export_path_new, mode="w", newline="") as file:
+                #     writer = csv.writer(file)
+                #     writer.writerow(['node', 'availability_export'])
+                #
+                #     for realnode in all_nodes:
+                #         writer.writerow([realnode, 0])
+                #
+                #     # Add info for the dummy nodes.
+                #     dummy_nodes = []
+                #     for node in nodes_involved:
+                #         if 'dummy' in node:
+                #             dummy_nodes.append([node, 0])
+                #
+                #     for new_row in dummy_nodes:
+                #         writer.writerow(new_row)
 
 
 
@@ -1318,7 +1314,6 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
             # Specify needed paths
             avail_export_path = os.path.join(carrier_path, 'availability_export.csv')
             avail_export_yearly_path = os.path.join(carrier_path, 'availability_export_yearly_variation.csv')
-            avail_export_path_new = os.path.join(carrier_path, 'availability_export_new_' + str(scenario) + '.csv')
             avail_export_yearly_path_new = os.path.join(carrier_path, 'availability_export_yearly_new_' + str(scenario) + '.csv')
 
             # Check if 'availability_import.csv'-file exists and read the data
@@ -1435,23 +1430,23 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
                     for new_row in all_dummy_nodes:
                         writer.writerow(new_row)
 
-                if os.path.exists(avail_export_path_new):
-                    os.remove(avail_export_path_new)
-
-                with open(avail_export_path_new, mode="w", newline="") as file:
-                    writer = csv.writer(file)
-                    writer.writerow(['node', 'availability_export'])
-
-                    for realnode in all_nodes:
-                        writer.writerow([realnode, 0])
-
-                    # Add info for the dummy nodes.
-                    dummy_nodes = []
-                    for dummynode in demand_data[scenario][transport_type]:
-                        dummy_nodes.append([dummynode, 0])
-
-                    for new_row in dummy_nodes:
-                        writer.writerow(new_row)
+                # if os.path.exists(avail_export_path_new):
+                #     os.remove(avail_export_path_new)
+                #
+                # with open(avail_export_path_new, mode="w", newline="") as file:
+                #     writer = csv.writer(file)
+                #     writer.writerow(['node', 'availability_export'])
+                #
+                #     for realnode in all_nodes:
+                #         writer.writerow([realnode, 0])
+                #
+                #     # Add info for the dummy nodes.
+                #     dummy_nodes = []
+                #     for dummynode in demand_data[scenario][transport_type]:
+                #         dummy_nodes.append([dummynode, 0])
+                #
+                #     for new_row in dummy_nodes:
+                #         writer.writerow(new_row)
 
 
     for scenario in demand_data:
@@ -1467,7 +1462,6 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
 
                 avail_export_path = os.path.join(carrier_path, 'availability_export.csv')
                 avail_export_yearly_path = os.path.join(carrier_path, 'availability_export_yearly_variation.csv')
-                avail_export_path_new = os.path.join(carrier_path, 'availability_export_new_' + str(scenario) + '.csv')
                 avail_export_yearly_path_new = os.path.join(carrier_path, 'availability_export_yearly_new_' + str(scenario) + '.csv')
 
                 # Check if 'availability_import.csv'-file exists and read the data
@@ -1549,24 +1543,24 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
                         for new_row in dummy_nodes:
                             writer.writerow(new_row)
 
-                    if os.path.exists(avail_export_path_new):
-                        os.remove(avail_export_path_new)
-
-                    with open(avail_export_path_new, mode="w", newline="") as file:
-                        writer = csv.writer(file)
-                        writer.writerow(['node', 'availability_export'])
-
-                        for realnode in all_nodes:
-                            writer.writerow([realnode, 0])
-
-                        # Add info for the dummy nodes.
-                        dummy_nodes = []
-                        for node in nodes_involved:
-                            if 'dummy' in node:
-                                dummy_nodes.append([node, 0])
-
-                        for new_row in dummy_nodes:
-                            writer.writerow(new_row)
+                    # if os.path.exists(avail_export_path_new):
+                    #     os.remove(avail_export_path_new)
+                    #
+                    # with open(avail_export_path_new, mode="w", newline="") as file:
+                    #     writer = csv.writer(file)
+                    #     writer.writerow(['node', 'availability_export'])
+                    #
+                    #     for realnode in all_nodes:
+                    #         writer.writerow([realnode, 0])
+                    #
+                    #     # Add info for the dummy nodes.
+                    #     dummy_nodes = []
+                    #     for node in nodes_involved:
+                    #         if 'dummy' in node:
+                    #             dummy_nodes.append([node, 0])
+                    #
+                    #     for new_row in dummy_nodes:
+                    #         writer.writerow(new_row)
 
     return None
 
@@ -1642,7 +1636,7 @@ def create_new_demand_files_bayesian(demand_data, set_carrier_folder, years):
     return None
 
 
-def create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years, result):
+def create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years):
     """
     This function creates new price_import files for the carriers that are being imported.
     The price is set to 0 for the first implementation
@@ -1872,6 +1866,7 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
 
         else:
 
+
             shadow_prices = result.get_dual('constraint_transport_technology_capex')
 
             header = [['node', 'price_export']]
@@ -1889,7 +1884,10 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
 
             for node in all_dummynodes:
                 for idx_year, year in enumerate(years):
-                    value_variation = shadow_prices[idx_year].loc[transport][idx_year] / shadow_prices[idx_year].loc[transport][0]
+                    if abs(shadow_prices[idx_year].loc[transport][idx_year]) == 0 and abs(shadow_prices[idx_year].loc[transport][0]) == 0:
+                        value_variation = 1
+                    else:
+                        value_variation = shadow_prices[idx_year].loc[transport][idx_year] / shadow_prices[idx_year].loc[transport][0]
                     entry = [node, year, value_variation]
                     entries_yearly.append(entry)
 
@@ -1898,5 +1896,6 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
             with open(price_export_var_file_new, 'w', newline='') as price_yearly_file_new:
                 writer = csv.writer(price_yearly_file_new)
                 writer.writerows(final_data_yearly)
+
 
     return None
