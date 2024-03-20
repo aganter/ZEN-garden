@@ -48,13 +48,12 @@ def main(config, dataset_path=None, job_index=None):
         set_carrier_path = os.path.join(config.analysis['dataset'], 'set_carriers')
         elements_set_carriers = os.listdir(set_carrier_path)
         for folder in elements_set_carriers:
-            if folder != 'natural_gas' and folder != 'wet_biomass':
-                folder_to_check = os.path.join(set_carrier_path, folder)
-                files = os.listdir(folder_to_check)
-                for file_name in files:
-                    if 'new' in file_name:
-                        file_path = os.path.join(folder_to_check, file_name)
-                        os.remove(file_path)
+            folder_to_check = os.path.join(set_carrier_path, folder)
+            files = os.listdir(folder_to_check)
+            for file_name in files:
+                if 'new' in file_name:
+                    file_path = os.path.join(folder_to_check, file_name)
+                    os.remove(file_path)
 
         # TODO: Delete notebooks protocol_results
 
@@ -72,11 +71,11 @@ def main(config, dataset_path=None, job_index=None):
                  range(0, config.system['optimized_years'] * config.system['interval_between_years'],
                        config.system['interval_between_years'])]
         set_carrier_folder = os.path.join(run_path, 'set_carriers')
-        all_carriers = result.results[None]['system']['set_carriers']
+        all_carriers = result.solution_loader.scenarios['none'].system.set_carriers
         specific_carrier_path = [os.path.join(set_carrier_folder, carrier) for carrier in all_carriers]
 
         # Create the parameter space for all edges
-        space, names = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
+        space, names , flag_seperate = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
 
         # Next step: Operational calculation
         calculation_flag = 'loop'
@@ -455,7 +454,14 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
                     space.append(space_to_append)
                     names.append(name_to_append)
 
-    return space, names
+    # Check if list is empty
+    if len(space) == 0:
+        print('No edge to be optimized. Subproblems can be calculated seperately.')
+        flag_seperate = True
+    else:
+        flag_seperate = False
+
+    return space, names, flag_seperate
 
 
 def energy_model(sample_points, nodes_scenarios):
