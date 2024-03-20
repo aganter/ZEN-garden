@@ -597,7 +597,7 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
         create_new_export_files_bayesian(demand_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
 
         # Price Import/Export files
-        create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years, result)
+        create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years)
         create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result)
 
     elif flag_iter == False:
