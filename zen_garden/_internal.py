@@ -175,7 +175,7 @@ def main(config, dataset_path=None, job_index=None):
                     scenario_name = 'scenario_' + str(scenario_index)
 
                     # Read out the flow on the specific edge
-                    val = res.get_total('flow_transport', scenario=scenario_name).round(3).loc[transport_type].loc[edge_scen][year]
+                    val = res.get_total('flow_transport', scenario_name=scenario_name).round(3).loc[transport_type].loc[edge_scen][year]
                     flows.append(val)
                     flows_in_out_protocol.append(val)
 
@@ -206,7 +206,7 @@ def main(config, dataset_path=None, job_index=None):
             for idx_scen, _ in enumerate(nodes_scenarios):
                 for idx_year, _ in enumerate(years):
                     scenario_act = 'scenario_' + str(idx_scen)
-                    cost_temp = res.get_total('net_present_cost', scenario=scenario_act).round(3).loc[idx_year]
+                    cost_temp = res.get_total('net_present_cost', scenario_name=scenario_act).round(3).loc[idx_year]
                     costs.append(cost_temp)
 
             costs_str = ': '.join(map(str, costs))
