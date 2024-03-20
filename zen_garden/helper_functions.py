@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import copy
 import shutil
 import warnings
@@ -16,11 +17,16 @@ def modify_configs(config, destination_folder):
 
     # Get all the carrier paths
     set_carrier_folder = os.path.join(run_path, 'set_carriers')
-    all_carriers = result.results[None]['system']['set_carriers']
+    set_conversion_folder = os.path.join(run_path, 'set_technologies', 'set_conversion_technologies')
+    all_carriers = result.solution_loader.scenarios['none'].system.set_carriers
+    all_conversion_techs = result.solution_loader.scenarios['none'].system.set_conversion_technologies
+
     specific_carrier_path = [os.path.join(set_carrier_folder, carrier) for carrier in all_carriers]
+    specific_conversiontech_path = [os.path.join(set_conversion_folder, conversion) for conversion in all_conversion_techs]
 
     # Check set_nodes and set_edges file for completeness
     dummy_nodes, dummy_edges, nodes_scenarios = new_setnodes_setedges_file(result, run_path)
+    adapt_capacity_limit(dummy_nodes, specific_conversiontech_path)
     # Analyze the flow over the edges for the global problem (design)
     # import_at_nodes, export_at_nodes = analyze_imports_exports(result, dummy_nodes, dummy_edges)
     flow_at_nodes = analyze_imports_exports_bayesian_modified(result, dummy_edges)
@@ -64,8 +70,6 @@ def copy_resultsfolder(calculation_flag, config, iteration=None):
 
     model_name = os.path.basename(config.analysis["dataset"])
     folder_outputs_spec = os.path.join(folder_outputs, model_name)
-
-
 
     # Distinguish between design and operational calculation
     if calculation_flag == 'design':
@@ -118,8 +122,8 @@ def new_setnodes_setedges_file(result, run_path):
             edges.append(nodes_connect)
 
     # Create the node-configuration for every scenario.
-    nodes = copy.deepcopy(result.results[None]['system']['set_nodes'])
-    cluster_nodes_temp = copy.deepcopy(result.results[None]['system']['set_cluster_nodes'])
+    nodes = copy.deepcopy(result.solution_loader.scenarios['none'].system.set_nodes)
+    cluster_nodes_temp = copy.deepcopy(result.solution_loader.scenarios['none'].system.model_extra['set_cluster_nodes'])
     nodes_scenarios = create_dummy_nodes(cluster_nodes_temp, nodes)
 
     # Create the possible connections between normal nodes and dummy nodes.
@@ -135,7 +139,7 @@ def new_setnodes_setedges_file(result, run_path):
 
 
     # Check if all new dummy nodes are in the set_nodes.csv. Create e new (updated) file if it is not the case.
-    set_nodes_path = os.path.join(run_path, 'system_specification', 'set_nodes.csv')
+    set_nodes_path = os.path.join(run_path, 'energy_system', 'set_nodes.csv')
     if os.path.exists(set_nodes_path):
         with open(set_nodes_path, 'r', newline='') as set_nodes_file:
             csv_reader = csv.reader(set_nodes_file)
@@ -169,7 +173,7 @@ def new_setnodes_setedges_file(result, run_path):
 
 
     # Check if all new dummy edges are in the set_edges.csv and create a new (updated) file if it is not the case.
-    set_edges_path = os.path.join(run_path, 'system_specification', 'set_edges.csv')
+    set_edges_path = os.path.join(run_path, 'energy_system', 'set_edges.csv')
     if os.path.exists(set_edges_path):
         with open(set_edges_path, 'r', newline='') as set_edges_file:
             csv_reader = csv.reader(set_edges_file)
@@ -280,7 +284,7 @@ def analyze_imports_exports_bayesian_modified(result, dummy_edges):
 
     # Get some information from the result object
     df = result.get_total('flow_transport').round(3)
-    transport_types = result.results[None]['system']['set_transport_technologies']
+    transport_types = result.solution_loader.scenarios['none'].system.set_transport_technologies
 
     # Analyze the imports and exports for the dummy nodes
     flow_at_nodes = dict()
@@ -715,46 +719,102 @@ def create_new_demand_file(specific_carrier_path, result, export_at_nodes):
     return None
 
 def modifiy_attribute_file(specific_carrier_path):
+    """
+    This function creates new modified attribute files.
 
-    # Define the carrier for every transport technology
-    transporttype_to_carrier = {'biomethane_transport': 'biomethane',
-                                'carbon_pipeline': 'carbon',
-                                'dry_biomass_truck': 'dry_biomass',
-                                'hydrogen_pipeline': 'hydrogen',
-                                'power_line': 'electricity'}
+    Parameters:
+        specific_carrier_path (list): List with the file paths to the specific carriers
 
-    for transport_type in transporttype_to_carrier:
-        for carrier_path in specific_carrier_path:
+    Returns:
+        None
+    """
 
-            carrier = os.path.basename(carrier_path)
-            if carrier == transporttype_to_carrier[transport_type]:
+    for carrier_path in specific_carrier_path:
 
-    #for carrier_path in specific_carrier_path:
+        carrier = os.path.basename(carrier_path)
+        if carrier != 'hydrogen':
 
-                # Modify all carrier attributes    ### attributes_new.csv is needed for every carrier if defined in scenario dict
-                attribute_file = os.path.join(carrier_path, 'attributes.csv')
-                attribute_file_new = os.path.join(carrier_path, 'attributes_new.csv')
-                with open(attribute_file, 'r') as file:
-                    reader = csv.reader(file)
-                    data = list(reader)
+            # Modify all carrier attributes
+            attribute_file = os.path.join(carrier_path, 'attributes.json')
+            attribute_file_new = os.path.join(carrier_path, 'attributes_new.json')
 
-                new_data = []
-                for row in data:
-                    if len(row) != 0:
-                        if row[0] == 'availability_import_default':
-                            row[1] = 'inf'
-                        elif row[0] == 'availability_export_default':
-                            row[1] = 'inf'
-                        elif row[0] == 'availability_import_yearly_default':
-                            row[1] = '0'
-                        elif row[0] == 'availability_export_yearly_default':
-                            row[1] = '0'
-                        new_data.append(row)
+            # Read original JSON file
+            with open(attribute_file, 'r') as file:
+                data = json.load(file)
 
-                # Save the modified data back to new CSV file
-                with open(attribute_file_new, 'w', newline='') as file:
-                    writer = csv.writer(file)
-                    writer.writerows(new_data)
+            # Check if file exist
+            if os.path.exists(attribute_file_new):
+                os.remove(attribute_file_new)
+
+            for entry in data:
+                if 'availability_import' == entry:
+                    data[entry]['default_value'] = 'inf'
+                elif 'availability_export' == entry:
+                    data[entry]['default_value'] = 'inf'
+                elif 'availability_import_yearly' == entry:
+                    data[entry]['default_value'] = '0'
+                elif 'availability_export_yearly' == entry:
+                    data[entry]['default_value'] = '0'
+            new_data = data
+
+            # Save the modified data back to new CSV file
+            with open(attribute_file_new, 'w', newline='') as file:
+                json.dump(new_data, file, indent=4)
+
+    return None
+
+def adapt_capacity_limit(dummy_nodes, specific_conversiontech_path):
+    """
+    This function adds the missing dummy nodes to the capacity_limit file if there exists one.
+
+    Parameters:
+        dummy_nodes (list): List with all the dummy nodes
+        all_conversion_techs (list): List with the file paths to the specific conversion technologies
+
+    Returns:
+        None
+    """
+
+    for conversion_path in specific_conversiontech_path:
+
+        conversion_spec = os.path.join(conversion_path, 'capacity_limit.csv')
+        if os.path.exists(conversion_spec):
+
+            # Read the data from the existing capacity_limit file
+            with open(conversion_spec, 'r', newline='') as limit_file:
+                csv_reader = csv.reader(limit_file)
+                cap_limit = [row for row in csv_reader]
+
+            # Check which dummy nodes are not in the capacity_limit file
+            nodes_missing = []
+            for dummynode in dummy_nodes:
+                check_node = []
+                for row in cap_limit:
+
+                    if dummynode in row:
+                        check_node.append(True)
+                    else:
+                        check_node.append(False)
+
+                if True not in check_node:
+                    nodes_missing.append(dummynode)
+
+            # Construct the data to be appended in the capacity_limit file for the dummy nodes
+            nodes_to_add = [[checked_node, 0] for checked_node in nodes_missing]
+
+            # Add the missing dummy nodes to the capacity_limit file
+            final_data = cap_limit + nodes_to_add
+            with open(conversion_spec, mode="w", newline="") as limit_file_new:
+                writer = csv.writer(limit_file_new)
+                writer.writerows(final_data)
+
+    return None
+
+
+
+
+
+
 
 
 def create_new_import_files_bayesian(avail_import_data, specific_carrier_path, years, all_nodes, nodes_scenarios):
