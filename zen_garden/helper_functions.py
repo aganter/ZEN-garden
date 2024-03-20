@@ -7,7 +7,7 @@ import warnings
 from zen_garden.postprocess.results import Results
 
 # Control of function to import in _internal.py
-__all__ = ['modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian', 'create_new_demand_files_bayesian', 'create_new_priceimport_file_bayesian']
+__all__ = ['modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian', 'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian']
 
 def modify_configs(config, destination_folder):
 
@@ -1104,6 +1104,413 @@ def create_new_import_files_bayesian(avail_import_data, specific_carrier_path, y
     return None
 
 
+
+def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, all_nodes, nodes_scenarios):
+    """
+    This function creates new availability_export_yearly files for the carriers that are being transported.
+
+    Parameters:
+        specific_carrier_path (list): List with containing the paths to the carriers in the set_carrier-folder
+        result (object): Result object to analyze results
+        dummy_nodes (list): List with the dummy nodes
+        import_at_nodes (dict): Dictionary with the amount imported of specific carrier for every node.
+
+    Returns:
+        None
+    """
+
+    # Define the carrier for every transport technology
+    transporttype_to_carrier = {'biomethane_transport': 'biomethane',
+                                'carbon_pipeline': 'carbon',
+                                'dry_biomass_truck': 'dry_biomass',
+                                'hydrogen_pipeline': 'hydrogen',
+                                'power_line': 'electricity'}
+
+    reference_year = years[0]
+
+    # Base path
+    set_carrier_folder = os.path.dirname(specific_carrier_path[0])
+
+    missing_scenarios = []
+    for idx, scenario_nodes in enumerate(nodes_scenarios):
+        if idx not in demand_data:
+            missing_scenarios.append(idx)
+
+    for missing_scen in missing_scenarios:
+        nodes_involved = nodes_scenarios[missing_scen]
+
+        # Specify needed paths
+        for carrier_path in specific_carrier_path:
+            avail_export_path = os.path.join(carrier_path, 'availability_export.csv')
+            avail_export_yearly_path = os.path.join(carrier_path, 'availability_export_yearly_variation.csv')
+            avail_export_path_new = os.path.join(carrier_path, 'availability_export_new_' + str(missing_scen) + '.csv')
+            avail_export_yearly_path_new = os.path.join(carrier_path, 'availability_export_yearly_new_' + str(missing_scen) + '.csv')
+
+            # Check if 'availability_import.csv'-file exists and read the data
+            if os.path.exists(avail_export_path):
+                with open(avail_export_path, 'r', newline='') as input_file:
+                    csv_reader = csv.reader(input_file)
+                    avail_export = [row for row in csv_reader]
+            else:
+                avail_export = []
+
+            # Check if 'availability_import_yearly.csv'-file exists and read the data
+            if os.path.exists(avail_export_yearly_path):
+                with open(avail_export_yearly_path, 'r', newline='') as yearly_var_file:
+                    csv_reader = csv.reader(yearly_var_file)
+                    avail_export_yearly = [row for row in csv_reader]
+            else:
+                avail_export_yearly = []
+
+            # Check which countries are contained in the file
+            countries_exist = []
+            for check_county in avail_export_yearly:
+                if check_county[0] != 'node':
+                    if check_county[0] not in countries_exist:
+                        countries_exist.append(check_county[0])
+
+            countries_to_add = []
+            for country in all_nodes:
+                if country not in countries_exist:
+                    countries_to_add.append(country)
+
+            countries_to_file = []
+            for country_file in countries_to_add:
+                for year in years:
+                    countries_to_file.append([country_file, year, 0])
+
+            # If both files exist
+            if len(avail_export_yearly) != 0 and len(avail_export) != 0:
+
+                # Change the already existing (hourly) values to yearly values
+                for export_aval in avail_export:
+                    for export_vari in avail_export_yearly:
+                        if export_aval[0] == export_vari[0] and avail_export_yearly.index(
+                                export_vari) != 0 and avail_export.index(export_aval) != 0:
+                            new_val = float(export_aval[-1]) * 8760 * float(export_vari[-1])
+                            export_vari[-1] = str(round(new_val, 3))
+
+
+                # Add info for the dummy nodes.
+                dummy_nodes = []
+                for node in nodes_involved:
+                    if 'dummy' in node:
+                        for year in years:
+                            dummy_nodes.append([node, year, 0])
+
+                # Combine both data for the new 'availability_import_yearly'-file
+                new_data = avail_export_yearly + countries_to_file + dummy_nodes
+                with open(avail_export_yearly_path_new, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerows(new_data)
+
+            else:
+                if os.path.exists(avail_export_yearly_path_new):
+                    os.remove(avail_export_yearly_path_new)
+
+                with open(avail_export_yearly_path_new, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['node', 'year', 'availability_export'])
+
+                    for realnode in all_nodes:
+                        for year in years:
+                            writer.writerow([realnode, year, 0])
+
+                    # Add info for the dummy nodes.
+                    dummy_nodes = []
+                    for node in nodes_involved:
+                        if 'dummy' in node:
+                            for year in years:
+                                dummy_nodes.append([node, year, 0])
+
+                    for new_row in dummy_nodes:
+                        writer.writerow(new_row)
+
+                if os.path.exists(avail_export_path_new):
+                    os.remove(avail_export_path_new)
+
+                with open(avail_export_path_new, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['node', 'availability_export'])
+
+                    for realnode in all_nodes:
+                        writer.writerow([realnode, 0])
+
+                    # Add info for the dummy nodes.
+                    dummy_nodes = []
+                    for node in nodes_involved:
+                        if 'dummy' in node:
+                            dummy_nodes.append([node, 0])
+
+                    for new_row in dummy_nodes:
+                        writer.writerow(new_row)
+
+
+
+
+    for scenario in demand_data:
+
+        for transport_type in demand_data[scenario]:
+
+            carrier = transporttype_to_carrier[transport_type]
+            carrier_path = os.path.join(set_carrier_folder, carrier)
+
+            # Specify needed paths
+            avail_export_path = os.path.join(carrier_path, 'availability_export.csv')
+            avail_export_yearly_path = os.path.join(carrier_path, 'availability_export_yearly_variation.csv')
+            avail_export_path_new = os.path.join(carrier_path, 'availability_export_new_' + str(scenario) + '.csv')
+            avail_export_yearly_path_new = os.path.join(carrier_path, 'availability_export_yearly_new_' + str(scenario) + '.csv')
+
+            # Check if 'availability_import.csv'-file exists and read the data
+            if os.path.exists(avail_export_path):
+                with open(avail_export_path, 'r', newline='') as input_file:
+                    csv_reader = csv.reader(input_file)
+                    avail_export = [row for row in csv_reader]
+            else:
+                avail_export = []
+
+            # Check if 'availability_import_yearly.csv'-file exists and read the data
+            if os.path.exists(avail_export_yearly_path):
+                with open(avail_export_yearly_path, 'r', newline='') as yearly_var_file:
+                    csv_reader = csv.reader(yearly_var_file)
+                    avail_export_yearly = [row for row in csv_reader]
+            else:
+                avail_export_yearly = []
+
+            # Check which countries are contained in the file
+            countries_exist = []
+            for check_county in avail_export_yearly:
+                if check_county[0] != 'node':
+                    if check_county[0] not in countries_exist:
+                        countries_exist.append(check_county[0])
+
+            countries_to_add = []
+            for country in all_nodes:
+                if country not in countries_exist:
+                    countries_to_add.append(country)
+
+            countries_to_file = []
+            for country_file in countries_to_add:
+                for year in years:
+                    countries_to_file.append([country_file, year, 0])
+
+            # If both files exist
+            if len(avail_export_yearly) != 0 and len(avail_export) != 0:
+
+                # Change the already existing (hourly) values to yearly values
+                for export_aval in avail_export:
+                    for export_vari in avail_export_yearly:
+                        if export_aval[0] == export_vari[0] and avail_export_yearly.index(
+                                export_vari) != 0 and avail_export.index(export_aval) != 0:
+                            new_val = float(export_aval[-1]) * 8760 * float(export_vari[-1])
+                            export_vari[-1] = str(round(new_val, 3))
+
+                # Do summation of all available imports ¦¦Get the values from the 'import_at_nodes' dict in the correct structure for the new .csv-file
+                add_dummy_nodes = []
+                for dummynode in demand_data[scenario][transport_type]:
+                    for year in demand_data[scenario][transport_type][dummynode]:
+                        actual_year = int(year) + reference_year
+                        value = max(demand_data[scenario][transport_type][dummynode][year])
+                        entry_to_add = [dummynode, actual_year, value]
+                        add_dummy_nodes.append(entry_to_add)
+
+                # Add info for the missing years of the existing dummy nodes in the dict.
+                nodes_to_check = []
+                for dummynode in demand_data[scenario][transport_type]:
+                    for idx, year in enumerate(years):
+                        if str(idx) not in demand_data[scenario][transport_type][dummynode]:
+                            nodes_to_check.append([dummynode, year, 0])
+
+                # Add info for the missing dummy nodes.
+                other_dummy_nodes = []
+                for node in nodes_scenarios[scenario]:
+                    if 'dummy' in node and node not in demand_data[scenario][transport_type]:
+                        for year in years:
+                            other_dummy_nodes.append([node, year, 0])
+
+
+                # Combine both data for the new 'availability_import_yearly'-file
+                new_data = avail_export_yearly + countries_to_file + add_dummy_nodes + nodes_to_check + other_dummy_nodes
+                with open(avail_export_yearly_path_new, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerows(new_data)
+
+            else:
+                if os.path.exists(avail_export_yearly_path_new):
+                    os.remove(avail_export_yearly_path_new)
+
+                with open(avail_export_yearly_path_new, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['node', 'year', 'availability_export'])
+
+                    for realnode in all_nodes:
+                        for year in years:
+                            writer.writerow([realnode, year, 0])
+
+                    # Get the max value from the list
+                    add_dummy_nodes = []
+                    for dummynode in demand_data[scenario][transport_type]:
+                        for year in demand_data[scenario][transport_type][dummynode]:
+                            actual_year = int(year) + reference_year
+                            value = max(demand_data[scenario][transport_type][dummynode][year])
+                            entry_to_add = [dummynode, actual_year, value]
+                            add_dummy_nodes.append(entry_to_add)
+
+                    # Add info for the missing years of the existing dummy nodes in the dict.
+                    nodes_to_check = []
+                    for dummynode in demand_data[scenario][transport_type]:
+                        for idx, year in enumerate(years):
+                            if str(idx) not in demand_data[scenario][transport_type][dummynode]:
+                                nodes_to_check.append([dummynode, year, 0])
+
+                    # Add info for the missing dummy nodes.
+                    other_dummy_nodes = []
+                    for node in nodes_scenarios[scenario]:
+                        if 'dummy' in node and node not in demand_data[scenario][transport_type]:
+                            for year in years:
+                                other_dummy_nodes.append([node, year, 0])
+
+                    all_dummy_nodes = add_dummy_nodes + nodes_to_check + other_dummy_nodes
+
+                    for new_row in all_dummy_nodes:
+                        writer.writerow(new_row)
+
+                if os.path.exists(avail_export_path_new):
+                    os.remove(avail_export_path_new)
+
+                with open(avail_export_path_new, mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['node', 'availability_export'])
+
+                    for realnode in all_nodes:
+                        writer.writerow([realnode, 0])
+
+                    # Add info for the dummy nodes.
+                    dummy_nodes = []
+                    for dummynode in demand_data[scenario][transport_type]:
+                        dummy_nodes.append([dummynode, 0])
+
+                    for new_row in dummy_nodes:
+                        writer.writerow(new_row)
+
+
+    for scenario in demand_data:
+        for carrier_path in specific_carrier_path:
+
+            carrier = os.path.basename(carrier_path)
+            active_transports = [transporttype_to_carrier[key_trans] for key_trans in demand_data[scenario]]
+
+            if carrier in active_transports:
+                continue
+            else:
+                nodes_involved = nodes_scenarios[scenario]
+
+                avail_export_path = os.path.join(carrier_path, 'availability_export.csv')
+                avail_export_yearly_path = os.path.join(carrier_path, 'availability_export_yearly_variation.csv')
+                avail_export_path_new = os.path.join(carrier_path, 'availability_export_new_' + str(scenario) + '.csv')
+                avail_export_yearly_path_new = os.path.join(carrier_path, 'availability_export_yearly_new_' + str(scenario) + '.csv')
+
+                # Check if 'availability_import.csv'-file exists and read the data
+                if os.path.exists(avail_export_path):
+                    with open(avail_export_path, 'r', newline='') as input_file:
+                        csv_reader = csv.reader(input_file)
+                        avail_export = [row for row in csv_reader]
+                else:
+                    avail_export = []
+
+                # Check if 'availability_import_yearly.csv'-file exists and read the data
+                if os.path.exists(avail_export_yearly_path):
+                    with open(avail_export_yearly_path, 'r', newline='') as yearly_var_file:
+                        csv_reader = csv.reader(yearly_var_file)
+                        avail_export_yearly = [row for row in csv_reader]
+                else:
+                    avail_export_yearly = []
+
+                # Check which countries are contained in the file
+                countries_exist = []
+                for check_county in avail_export_yearly:
+                    if check_county[0] != 'node':
+                        if check_county[0] not in countries_exist:
+                            countries_exist.append(check_county[0])
+
+                countries_to_add = []
+                for country in all_nodes:
+                    if country not in countries_exist:
+                        countries_to_add.append(country)
+
+                countries_to_file = []
+                for country_file in countries_to_add:
+                    for year in years:
+                        countries_to_file.append([country_file, year, 0])
+
+                # If both files exist
+                if len(avail_export_yearly) != 0 and len(avail_export) != 0:
+
+                    # Change the already existing (hourly) values to yearly values
+                    for export_aval in avail_export:
+                        for export_vari in avail_export_yearly:
+                            if export_aval[0] == export_vari[0] and avail_export_yearly.index(
+                                    export_vari) != 0 and avail_export.index(export_aval) != 0:
+                                new_val = float(export_aval[-1]) * 8760 * float(export_vari[-1])
+                                export_vari[-1] = str(round(new_val, 3))
+
+                    # Add info for the dummy nodes.
+                    dummy_nodes = []
+                    for node in nodes_involved:
+                        if 'dummy' in node:
+                            for year in years:
+                                dummy_nodes.append([node, year, 0])
+
+                    # Combine both data for the new 'availability_import_yearly'-file
+                    new_data = avail_export_yearly + countries_to_file + dummy_nodes
+                    with open(avail_export_yearly_path_new, mode="w", newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerows(new_data)
+
+                else:
+                    if os.path.exists(avail_export_yearly_path_new):
+                        os.remove(avail_export_yearly_path_new)
+
+                    with open(avail_export_yearly_path_new, mode="w", newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(['node', 'year', 'availability_export'])
+
+                        for realnode in all_nodes:
+                            for year in years:
+                                writer.writerow([realnode, year, 0])
+
+                        # Add info for the dummy nodes.
+                        dummy_nodes = []
+                        for node in nodes_involved:
+                            if 'dummy' in node:
+                                for year in years:
+                                    dummy_nodes.append([node, year, 0])
+
+                        for new_row in dummy_nodes:
+                            writer.writerow(new_row)
+
+                    if os.path.exists(avail_export_path_new):
+                        os.remove(avail_export_path_new)
+
+                    with open(avail_export_path_new, mode="w", newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(['node', 'availability_export'])
+
+                        for realnode in all_nodes:
+                            writer.writerow([realnode, 0])
+
+                        # Add info for the dummy nodes.
+                        dummy_nodes = []
+                        for node in nodes_involved:
+                            if 'dummy' in node:
+                                dummy_nodes.append([node, 0])
+
+                        for new_row in dummy_nodes:
+                            writer.writerow(new_row)
+
+    return None
+
+
 def create_new_demand_files_bayesian(demand_data, set_carrier_folder, years):
     """
         This function creates new demand files for the carriers and dummy nodes in the subproblems.
@@ -1175,110 +1582,261 @@ def create_new_demand_files_bayesian(demand_data, set_carrier_folder, years):
     return None
 
 
-def create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, years):
+def create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years, result):
     """
     This function creates new price_import files for the carriers that are being imported.
     The price is set to 0 for the first implementation
 
     Parameters:
-        specific_carrier_path (list): List with containing the paths to the carriers in the set_carrier-folder
-        import_at_nodes (dict): Dictionary with the amount imported of specific carrier for every node.
+        avail_import_data (dict): Dictionary with the amount imported of specific carrier for every node.
+        set_carrier_folder (str): Path to 'set_carrier' folder.
+        all_nodes (list): List of all nodes involved in the case.
+        years (list): List of the years to be optimized.
+        result (object): Results objecz
 
     Returns:
         None
     """
+
+    # Construct dummy nodes
+    all_dummynodes = [node + 'dummy' for node in all_nodes]
+
     # Define the carrier for every transport technology
     transporttype_to_carrier = {'biomethane_transport': 'biomethane',
                                 'carbon_pipeline': 'carbon',
                                 'dry_biomass_truck': 'dry_biomass',
                                 'hydrogen_pipeline': 'hydrogen',
                                 'power_line': 'electricity'}
-
+    check_transport_types = []
     for scenario in avail_import_data:
+        for trans_type in avail_import_data[scenario]:
+            if trans_type not in check_transport_types:
+                check_transport_types.append(trans_type)
 
-        for transport_type in avail_import_data[scenario]:
-            carrier = transporttype_to_carrier[transport_type]
-            carrier_path = os.path.join(set_carrier_folder, carrier)
+    for transport in check_transport_types:
 
-            # Specify needed paths
-            avail_import_yearly_path_new = os.path.join(carrier_path, 'availability_import_yearly_new_' + str(scenario) + '.csv')
+        carrier = transporttype_to_carrier[transport]
+        carrier_path = os.path.join(set_carrier_folder, carrier)
 
-            # Check if 'availability_import_yearly.csv'-file exists and read the data
-            if os.path.exists(avail_import_yearly_path_new):
-                with open(avail_import_yearly_path_new, 'r', newline='') as yearly_var_file:
-                    csv_reader = csv.reader(yearly_var_file)
-                    avail_import_yearly = [row for row in csv_reader]
+        price_import_file_new = os.path.join(carrier_path, 'price_import_new.csv')
+        price_import_file = os.path.join(carrier_path, 'price_import.csv')
+        price_import_var_file_new = os.path.join(carrier_path, 'price_import_yearly_variation_new.csv')
+        price_import_var_file = os.path.join(carrier_path, 'price_import_yearly_variation.csv')
 
-                avail_dummy = [row[0] for row in avail_import_yearly if 'dummy' in row[0] if row[-1] != str(0)]
-                avail_dummy = list(set(avail_dummy))
+        if os.path.exists(price_import_file):
+            with open(price_import_file, mode='r', newline='') as price_file:
+                reader = csv.reader(price_file)
+                price_import_data = [row for row in reader]
+        else:
+            price_import_data = []
 
-                # Define paths to price_import-files
-                price_import_file_new = os.path.join(carrier_path, 'price_import_new_' + str(scenario) + '.csv')
-                price_import_file = os.path.join(carrier_path, 'price_import.csv')
-                price_import_var_file_new = os.path.join(carrier_path, 'price_import_yearly_variation_new_' + str(scenario) + '.csv')
-                price_import_var_file = os.path.join(carrier_path, 'price_import_yearly_variation.csv')
+        if os.path.exists(price_import_var_file):
+            with open(price_import_var_file, mode='r', newline='') as price_yearly_file:
+                reader = csv.reader(price_yearly_file)
+                price_import_yearly_data = [row for row in reader]
+        else:
+            price_import_yearly_data = []
 
-                # Check if price_import_variation file exists
-                if os.path.exists(price_import_var_file):
-                    with open(price_import_var_file, 'r', newline='') as input_file:
-                        csv_reader = csv.reader(input_file)
-                        price_imp_var = [row for row in csv_reader]
-                else:
-                    price_imp_var = []
+        if len(price_import_data) != 0 and len(price_import_yearly_data) != 0:
 
-                # Check if price_import file exists
-                if os.path.exists(price_import_file):
-                    with open(price_import_file, 'r', newline='') as input_file:
-                        csv_reader = csv.reader(input_file)
-                        price_imp = [row for row in csv_reader]
-                else:
-                    price_imp = []
+            # Price import
+            if carrier != 'electricity':
+                #drybiomass structure
+                dummynodes_data_price_import = []
+                for price_data in price_import_data:
+                    for dummynode in all_dummynodes:
 
-                nonzero_flow = []
-                nonzero_flow_var = []
-                for node in avail_dummy:
+                        if price_data[0] == dummynode[:2]:
+                            entry = [dummynode, price_data[1]]
+                            dummynodes_data_price_import.append(entry)
 
-                    if len(price_imp) != 0:
-                        if price_imp[0][1] == 'time':
-                            nonzero_flow = nonzero_flow + [[node, str(i), '1'] for i in range(0, 8760)]
-                        else:
-                            nonzero_flow.append([node, '1'])
-                    else:
-                        if ['node', 'price_import'] not in nonzero_flow:
-                            nonzero_flow.append(['node', 'price_import'])
-                            nonzero_flow.append([node, '1'])
-                        else:
-                            nonzero_flow.append([node, '1'])
+            else:
+                #electricity structure
+                dummynodes_data_price_import = []
+                for dummynode in all_dummynodes:
+                    for price_data in price_import_data:
 
-                    if len(price_imp_var) != 0:
-                        for j in years:
-                            nonzero_flow_var.append([node, str(j), '0'])
-                    else:
-                        if ['node', 'year', 'price_import_yearly_variation'] not in nonzero_flow_var:
-                            nonzero_flow_var.append(['node', 'year', 'price_import_yearly_variation'])
-                            for j in years:
-                                nonzero_flow_var.append([node, str(j), '0'])
-                        else:
-                            for j in years:
-                                nonzero_flow_var.append([node, str(j), '0'])
+                        if price_data[0] == dummynode[:2]:
+                            entry = [dummynode, price_data[1], price_data[2]]
+                            dummynodes_data_price_import.append(entry)
 
-                new_prices = price_imp + nonzero_flow
-                new_prices_var = price_imp_var + nonzero_flow_var
+            final_data = price_import_data + dummynodes_data_price_import
 
-                # Only create new files if there is actually a flow of the specific carrier. Else, use still the old (normal) ones.
-                if len(new_prices) != 0:
-                    if os.path.exists(price_import_file_new):
-                        os.remove(price_import_file_new)
-                    with open(price_import_file_new, 'w', newline='') as file:
-                        writer = csv.writer(file)
-                        writer.writerows(new_prices)
+            with open(price_import_file_new, 'w', newline='') as price_file_new:
+                writer = csv.writer(price_file_new)
+                writer.writerows(final_data)
 
-                if len(new_prices_var) != 0:
-                    if os.path.exists(price_import_var_file_new):
-                        os.remove(price_import_var_file_new)
-                    with open(price_import_var_file_new, 'w', newline='') as file:
-                        writer = csv.writer(file)
-                        writer.writerows(new_prices_var)
 
+            # Price import yearly
+            dummynodes_data_price_import_yearly = []
+            for dummynode in all_dummynodes:
+                for price_yearly_data in price_import_yearly_data:
+
+                    if price_yearly_data[0] == dummynode[:2]:
+                        entry = [dummynode, price_yearly_data[1], price_yearly_data[2]]
+                        dummynodes_data_price_import_yearly.append(entry)
+
+            final_data_yearly = price_import_yearly_data + dummynodes_data_price_import_yearly
+
+            with open(price_import_var_file_new, 'w', newline='') as price_yearly_file_new:
+                writer = csv.writer(price_yearly_file_new)
+                writer.writerows(final_data_yearly)
+
+        else:
+
+            normal_and_dummynodes = all_nodes + all_dummynodes
+
+            header = [['node', 'price_import']]
+            entries = [[node, '0'] for node in normal_and_dummynodes]
+
+            final_data = header + entries
+            with open(price_import_file_new, 'w', newline='') as price_file_new:
+                writer = csv.writer(price_file_new)
+                writer.writerows(final_data)
+
+            header_yearly = [['node', 'year', 'price_import_yearly_variation']]
+            entries_yearly = []
+
+            for node in normal_and_dummynodes:
+                for year in years:
+                    entry = [node, year, 1]
+                    entries_yearly.append(entry)
+
+            final_data_yearly = header_yearly + entries_yearly
+
+            with open(price_import_var_file_new, 'w', newline='') as price_yearly_file_new:
+                writer = csv.writer(price_yearly_file_new)
+                writer.writerows(final_data_yearly)
+
+    return None
+
+def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result):
+    """
+    This function creates new price_export files for the carriers that are being imported.
+    The price is set to XX for the first implementation
+
+    Parameters:
+        demand_data (dict): Dictionary with the amount imported of specific carrier for every node.
+        set_carrier_folder (str): Path to 'set_carrier' folder.
+        all_nodes (list): List of all nodes involved in the case.
+        years (list): List of the years to be optimized.
+        result (object): Results object
+
+    Returns:
+        None
+    """
+
+    # Construct dummy nodes
+    all_dummynodes = [node + 'dummy' for node in all_nodes]
+
+    # Define the carrier for every transport technology
+    transporttype_to_carrier = {'biomethane_transport': 'biomethane',
+                                'carbon_pipeline': 'carbon',
+                                'dry_biomass_truck': 'dry_biomass',
+                                'hydrogen_pipeline': 'hydrogen',
+                                'power_line': 'electricity'}
+    check_transport_types = []
+    for scenario in demand_data:
+        for trans_type in demand_data[scenario]:
+            if trans_type not in check_transport_types:
+                check_transport_types.append(trans_type)
+
+    for transport in check_transport_types:
+
+        carrier = transporttype_to_carrier[transport]
+        carrier_path = os.path.join(set_carrier_folder, carrier)
+
+        price_export_file_new = os.path.join(carrier_path, 'price_export_new.csv')
+        price_export_file = os.path.join(carrier_path, 'price_export.csv')
+        price_export_var_file_new = os.path.join(carrier_path, 'price_export_yearly_variation_new.csv')
+        price_export_var_file = os.path.join(carrier_path, 'price_export_yearly_variation.csv')
+
+        if os.path.exists(price_export_file):
+            with open(price_export_file, mode='r', newline='') as price_file:
+                reader = csv.reader(price_file)
+                price_export_data = [row for row in reader]
+        else:
+            price_export_data = []
+
+        if os.path.exists(price_export_var_file):
+            with open(price_export_var_file, mode='r', newline='') as price_yearly_file:
+                reader = csv.reader(price_yearly_file)
+                price_export_yearly_data = [row for row in reader]
+        else:
+            price_export_yearly_data = []
+
+        if len(price_export_data) != 0 and len(price_export_yearly_data) != 0:
+
+            # Price import
+            if carrier != 'electricity':
+                #drybiomass structure
+                dummynodes_data_price_export = []
+                for price_data in price_export_data:
+                    for dummynode in all_dummynodes:
+
+                        if price_data[0] == dummynode[:2]:
+                            entry = [dummynode, price_data[1]]
+                            dummynodes_data_price_export.append(entry)
+
+            else:
+                #electricity structure
+                dummynodes_data_price_export = []
+                for dummynode in all_dummynodes:
+                    for price_data in price_export_data:
+
+                        if price_data[0] == dummynode[:2]:
+                            entry = [dummynode, price_data[1], price_data[2]]
+                            dummynodes_data_price_export.append(entry)
+
+            final_data = price_export_data + dummynodes_data_price_export
+
+            with open(price_export_file_new, 'w', newline='') as price_file_new:
+                writer = csv.writer(price_file_new)
+                writer.writerows(final_data)
+
+
+            # Price import yearly
+            dummynodes_data_price_export_yearly = []
+            for dummynode in all_dummynodes:
+                for price_yearly_data in price_export_yearly_data:
+
+                    if price_yearly_data[0] == dummynode[:2]:
+                        entry = [dummynode, price_yearly_data[1], price_yearly_data[2]]
+                        dummynodes_data_price_export_yearly.append(entry)
+
+            final_data_yearly = price_export_yearly_data + dummynodes_data_price_export_yearly
+
+            with open(price_export_var_file_new, 'w', newline='') as price_yearly_file_new:
+                writer = csv.writer(price_yearly_file_new)
+                writer.writerows(final_data_yearly)
+
+        else:
+
+            shadow_prices = result.get_dual('constraint_transport_technology_capex')
+
+            header = [['node', 'price_export']]
+
+            value = shadow_prices[0].loc[transport][0] * 1000
+            entries = [[node, value] for node in all_dummynodes]
+
+            final_data = header + entries
+            with open(price_export_file_new, 'w', newline='') as price_file_new:
+                writer = csv.writer(price_file_new)
+                writer.writerows(final_data)
+
+            header_yearly = [['node', 'year', 'price_export_yearly_variation']]
+            entries_yearly = []
+
+            for node in all_dummynodes:
+                for idx_year, year in enumerate(years):
+                    value_variation = shadow_prices[idx_year].loc[transport][idx_year] / shadow_prices[idx_year].loc[transport][0]
+                    entry = [node, year, value_variation]
+                    entries_yearly.append(entry)
+
+            final_data_yearly = header_yearly + entries_yearly
+
+            with open(price_export_var_file_new, 'w', newline='') as price_yearly_file_new:
+                writer = csv.writer(price_yearly_file_new)
+                writer.writerows(final_data_yearly)
 
     return None
