@@ -6,6 +6,9 @@ import warnings
 
 from zen_garden.postprocess.results import Results
 
+# Control of function to import in _internal.py
+__all__ = ['modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian', 'create_new_demand_files_bayesian', 'create_new_priceimport_file_bayesian']
+
 def modify_configs(config, destination_folder):
 
     run_path = config.analysis['dataset']
