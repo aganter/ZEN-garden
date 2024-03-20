@@ -1385,9 +1385,14 @@ class ScenarioUtils:
         :return: elements in scenario
         """
         if config.system["conduct_scenario_analysis"]:
-            scenarios_path = os.path.abspath(os.path.join(config.analysis['dataset'], "scenarios.py"))
+            scenarios_path = os.path.abspath(os.path.join(config.analysis['dataset'], "scenarios_algor_loop.py"))
             if not os.path.exists(scenarios_path):
-                raise FileNotFoundError(f"scenarios.py not found in dataset: {config.analysis['dataset']}")
+                raise FileNotFoundError(f"scenarios_algor_loop.py not found in dataset: {config.analysis['dataset']}")
+
+            sys.path.append(config.analysis['dataset'])
+            from scenarios_algor_loop import scenarios
+            scenarios = scenarios
+
             spec = importlib.util.spec_from_file_location("module", scenarios_path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
