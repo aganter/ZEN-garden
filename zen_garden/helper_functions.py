@@ -8,7 +8,49 @@ import warnings
 from zen_garden.postprocess.results import Results
 
 # Control of function to import in _internal.py
-__all__ = ['modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian', 'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian']
+__all__ = ['remove_dummy_nodes_and_edges', 'modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian',
+           'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian']
+
+
+def remove_dummy_nodes_and_edges(config):
+    """
+    Preprocessing: Remove all dummy elements from nodes and edges file
+
+    Parameters:
+        config: A config instance for the specific run
+
+    Returns:
+        None
+    """
+
+    dataset_path = os.path.abspath(config.analysis.dataset)
+
+    # Read in files
+    set_edges_path = os.path.join(dataset_path, 'energy_system', 'set_edges.csv')
+    with open(set_edges_path, 'r', newline='') as set_edges_file:
+        csv_reader = csv.reader(set_edges_file)
+        edges_existing = [row for row in csv_reader]
+
+    set_nodes_path = os.path.join(dataset_path, 'energy_system', 'set_nodes.csv')
+    with open(set_nodes_path, 'r', newline='') as set_nodes_file:
+        csv_reader = csv.reader(set_nodes_file)
+        nodes_existing = [row for row in csv_reader]
+
+    # Remove dummy elements
+    nodes_wo_dummy = [node for node in nodes_existing if 'dummy' not in node[0]]
+    edges_wo_dummy = [edge for edge in edges_existing if 'dummy' not in edge[0]]
+
+    # Write new file
+    with open(set_edges_path, 'w', newline='') as set_edges_file_mod:
+        writer = csv.writer(set_edges_file_mod)
+        writer.writerows(edges_wo_dummy)
+
+    with open(set_nodes_path, 'w', newline='') as set_nodes_file_mod:
+        writer = csv.writer(set_nodes_file_mod)
+        writer.writerows(nodes_wo_dummy)
+
+    return None
+
 
 def modify_configs(config, destination_folder):
 
@@ -25,7 +67,7 @@ def modify_configs(config, destination_folder):
     specific_conversiontech_path = [os.path.join(set_conversion_folder, conversion) for conversion in all_conversion_techs]
 
     # Check set_nodes and set_edges file for completeness
-    dummy_nodes, dummy_edges, nodes_scenarios = new_setnodes_setedges_file(result, run_path)
+    dummy_nodes, dummy_edges, nodes_scenarios = new_setnodes_setedges_file(result, run_path, config)
     adapt_capacity_limit(dummy_nodes, specific_conversiontech_path)
     # Analyze the flow over the edges for the global problem (design)
     # import_at_nodes, export_at_nodes = analyze_imports_exports(result, dummy_nodes, dummy_edges)
@@ -95,9 +137,8 @@ def copy_resultsfolder(calculation_flag, config, iteration=None):
 
         return destination_folder
 
-#copy_resultsfolder('design')
 
-def new_setnodes_setedges_file(result, run_path):
+def new_setnodes_setedges_file(result, run_path, config):
     """
     This function creates a list of the dummy nodes and a list of the dummy edges and returns both.
     It also checks, if the specific dummy nodes and edges are present in the set_nodes.csv and the set_edges.csv files.
@@ -105,6 +146,7 @@ def new_setnodes_setedges_file(result, run_path):
     Parameters:
         result (object): Result object to analyze results
         run_path (string): Path to the data
+        config: A config instance for the specific run
 
     Returns:
         dummy_nodes (list): List with the dummy nodes
@@ -123,8 +165,13 @@ def new_setnodes_setedges_file(result, run_path):
 
     # Create the node-configuration for every scenario.
     nodes = copy.deepcopy(result.solution_loader.scenarios['none'].system.set_nodes)
-    cluster_nodes_temp = copy.deepcopy(result.solution_loader.scenarios['none'].system.model_extra['set_cluster_nodes'])
+    cluster_nodes_temp = copy.deepcopy(config.system.set_cluster_nodes)
     nodes_scenarios = create_dummy_nodes(cluster_nodes_temp, nodes)
+
+    # Create a shared file to use tha data from the variable 'nodes_scenarios' in the scenario creation
+    filename = os.path.join(run_path, 'scenario_node.json')
+    with open(filename, 'w') as f:
+        json.dump(nodes_scenarios, f)
 
     # Create the possible connections between normal nodes and dummy nodes.
     dummy_edges = []
@@ -1872,7 +1919,7 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
             header = [['node', 'price_export']]
 
             value = shadow_prices[0].loc[transport][0] * 1000
-            entries = [[node, value] for node in all_dummynodes]
+            entries = [[node, 20] if 'dummy' in node else [node, 0] for node in all_dummynodes]
 
             final_data = header + entries
             with open(price_export_file_new, 'w', newline='') as price_file_new:
