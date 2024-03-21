@@ -19,7 +19,8 @@ from .model.optimization_setup import OptimizationSetup
 from .postprocess.postprocess import Postprocess
 from .postprocess.results import Results
 from .utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
-from zen_garden.helper_functions import *
+from .helper_functions import *
+from .community_detection import clustering_performance
 
 # we setup the logger here
 setup_logger()
@@ -35,14 +36,23 @@ def main(config, dataset_path=None, job_index=None):
     """
 
     if config.system['calculation_mode'] == 'ZEN-GARDEN':
+
         optimization_setup = main_zen(config, dataset_path, job_index)
+
+        return optimization_setup
 
 
     elif config.system['calculation_mode'] == 'ALGORITHM':
 
+        # Preprocess
+        #remove_dummy_nodes_and_edges(config)
+
         # Design calculation
         calculation_flag = 'design'
         optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
+
+        # Copy the results to the protocol folder
+        destination_folder = copy_resultsfolder(calculation_flag, config)
 
         # Delete everything in set carriers
         set_carrier_path = os.path.join(config.analysis['dataset'], 'set_carriers')
@@ -57,8 +67,10 @@ def main(config, dataset_path=None, job_index=None):
 
         # TODO: Delete notebooks protocol_results
 
+        # Do the clustering and define the cluster_nodes variable in the config file
+        config = clustering_performance(destination_folder, config)
+
         # Function to modify all the needed files/configurations, based on results from design
-        destination_folder = copy_resultsfolder(calculation_flag, config)
         flow_at_nodes, dummy_edges, nodes_scenarios = modify_configs(config, destination_folder)
 
         # Get results object from design calculation
@@ -76,6 +88,18 @@ def main(config, dataset_path=None, job_index=None):
 
         # Create the parameter space for all edges
         space, names , flag_seperate = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
+
+        if flag_seperate == True:
+            print('There is no flow among the scenarios. Do a separate optimization for each of the scenarios')
+            cluster_nodes = config.system.model_extra['set_cluster_nodes']
+
+            # The length of the cluster_nodes is the number of the scenarios to calculate
+            new_scenario = create_scenario_dict(cluster_nodes)
+            calculation_flag = 'individual'
+            optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, new_scenario)
+
+            return optimization_setup
+
 
         # Next step: Operational calculation
         calculation_flag = 'loop'
@@ -134,9 +158,19 @@ def main(config, dataset_path=None, job_index=None):
         # Number of iterations for the optimization loop
         n_iter = 60
 
+        # Define variables needed to check convergence
+        optimizer_convergence = dict()
+        for name in names:
+            optimizer_convergence[name] = False
+        tolerance = 150
+
         for i in range(n_iter):
             # Ask the optimizer for the next point to sample
-            sample_points = {key_edge: opt.ask() for key_edge, opt in optimizer_edge.items()}
+            sample_points = {}
+            for key_edge, opt in optimizer_edge.items():
+
+                if optimizer_convergence[key_edge] == False:
+                    sample_points[key_edge] = opt.ask()
 
             # Modify input csv files with the new sample points
             avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
@@ -185,8 +219,14 @@ def main(config, dataset_path=None, job_index=None):
                     # Calculate the difference
                     flow_diff = abs(flows[0] - flows[1])
                     protocol_flow[key_edge].append(flow_diff)
+
                     # Tell the optimizer about the objective function value at the sampled point
                     optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
+
+                    # Convergence Check for every edge
+                    if flow_diff <= tolerance:
+                        optimizer_convergence[key_edge] = True
+                        print('Edge ' + key_edge + ' is optimized.')
 
                 else:
                     error_msg = 'Error while reading out results object.'
@@ -226,7 +266,8 @@ def main(config, dataset_path=None, job_index=None):
             # Change flag to False
             flag_iter = False
 
-        x = 0
+        return optimization_setup
+
 
 
 def main_zen(config, dataset_path, job_index):
@@ -306,7 +347,7 @@ def main_zen(config, dataset_path, job_index):
     logging.info("--- Optimization finished ---")
     return optimization_setup
 
-def main_algor(config, dataset_path, job_index, calculation_flag):
+def main_algor(config, dataset_path, job_index, calculation_flag, scenarios_new=None):
     """
     This function runs ZEN garden,
     it is executed in the __main__.py script
@@ -351,7 +392,7 @@ def main_algor(config, dataset_path, job_index, calculation_flag):
         config.system["conduct_scenario_analysis"] = True
 
     # overwrite default system and scenario dictionaries
-    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index)
+    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index,calculation_flag, scenarios_new)
     # get the name of the dataset
     model_name, out_folder = StringUtils.get_model_name(config.analysis,config.system)
     # clean sub-scenarios if necessary
@@ -607,3 +648,13 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
 
 
     return None
+
+
+def create_scenario_dict(cluster_nodes):
+    scenario_dict = dict()
+
+    for idx_cl, cluster_info in enumerate(cluster_nodes):
+        scenario_dict[str(idx_cl)] = {'system': {'set_nodes': cluster_info,
+                                                 'aggregated_time_steps_per_year': 4}
+                                      }
+    return scenario_dict
