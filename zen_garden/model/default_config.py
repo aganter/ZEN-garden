@@ -61,6 +61,7 @@ class Subsets(Subscriptable):
 
 class HeaderDataInputs(Subscriptable):
     set_nodes: str = "node"
+    set_cluster_nodes: str = "cluster_nodes"
     set_edges: str = "edge"
     set_location: str = "location"
     set_time_steps: str = "time"  # IMPORTANT: time must be unique
