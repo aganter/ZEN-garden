@@ -68,6 +68,9 @@ def main(config, dataset_path=None, job_index=None):
         # TODO: Delete notebooks protocol_results
 
         # Do the clustering and define the cluster_nodes variable in the config file
+        # List should be emtpy, check it and force it
+        if len(config.system.set_cluster_nodes) != 0:
+            config.system.set_cluster_nodes = []
         config = clustering_performance(destination_folder, config)
 
         # Function to modify all the needed files/configurations, based on results from design
