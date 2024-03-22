@@ -45,7 +45,7 @@ def main(config, dataset_path=None, job_index=None):
     elif config.system['calculation_mode'] == 'ALGORITHM':
 
         # Preprocess
-        #remove_dummy_nodes_and_edges(config)
+        remove_dummy_nodes_and_edges(config)
 
         # Design calculation
         calculation_flag = 'design'
