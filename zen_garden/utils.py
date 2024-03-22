@@ -1377,7 +1377,7 @@ class ScenarioUtils:
                             os.remove(sub_folder_path)
 
     @staticmethod
-    def get_scenarios(config,job_index):
+    def get_scenarios(config,job_index, calculation_flag, scenarios_new):
         """ retrieves and overwrites the scenario dicts
         :param config: config of optimization
         :param job_index: index of current job, if passed
@@ -1385,18 +1385,25 @@ class ScenarioUtils:
         :return: elements in scenario
         """
         if config.system["conduct_scenario_analysis"]:
-            scenarios_path = os.path.abspath(os.path.join(config.analysis['dataset'], "scenarios_algor_loop.py"))
-            if not os.path.exists(scenarios_path):
-                raise FileNotFoundError(f"scenarios_algor_loop.py not found in dataset: {config.analysis['dataset']}")
+            if calculation_flag != 'individual':
+                scenarios_path = os.path.abspath(os.path.join(config.analysis['dataset'], "scenarios_algor_loop.py"))
+                if not os.path.exists(scenarios_path):
+                    raise FileNotFoundError(f"scenarios_algor_loop.py not found in dataset: {config.analysis['dataset']}")
 
-            sys.path.append(config.analysis['dataset'])
-            from scenarios_algor_loop import scenarios
-            scenarios = scenarios
+                sys.path.append(config.analysis['dataset'])
+                from scenarios_algor_loop import scenarios
+                scenarios = scenarios
+                spec = importlib.util.spec_from_file_location("module", scenarios_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                scenarios = module.scenarios
+            else:
+                scenarios = scenarios_new
 
-            spec = importlib.util.spec_from_file_location("module", scenarios_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            scenarios = module.scenarios
+            # spec = importlib.util.spec_from_file_location("module", scenarios_path)
+            # module = importlib.util.module_from_spec(spec)
+            # spec.loader.exec_module(module)
+            # scenarios = module.scenarios
             config.scenarios.update(scenarios)
             # remove the default scenario if necessary
             if not config.system["run_default_scenario"] and "" in config.scenarios:
