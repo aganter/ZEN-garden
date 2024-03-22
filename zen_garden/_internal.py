@@ -107,7 +107,7 @@ def main(config, dataset_path=None, job_index=None):
         # Initialize the optimizer with the Gaussian process estimator
         optimizer_edge = dict()
         for edge, name in zip(space, names):
-            optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="rf", n_initial_points=20,
+            optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gbrt", n_initial_points=20,
                                              acq_func="gp_hedge", random_state=42)
 
         # Define file paths for .log-files
@@ -163,6 +163,8 @@ def main(config, dataset_path=None, job_index=None):
         for name in names:
             optimizer_convergence[name] = False
         tolerance = 150
+        sample_points_fixed = {}
+        converged_edges = []
 
         for i in range(n_iter):
             # Ask the optimizer for the next point to sample
@@ -171,11 +173,14 @@ def main(config, dataset_path=None, job_index=None):
 
                 if optimizer_convergence[key_edge] == False:
                     sample_points[key_edge] = opt.ask()
+                else:
+                    sample_points[key_edge] = sample_points_fixed[key_edge]
+
 
             # Modify input csv files with the new sample points
             avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
             create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes,
-                         nodes_scenarios, result, flag_iter)
+                         nodes_scenarios, result, flag_iter, config)
 
             # Start optimization
             optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
@@ -221,11 +226,16 @@ def main(config, dataset_path=None, job_index=None):
                     protocol_flow[key_edge].append(flow_diff)
 
                     # Tell the optimizer about the objective function value at the sampled point
-                    optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
+                    if key_edge not in converged_edges:
+                        optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
+                    else:
+                        print(key_edge + ': Edge no need to be further optimized')
 
                     # Convergence Check for every edge
-                    if flow_diff <= tolerance:
+                    if flow_diff <= tolerance and key_edge not in converged_edges:
                         optimizer_convergence[key_edge] = True
+                        converged_edges.append(key_edge)
+                        sample_points_fixed[key_edge] = sample_points[key_edge]
                         print('Edge ' + key_edge + ' is optimized.')
 
                 else:
@@ -615,7 +625,7 @@ def setup_logger(name, log_file, level=logging.INFO):
     return logger
 
 
-def create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios, result, flag_iter):
+def create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios, result, flag_iter, config):
     """
     Create files for the calculation of the scenarios (availability_import, demand, price_import)
 
@@ -638,8 +648,8 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
         create_new_export_files_bayesian(demand_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
 
         # Price Import/Export files
-        create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years)
-        create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result)
+        # create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years)
+        create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result, config)
 
     elif flag_iter == False:
         # Availability Import/Export files
