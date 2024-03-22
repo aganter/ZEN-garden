@@ -589,7 +589,7 @@ def create_new_priceimport_file(specific_carrier_path, import_at_nodes):
             if carrier == transporttype_to_carrier[transport_type]:
 
                 # Define paths to price_import-files
-                price_import_file_new = os.path.join(carrier_path, 'price_import_new.csv')
+                price_import_file_new = os.path.join(carrier_path, 'price_import_new_0.csv')
                 price_import_file = os.path.join(carrier_path, 'price_import.csv')
                 price_import_var_file_new = os.path.join(carrier_path, 'price_import_yearly_variation_new.csv')
                 price_import_var_file = os.path.join(carrier_path, 'price_import_yearly_variation.csv')
@@ -1811,7 +1811,7 @@ def create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, 
 
     return None
 
-def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result):
+def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result, config):
     """
     This function creates new price_export files for the carriers that are being imported.
     The price is set to XX for the first implementation
@@ -1913,36 +1913,52 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
 
         else:
 
+            for scenario in demand_data:
+                for trans_type in demand_data[scenario]:
 
-            shadow_prices = result.get_dual('constraint_transport_technology_capex')
+                    carrier = transporttype_to_carrier[transport]
+                    carrier_path = os.path.join(set_carrier_folder, carrier)
 
-            header = [['node', 'price_export']]
+                    price_export_file_new = os.path.join(carrier_path, 'price_export_new_' + str(scenario) + '.csv')
+                    price_export_var_file_new = os.path.join(carrier_path, 'price_export_yearly_variation_new.csv')
 
-            value = shadow_prices[0].loc[transport][0] * 1000
-            entries = [[node, 20] if 'dummy' in node else [node, 0] for node in all_dummynodes]
+                    shadow_prices = result.get_dual('constraint_transport_technology_capex')
 
-            final_data = header + entries
-            with open(price_export_file_new, 'w', newline='') as price_file_new:
-                writer = csv.writer(price_file_new)
-                writer.writerows(final_data)
+                    header = [['node', 'price_export']]
 
-            header_yearly = [['node', 'year', 'price_export_yearly_variation']]
-            entries_yearly = []
+                    # value = shadow_prices[0].loc[transport][0] * 1000
+                    entries = [[node, 20] if 'dummy' in node else [node, 0] for node in config.system.set_cluster_nodes[int(scenario)]]
 
-            for node in all_dummynodes:
-                for idx_year, year in enumerate(years):
-                    if abs(shadow_prices[idx_year].loc[transport][idx_year]) == 0 and abs(shadow_prices[idx_year].loc[transport][0]) == 0:
-                        value_variation = 1
-                    else:
-                        value_variation = shadow_prices[idx_year].loc[transport][idx_year] / shadow_prices[idx_year].loc[transport][0]
-                    entry = [node, year, value_variation]
-                    entries_yearly.append(entry)
+                    final_data = header + entries
+                    with open(price_export_file_new, 'w', newline='') as price_file_new:
+                        writer = csv.writer(price_file_new)
+                        writer.writerows(final_data)
 
-            final_data_yearly = header_yearly + entries_yearly
+                    header_yearly = [['node', 'year', 'price_export_yearly_variation']]
+                    entries_yearly = []
 
-            with open(price_export_var_file_new, 'w', newline='') as price_yearly_file_new:
-                writer = csv.writer(price_yearly_file_new)
-                writer.writerows(final_data_yearly)
+                    for node in all_dummynodes:
+                        for idx_year, year in enumerate(years):
+                            if abs(shadow_prices[idx_year].loc[transport][idx_year]) == 0 and abs(
+                                    shadow_prices[idx_year].loc[transport][0]) == 0:
+                                value_variation = 1
+                            else:
+                                value_variation = shadow_prices[idx_year].loc[transport][idx_year] / \
+                                                  shadow_prices[idx_year].loc[transport][0]
+                            entry = [node, year, value_variation]
+                            entries_yearly.append(entry)
+
+                    final_data_yearly = header_yearly + entries_yearly
+
+                    with open(price_export_var_file_new, 'w', newline='') as price_yearly_file_new:
+                        writer = csv.writer(price_yearly_file_new)
+                        writer.writerows(final_data_yearly)
+
+                    if trans_type not in check_transport_types:
+                        check_transport_types.append(trans_type)
+
+
+
 
 
     return None
