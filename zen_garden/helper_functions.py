@@ -852,6 +852,19 @@ def adapt_capacity_limit(dummy_nodes, specific_conversiontech_path):
                 writer = csv.writer(limit_file_new)
                 writer.writerows(final_data)
 
+        else:
+
+            header = [['node', 'capacity_limit']]
+
+            # Construct the data to be appended in the capacity_limit file for the dummy nodes
+            nodes_to_add = [[d_node, 0] for d_node in dummy_nodes]
+
+            final_entry = header + nodes_to_add
+            # Add the missing dummy nodes to the capacity_limit file
+            with open(conversion_spec, mode="w", newline="") as limit_file_new:
+                writer = csv.writer(limit_file_new)
+                writer.writerows(final_entry)
+
     return None
 
 
@@ -1927,7 +1940,15 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
                     header = [['node', 'price_export']]
 
                     # value = shadow_prices[0].loc[transport][0] * 1000
-                    entries = [[node, 20] if 'dummy' in node else [node, 0] for node in config.system.set_cluster_nodes[int(scenario)]]
+                    nodes_involved = [node + 'dummy' for node in all_nodes if node not in config.system.set_cluster_nodes[int(scenario)]]
+
+                    entries = []
+                    for nodes_invl in nodes_involved:
+                        if nodes_invl in demand_data[scenario][trans_type]:
+                            entries.append([nodes_invl, 60])
+                        else:
+                            entries.append([nodes_invl, 0])
+                    # entries = [] [[node, 60] for node in nodes_involved]
 
                     final_data = header + entries
                     with open(price_export_file_new, 'w', newline='') as price_file_new:
@@ -1956,9 +1977,6 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
 
                     if trans_type not in check_transport_types:
                         check_transport_types.append(trans_type)
-
-
-
 
 
     return None
