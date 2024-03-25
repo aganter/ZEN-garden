@@ -110,7 +110,7 @@ def main(config, dataset_path=None, job_index=None):
         # Initialize the optimizer with the Gaussian process estimator
         optimizer_edge = dict()
         for edge, name in zip(space, names):
-            optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gbrt", n_initial_points=20,
+            optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gp", n_initial_points=10,
                                              acq_func="gp_hedge", random_state=42)
 
         # Define file paths for .log-files
@@ -283,7 +283,7 @@ def main(config, dataset_path=None, job_index=None):
 
 
 
-def main_zen(config, dataset_path, job_index):
+def main_zen(config, dataset_path, job_index, calculation_flag=None, scenarios_new=None):
     """
     This function runs ZEN garden,
     it is executed in the __main__.py script
@@ -321,7 +321,7 @@ def main_zen(config, dataset_path, job_index):
     input_data_checks.check_technology_selections()
     input_data_checks.check_year_definitions()
     # overwrite default system and scenario dictionaries
-    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index)
+    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index, calculation_flag, scenarios_new)
     # get the name of the dataset
     model_name, out_folder = StringUtils.get_model_name(config.analysis,config.system)
     # clean sub-scenarios if necessary
