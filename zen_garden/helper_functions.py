@@ -25,62 +25,73 @@ def remove_dummy_nodes_and_edges(config):
 
     dataset_path = os.path.abspath(config.analysis.dataset)
 
-    # Read in files
-    set_edges_path = os.path.join(dataset_path, 'energy_system', 'set_edges.csv')
-    with open(set_edges_path, 'r', newline='') as set_edges_file:
-        csv_reader = csv.reader(set_edges_file)
-        edges_existing = [row for row in csv_reader]
+    # Create paths
+    file_paths = [os.path.join(dataset_path, 'energy_system', 'set_edges.csv'),
+                  os.path.join(dataset_path, 'energy_system', 'set_nodes.csv')]
 
-    set_nodes_path = os.path.join(dataset_path, 'energy_system', 'set_nodes.csv')
-    with open(set_nodes_path, 'r', newline='') as set_nodes_file:
-        csv_reader = csv.reader(set_nodes_file)
-        nodes_existing = [row for row in csv_reader]
+    # Read in files, Remove dummy elements, Write new file
+    for file_path in file_paths:
 
-    # Remove dummy elements
-    nodes_wo_dummy = [node for node in nodes_existing if 'dummy' not in node[0]]
-    edges_wo_dummy = [edge for edge in edges_existing if 'dummy' not in edge[0]]
+        with open(file_path, 'r', newline='') as file:
+            rows = [row for row in csv.reader(file) if 'dummy' not in row[0]]
 
-    # Write new file
-    with open(set_edges_path, 'w', newline='') as set_edges_file_mod:
-        writer = csv.writer(set_edges_file_mod)
-        writer.writerows(edges_wo_dummy)
-
-    with open(set_nodes_path, 'w', newline='') as set_nodes_file_mod:
-        writer = csv.writer(set_nodes_file_mod)
-        writer.writerows(nodes_wo_dummy)
+        with open(file_path, 'w', newline='') as file:
+            csv.writer(file).writerows(rows)
 
     return None
 
 
 def modify_configs(config, destination_folder):
+    """
+    Prepare files for the run by performing a number of functions in a specific order.
 
+    Parameters:
+        config: A config instance for the specific run
+        destination_folder (str): Path to read the results from
+
+    Returns:
+        flow_at_nodes (dict): Dict with info about the flow transport over the edges for every transport technology and every year
+        dummy_edges (list): List containing all dummy edges
+        nodes_scenarios (list): List containing lists of nodes involved in each individual scenario
+    """
+
+    # Get results from design calculaiton
     run_path = config.analysis['dataset']
     result = Results(destination_folder)
 
-    # Get all the carrier paths
+    # Get all the carrier and conversion technologies paths
     set_carrier_folder = os.path.join(run_path, 'set_carriers')
     set_conversion_folder = os.path.join(run_path, 'set_technologies', 'set_conversion_technologies')
-    all_carriers = result.solution_loader.scenarios['none'].system.set_carriers
-    all_conversion_techs = result.solution_loader.scenarios['none'].system.set_conversion_technologies
 
-    specific_carrier_path = [os.path.join(set_carrier_folder, carrier) for carrier in all_carriers]
-    specific_conversiontech_path = [os.path.join(set_conversion_folder, conversion) for conversion in all_conversion_techs]
+    # Path to the carriers
+    specific_carrier_paths = [os.path.join(set_carrier_folder, carrier)
+                              for carrier in result.solution_loader.scenarios['none'].system.set_carriers]
+    # Path to the conversion technologies
+    specific_conversiontech_paths = [os.path.join(set_conversion_folder, conversion)
+                                     for conversion in result.solution_loader.scenarios['none'].system.set_conversion_technologies]
 
     # Check set_nodes and set_edges file for completeness
     dummy_nodes, dummy_edges, nodes_scenarios = new_setnodes_setedges_file(result, run_path, config)
-    adapt_capacity_limit(dummy_nodes, specific_conversiontech_path)
-    # Analyze the flow over the edges for the global problem (design)
-    # import_at_nodes, export_at_nodes = analyze_imports_exports(result, dummy_nodes, dummy_edges)
+    # Limitation for dummy nodes regarding capacity installation
+    adapt_capacity_limit(dummy_nodes, specific_conversiontech_paths)
+    # Analysis of flow transports from design calculation
     flow_at_nodes = analyze_imports_exports_bayesian_modified(result, dummy_edges)
-
-    # create_new_import_files(specific_carrier_path, result, dummy_nodes, import_at_nodes)
-    # create_new_priceimport_file(specific_carrier_path, import_at_nodes)
-    # create_new_demand_file(specific_carrier_path, result, export_at_nodes)
-    modifiy_attribute_file(specific_carrier_path)
+    # Modify attributes file
+    modifiy_attribute_file(specific_carrier_paths)
 
     return flow_at_nodes, dummy_edges, nodes_scenarios
 
 def create_dummy_nodes(clustering_nodes, set_nodes):
+    """
+    Creates the nested list with lists containing the involved nodes for each individual scenario.
+
+    Parameters:
+        clustering_nodes (list): Nested list containing list with all (normal) nodes involved in the created clusters (scenarios)
+        set_nodes (str): List with all nodes involved for the global run.
+
+    Returns:
+        temp_cluster (list): List containing lists of nodes involved in each individual scenario
+    """
 
     temp_cluster = copy.deepcopy(clustering_nodes)
 
@@ -98,44 +109,35 @@ def copy_resultsfolder(calculation_flag, config, iteration=None):
     This function copies the results folder from the original place to another folder.
 
     Parameters:
-        calculation_flag (str): Type of calculation in algorithm (design or operation)
+        calculation_flag (str): Type of calculation in algorithm-process
+        config: A config instance for the specific run
         iteration (int): Natural number (number of interation in loop)
 
     Returns:
-        None
+        destination_folder (str): The path to the destination folder where results are copied.
     """
 
     # Define folder paths
     ZEN_garden = os.path.abspath(os.path.join(config.analysis["folder_output"], '..', '..'))
-    folder_outputs = config.analysis['folder_output']
     save_folder = os.path.join(ZEN_garden, 'notebooks', 'protocol_results')
-
     model_name = os.path.basename(config.analysis["dataset"])
-    folder_outputs_spec = os.path.join(folder_outputs, model_name)
+    folder_outputs_spec = os.path.join(config.analysis['folder_output'], model_name)
 
-    # Distinguish between design and operational calculation
+    # Distinguish and determine destination based on calculation type
     if calculation_flag == 'design':
         destination_folder = os.path.join(save_folder, model_name)
-
-        if os.path.exists(destination_folder):
-            warnings.warn(f"The folder {destination_folder} already exists and is being deleted/overwritten.")
-            shutil.rmtree(destination_folder)
-
-        shutil.copytree(folder_outputs_spec, destination_folder)
-
-        return destination_folder
-
     else:
-        root_folder = os.path.join(save_folder, model_name + '_loop')
+        root_folder = os.path.join(save_folder, f"{model_name}_loop")
         destination_folder = os.path.join(root_folder, str(iteration))
 
-        if os.path.exists(destination_folder):
-            warnings.warn(f"The folder {destination_folder} already exists and is being deleted/overwritten.")
-            shutil.rmtree(destination_folder)
+    # Check and prepare destination folder
+    if os.path.exists(destination_folder):
+        warnings.warn(f"The folder {destination_folder} already exists and is being deleted/overwritten.")
+        shutil.rmtree(destination_folder)
 
-        shutil.copytree(folder_outputs_spec, destination_folder)
+    shutil.copytree(folder_outputs_spec, destination_folder)
 
-        return destination_folder
+    return destination_folder
 
 
 def new_setnodes_setedges_file(result, run_path, config):
@@ -151,6 +153,7 @@ def new_setnodes_setedges_file(result, run_path, config):
     Returns:
         dummy_nodes (list): List with the dummy nodes
         dummy_edges (list): List with the dummy edges
+        nodes_scenarios (list): List containing lists of nodes involved in each individual scenario
     """
 
     # Initialize dataframe to get the existing edges.
@@ -765,18 +768,18 @@ def create_new_demand_file(specific_carrier_path, result, export_at_nodes):
 
     return None
 
-def modifiy_attribute_file(specific_carrier_path):
+def modifiy_attribute_file(specific_carrier_paths):
     """
     This function creates new modified attribute files.
 
     Parameters:
-        specific_carrier_path (list): List with the file paths to the specific carriers
+        specific_carrier_paths (list): List with the file paths to the specific carriers
 
     Returns:
         None
     """
 
-    for carrier_path in specific_carrier_path:
+    for carrier_path in specific_carrier_paths:
 
         # Modify all carrier attributes
         attribute_file = os.path.join(carrier_path, 'attributes.json')
@@ -807,19 +810,19 @@ def modifiy_attribute_file(specific_carrier_path):
 
     return None
 
-def adapt_capacity_limit(dummy_nodes, specific_conversiontech_path):
+def adapt_capacity_limit(dummy_nodes, specific_conversiontech_paths):
     """
     This function adds the missing dummy nodes to the capacity_limit file if there exists one.
 
     Parameters:
         dummy_nodes (list): List with all the dummy nodes
-        all_conversion_techs (list): List with the file paths to the specific conversion technologies
+        specific_conversiontech_paths (list): List with the file paths to the specific conversion technologies
 
     Returns:
         None
     """
 
-    for conversion_path in specific_conversiontech_path:
+    for conversion_path in specific_conversiontech_paths:
 
         conversion_spec = os.path.join(conversion_path, 'capacity_limit.csv')
         if os.path.exists(conversion_spec):
