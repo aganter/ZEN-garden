@@ -128,28 +128,55 @@ def clustering_performance(destination_folder, config):
     dict_from_df = demand_df_h2.to_dict()
     dict_end = dict_from_df[0]  # Für Jahr 0 momentan
 
-
-    edges_graph = [(str(edge[1]), str(edge[2])) for edge in data_edges_avail]
-
     # Sample graph, adding edges
     G = nx.Graph()
-    G.add_edges_from(edges_graph)
+
+    trans_dict = res.get_total('flow_transport').round(2).loc['biomethane_transport'].to_dict()[0]
+    edges_graph = []
+    for edge in data_edges_avail:
+        if edge[0] in trans_dict:
+            edges_graph.append((str(edge[1]), str(edge[2]), str(trans_dict[edge[0]])))
+            G.add_edge(str(edge[1]), str(edge[2]), capacity=trans_dict[edge[0]])
+        else:
+            edges_graph.append((str(edge[1]), str(edge[2]), str(0)))
+
+    partition = community_louvain.best_partition(G, weight='weight')
+
+    # # Visualization (optional)
+    # pos = nx.spring_layout(G)
+    # cmap = plt.get_cmap('viridis')
+    # nx.draw_networkx_nodes(G, pos, partition.keys(), node_size=700,
+    #                        cmap=cmap, node_color=list(partition.values()))
+    # nx.draw_networkx_edges(G, pos, alpha=0.5)
+    # nx.draw_networkx_labels(G, pos)
+    # plt.show()
+
+
+
+    # G.add_edges_from(edges_graph)
+
+    # Perform the minimum cut
+    # cut_value, partition = nx.stoer_wagner(G)
+    #
+    # # partition gives you two sets of nodes representing the two clusters
+    # print("Minimum cut value:", cut_value)
+    # print("Partition:", partition)
 
     # hydrogen consumption for each node
-    H2_consumption = dict_end
-
-    # Normalize hydrogen consumption for similarity calculation
-    max_consumption = max(H2_consumption.values())
-    normalized_consumption = {node: consumption / max_consumption for node, consumption in H2_consumption.items()}
-
-    # Adjust edge weights based on hydrogen consumption similarity
-    for edge in G.edges():
-        node1, node2 = edge
-        consumption_similarity = 1 - abs(normalized_consumption[node1] - normalized_consumption[node2])
-        G[edge[0]][edge[1]]['weight'] = consumption_similarity
-
-    # Community detection with the modified graph
-    partition = community_louvain.best_partition(G, weight='weight')
+    # H2_consumption = dict_end
+    #
+    # # Normalize hydrogen consumption for similarity calculation
+    # max_consumption = max(H2_consumption.values())
+    # normalized_consumption = {node: consumption / max_consumption for node, consumption in H2_consumption.items()}
+    #
+    # # Adjust edge weights based on hydrogen consumption similarity
+    # for edge in G.edges():
+    #     node1, node2 = edge
+    #     consumption_similarity = 1 - abs(normalized_consumption[node1] - normalized_consumption[node2])
+    #     G[edge[0]][edge[1]]['weight'] = consumption_similarity
+    #
+    # # Community detection with the modified graph
+    # partition = community_louvain.best_partition(G, weight='weight')
 
     # # Visualization (optional)
     # pos = nx.spring_layout(G)
