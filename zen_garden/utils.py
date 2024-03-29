@@ -1377,7 +1377,7 @@ class ScenarioUtils:
                             os.remove(sub_folder_path)
 
     @staticmethod
-    def get_scenarios(config,job_index, calculation_flag, scenarios_new):
+    def get_scenarios(config, job_index, calculation_flag, adapted_agg_ts, scenarios_ind):
         """ retrieves and overwrites the scenario dicts
         :param config: config of optimization
         :param job_index: index of current job, if passed
@@ -1397,8 +1397,13 @@ class ScenarioUtils:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 scenarios = module.scenarios
+
+                # Adapt the aggregated time step to the corresponding state of the algorithm
+                for key_scen in scenarios:
+                    scenarios[key_scen]['system']['aggregated_time_steps_per_year'] = adapted_agg_ts
+
             else:
-                scenarios = scenarios_new
+                scenarios = scenarios_ind
 
             # spec = importlib.util.spec_from_file_location("module", scenarios_path)
             # module = importlib.util.module_from_spec(spec)
