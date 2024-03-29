@@ -126,8 +126,10 @@ class System(Subscriptable):
     set_transport_technologies_loss_exponential: list[str] = []
     double_capex_transport: bool = False
     set_nodes: list[str] = []
+    # set_cluster_nodes: list[str] = []
     exclude_parameters_from_TSA: bool = True
     conduct_scenario_analysis: bool = False
+    calculation_mode: str = 'ALGORITHM'
     run_default_scenario: bool = True
     clean_sub_scenarios: bool = False
     total_hours_per_year: int = 8760
