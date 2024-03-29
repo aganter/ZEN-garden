@@ -90,7 +90,7 @@ def main(config, dataset_path=None, job_index=None):
         specific_carrier_path = [os.path.join(set_carrier_folder, carrier) for carrier in all_carriers]
 
         # Create the parameter space for all edges
-        space, names , flag_seperate = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
+        space, names, flag_seperate, space_for_adaption = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
 
         if flag_seperate == True:
             print('There is no flow among the scenarios. Do a separate optimization for each of the scenarios')
@@ -99,7 +99,7 @@ def main(config, dataset_path=None, job_index=None):
             # The length of the cluster_nodes is the number of the scenarios to calculate
             new_scenario = create_scenario_dict(cluster_nodes)
             calculation_flag = 'individual'
-            optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, new_scenario)
+            optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, scenarios_ind=new_scenario)
 
             return optimization_setup
 
@@ -159,131 +159,213 @@ def main(config, dataset_path=None, job_index=None):
         flag_iter = True
 
         # Number of iterations for the optimization loop
-        n_iter = 60
+        agg_ts_list = [100, 500, 1400]
+        # n_improvements = 4
+        n_iterations = [18, 9, 1]
+        actual_iteration = 0
 
         # Define variables needed to check convergence
         optimizer_convergence = dict()
         for name in names:
             optimizer_convergence[name] = False
-        tolerance = 150
-        sample_points_fixed = {}
+        # tolerance = 150
+        sample_points_fixed = dict()
         converged_edges = []
-
-        for i in range(n_iter):
-            # Ask the optimizer for the next point to sample
-            sample_points = {}
-            for key_edge, opt in optimizer_edge.items():
-
-                if optimizer_convergence[key_edge] == False:
-                    sample_points[key_edge] = opt.ask()
-                else:
-                    sample_points[key_edge] = sample_points_fixed[key_edge]
+        old_spaces_protocol = dict()
+        variable_information = dict()
+        return_information = dict()
 
 
-            # Modify input csv files with the new sample points
-            avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
-            create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes,
-                         nodes_scenarios, result, flag_iter, config)
+        for n_impr in range(len(n_iterations)):
 
-            # Start optimization
-            optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
-            # Results object
+            if n_impr == 0:
+                # Initialize the optimizer with the Gaussian process estimator
+                optimizer_edge = dict()
+                for edge, name in zip(space, names):
+                    optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gp", n_initial_points=10,
+                                                     acq_func="gp_hedge", random_state=42)
 
-            destination_folder = copy_resultsfolder(calculation_flag, config, iteration=i)
-            res = Results(destination_folder)
+            for n_iter in range(n_iterations[n_impr]):
 
-            # Analyze all edges
-            flows_in_out_protocol = []
-            for key_edge in optimizer_edge:
-                if key_edge not in protocol_flow and key_edge not in protocol_imp_dem:
-                    protocol_flow[key_edge] = []
-                    protocol_imp_dem[key_edge] = []
 
-                edge, transport_type, year_str = key_edge.split('.')
-                year = int(year_str)
-                node_in, node_out = (node + 'dummy' for node in edge.split('-'))
 
-                # List with edges to analyze
-                edges_to_analyze = [f"{node_in}-{edge.split('-')[1]}", f"{edge.split('-')[0]}-{node_out}"]
-                flows = []
+                # Ask the optimizer for the next point to sample
+                sample_points = {}
+                for key_edge, opt in optimizer_edge.items():
 
-                # Check which scenario the edge is in
-                for edge_scen in edges_to_analyze:
-                    node_to, node_reverso = edge_scen.split('-')
-                    for idx, scenario in enumerate(nodes_scenarios):
-                        if node_to in scenario and node_reverso in scenario:
-                            scenario_index = idx
-
-                    scenario_name = 'scenario_' + str(scenario_index)
-
-                    # Read out the flow on the specific edge
-                    val = res.get_total('flow_transport', scenario_name=scenario_name).round(3).loc[transport_type].loc[edge_scen][year]
-                    flows.append(val)
-                    flows_in_out_protocol.append(val)
-
-                protocol_imp_dem[key_edge].append(sample_points[key_edge])
-
-                if len(flows) == 2:
-                    # Calculate the difference
-                    flow_diff = abs(flows[0] - flows[1])
-                    protocol_flow[key_edge].append(flow_diff)
-
-                    # Tell the optimizer about the objective function value at the sampled point
-                    if key_edge not in converged_edges:
-                        optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
+                    if optimizer_convergence[key_edge] == False:
+                        sample_points[key_edge] = opt.ask()
                     else:
-                        print(key_edge + ': Edge no need to be further optimized')
+                        sample_points[key_edge] = sample_points_fixed[key_edge]
 
-                    # Convergence Check for every edge
-                    if flow_diff <= tolerance and key_edge not in converged_edges:
-                        optimizer_convergence[key_edge] = True
-                        converged_edges.append(key_edge)
-                        sample_points_fixed[key_edge] = sample_points[key_edge]
-                        print('Edge ' + key_edge + ' is optimized.')
 
+                # Modify input csv files with the new sample points
+                avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
+                create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes,
+                             nodes_scenarios, result, flag_iter, config)
+
+                # Start optimization
+                agg_ts = agg_ts_list[n_impr]
+                optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts=agg_ts)
+                # Results object
+
+                destination_folder = copy_resultsfolder(calculation_flag, config, iteration=actual_iteration)
+                res = Results(destination_folder)
+
+                # Analyze all edges
+                flows_in_out_protocol = []
+                for key_edge in optimizer_edge:
+                    if key_edge not in protocol_flow and key_edge not in protocol_imp_dem:
+                        protocol_flow[key_edge] = []
+                        protocol_imp_dem[key_edge] = []
+
+                    edge, transport_type, year_str = key_edge.split('.')
+                    year = int(year_str)
+                    node_in, node_out = (node + 'dummy' for node in edge.split('-'))
+
+                    # List with edges to analyze
+                    edges_to_analyze = [f"{node_in}-{edge.split('-')[1]}", f"{edge.split('-')[0]}-{node_out}"]
+                    flows = []
+
+                    # Check which scenario the edge is in
+                    for edge_scen in edges_to_analyze:
+                        node_to, node_reverso = edge_scen.split('-')
+                        for idx, scenario in enumerate(nodes_scenarios):
+                            if node_to in scenario and node_reverso in scenario:
+                                scenario_index = idx
+
+                        scenario_name = 'scenario_' + str(scenario_index)
+
+                        # Read out the flow on the specific edge
+                        val = res.get_total('flow_transport', scenario_name=scenario_name).round(3).loc[transport_type].loc[edge_scen][year]
+                        flows.append(val)
+                        flows_in_out_protocol.append(val)
+
+                    protocol_imp_dem[key_edge].append(sample_points[key_edge])
+
+                    if len(flows) == 2:
+                        # Calculate the difference
+                        flow_diff = abs(flows[0] - flows[1])
+                        protocol_flow[key_edge].append(flow_diff)
+
+                        # Tell the optimizer about the objective function value at the sampled point
+                        if key_edge not in converged_edges:
+                            optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
+                        else:
+                            print(key_edge + ': Edge no need to be further optimized')
+
+                        # Convergence Check for every edge
+                        # if flow_diff <= tolerance and key_edge not in converged_edges:
+                        #     optimizer_convergence[key_edge] = True
+                        #     converged_edges.append(key_edge)
+                        #     sample_points_fixed[key_edge] = sample_points[key_edge]
+                        #     print('Edge ' + key_edge + ' is optimized.')
+
+                    else:
+                        error_msg = 'Error while reading out results object.'
+                        raise RuntimeError(error_msg)
+
+                # Flow difference
+                flows_protocol = [protocol_flow[edge_prot][actual_iteration] for edge_prot in protocol_flow]
+                flows_str = ': '.join(map(str, flows_protocol))
+                loggers['difference_flows'].info(flows_str)
+
+                # Actual flows in both directions
+                flows_in_out_protocol_str = ': '.join(map(str, flows_in_out_protocol))
+                loggers['actual_flows'].info(flows_in_out_protocol_str)
+
+                # Costs
+                costs = []
+                for idx_scen, _ in enumerate(nodes_scenarios):
+                    for idx_year, _ in enumerate(years):
+                        scenario_act = 'scenario_' + str(idx_scen)
+                        cost_temp = res.get_total('net_present_cost', scenario_name=scenario_act).round(3).loc[idx_year]
+                        costs.append(cost_temp)
+
+                costs_str = ': '.join(map(str, costs))
+                loggers['costs'].info(costs_str)
+
+                # Import and demand values
+                temp_list = []
+                for key_prot in protocol_imp_dem:
+                    avail_imp = protocol_imp_dem[key_prot][actual_iteration][0]
+                    demand = protocol_imp_dem[key_prot][actual_iteration][1]
+                    temp_list.append(avail_imp)
+                    temp_list.append(demand)
+
+                attrs_str = ': '.join(map(str, temp_list))
+                loggers['import_demand'].info(attrs_str)
+
+                # Change flag to False
+                flag_iter = False
+
+                # Keep track of iteration
+                actual_iteration = actual_iteration + 1
+
+
+            # Get the best value out of the calculated points
+            best_vals = dict()
+            best_vars = dict()
+            for key_edge in optimizer_edge:
+
+                # Add best return value
+                best_vals[key_edge] = min(optimizer_edge[key_edge].yi)
+                index_val = optimizer_edge[key_edge].yi.index(min(optimizer_edge[key_edge].yi))
+
+                # Add corresponding variables for best return value
+                best_vars[key_edge] = optimizer_edge[key_edge].Xi[index_val]
+
+            # Create adapted spaces
+            if n_impr == 0:
+                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption)
+                old_spaces_protocol[n_impr] = adapted_space
+            else:
+                space_for_adaption = old_spaces_protocol[n_impr-1]
+                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption)
+                old_spaces_protocol[n_impr] = adapted_space
+
+            # Save Optimizer information for actual iteration
+            returns = dict()
+            variables = dict()
+            for key_edge in names:
+                returns[key_edge] = optimizer_edge[key_edge].yi
+                variables[key_edge] = optimizer_edge[key_edge].Xi
+
+            # Add information from actual iteration to the list, where all values are saved from all previous iterations
+            for key_edge in names:
+                if key_edge not in variable_information:
+                    variable_information[key_edge] = []
+                    variable_information[key_edge] = variable_information[key_edge] + variables[key_edge]
                 else:
-                    error_msg = 'Error while reading out results object.'
-                    raise RuntimeError(error_msg)
+                    variable_information[key_edge] = variable_information[key_edge] + variables[key_edge]
 
-            # Flow difference
-            flows_protocol = [protocol_flow[edge_prot][i] for edge_prot in protocol_flow]
-            flows_str = ': '.join(map(str, flows_protocol))
-            loggers['difference_flows'].info(flows_str)
+                if key_edge not in return_information:
+                    return_information[key_edge] = []
+                    return_information[key_edge] = return_information[key_edge] + returns[key_edge]
+                else:
+                    return_information[key_edge] = return_information[key_edge] + returns[key_edge]
 
-            # Actual flows in both directions
-            flows_in_out_protocol_str = ': '.join(map(str, flows_in_out_protocol))
-            loggers['actual_flows'].info(flows_in_out_protocol_str)
+            # Initialize the Optimizer with the Gaussian process estimator
+            optimizer_edge = dict()
+            for edge, name in zip(space, names):
+                optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gp", n_initial_points=10,
+                                                 acq_func="gp_hedge", random_state=42)
 
-            # Costs
-            costs = []
-            for idx_scen, _ in enumerate(nodes_scenarios):
-                for idx_year, _ in enumerate(years):
-                    scenario_act = 'scenario_' + str(idx_scen)
-                    cost_temp = res.get_total('net_present_cost', scenario_name=scenario_act).round(3).loc[idx_year]
-                    costs.append(cost_temp)
+            # Tell the Optimizer about the previous results.
+            for key_edge in names:
+                for variable_val, return_val in zip(variable_information[key_edge], return_information[key_edge]):
 
-            costs_str = ': '.join(map(str, costs))
-            loggers['costs'].info(costs_str)
+                    if (adapted_space[key_edge][0][0] < variable_val[0] < adapted_space[key_edge][0][1]) and (
+                            adapted_space[key_edge][1][0] < variable_val[1] < adapted_space[key_edge][1][1]):
 
-            # Import and demand values
-            temp_list = []
-            for key_prot in protocol_imp_dem:
-                avail_imp = protocol_imp_dem[key_prot][i][0]
-                demand = protocol_imp_dem[key_prot][i][1]
-                temp_list.append(avail_imp)
-                temp_list.append(demand)
+                        optimizer_edge[key_edge].tell(variable_val, return_val)
 
-            attrs_str = ': '.join(map(str, temp_list))
-            loggers['import_demand'].info(attrs_str)
-
-            # Change flag to False
-            flag_iter = False
 
         return optimization_setup
 
 
 
-def main_zen(config, dataset_path, job_index, calculation_flag=None, scenarios_new=None):
+def main_zen(config, dataset_path, job_index, calculation_flag=None, adapted_agg_ts=None, scenarios_new=None):
     """
     This function runs ZEN garden,
     it is executed in the __main__.py script
@@ -321,7 +403,7 @@ def main_zen(config, dataset_path, job_index, calculation_flag=None, scenarios_n
     input_data_checks.check_technology_selections()
     input_data_checks.check_year_definitions()
     # overwrite default system and scenario dictionaries
-    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index, calculation_flag, scenarios_new)
+    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index, calculation_flag, adapted_agg_ts, scenarios_new)
     # get the name of the dataset
     model_name, out_folder = StringUtils.get_model_name(config.analysis,config.system)
     # clean sub-scenarios if necessary
@@ -360,7 +442,7 @@ def main_zen(config, dataset_path, job_index, calculation_flag=None, scenarios_n
     logging.info("--- Optimization finished ---")
     return optimization_setup
 
-def main_algor(config, dataset_path, job_index, calculation_flag, scenarios_new=None):
+def main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts=None, scenarios_ind=None):
     """
     This function runs ZEN garden,
     it is executed in the __main__.py script
@@ -405,7 +487,7 @@ def main_algor(config, dataset_path, job_index, calculation_flag, scenarios_new=
         config.system["conduct_scenario_analysis"] = True
 
     # overwrite default system and scenario dictionaries
-    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index,calculation_flag, scenarios_new)
+    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index,calculation_flag, adapted_agg_ts, scenarios_ind)
     # get the name of the dataset
     model_name, out_folder = StringUtils.get_model_name(config.analysis,config.system)
     # clean sub-scenarios if necessary
@@ -486,6 +568,9 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
     # With the values from the dict, define the space for each edge and suproblem
     space = []
     names = []
+
+    space_for_adaption = dict()
+
     for transport in flow_at_nodes:
         for year in range(len(years)):
             for edge in dummy_edges:
@@ -508,6 +593,9 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
                     space.append(space_to_append)
                     names.append(name_to_append)
 
+                    # Dictionary for later adaption of the space
+                    space_for_adaption[name_to_append] = [[min_value, max_value], [min_value, max_value]]
+
     # Check if list is empty
     if len(space) == 0:
         print('No edge to be optimized. Subproblems can be calculated seperately.')
@@ -515,7 +603,72 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
     else:
         flag_seperate = False
 
-    return space, names, flag_seperate
+    return space, names, flag_seperate, space_for_adaption
+
+
+
+def space_generation_bayesian_adaption(best_vars, old_space):
+    """
+    This function creates the space/range for the all (input-)variables to vary in the bayesian optimization based on the data
+    in the flow_at_nodes dict.
+
+    Parameters:
+        flow_at_nodes (dict): Dict containing the data for every edge from the design calculation to define the space
+        dummy_edges (list): List with the edges involved in the bayesian optimization
+        years (list): (Nested) List with the years to be optimized in the run
+
+    Returns:
+        space (list): List containing the space for every variable involved in the bayesian optimization
+        names (list): List containing the variable names for every variable involved in the bayesian optimization
+    """
+
+
+    # With the values from the dict, define the space for each edge and suproblem
+    space = []
+    names = []
+    adapted_space = dict()
+
+    for key_edge in old_space:
+
+        # Get min and max of bound for import variable
+        min_val_param_imp = old_space[key_edge][0][0]
+        max_val_param_imp = old_space[key_edge][0][1]
+        bound_imp = max_val_param_imp - min_val_param_imp
+
+        # Get min and max of bound for export variable
+        min_val_param_exp = old_space[key_edge][1][0]
+        max_val_param_exp = old_space[key_edge][1][1]
+        bound_exp = max_val_param_exp - min_val_param_exp
+
+        # How strong should the bound change (from 1 (fastest) to 10 (slowest))
+        learning_rate = 3
+
+        # Get the best value for the import variable
+        best_param_imp = best_vars[key_edge][0]
+
+        # Get the best value for the export variable
+        best_param_exp = best_vars[key_edge][1]
+
+        # Define new space for the import and the export
+        min_val_param_imp_new = max(min_val_param_imp, min_val_param_imp + (abs(best_param_imp - min_val_param_imp) / bound_imp) * (bound_imp / learning_rate))
+        max_val_param_imp_new = min(max_val_param_imp, max_val_param_imp - (abs(max_val_param_imp - best_param_imp) / bound_imp) * (bound_imp / learning_rate))
+
+        min_val_param_exp_new = max(min_val_param_exp, min_val_param_exp + (abs(best_param_exp - min_val_param_exp) / bound_exp) * (bound_exp / learning_rate))
+        max_val_param_exp_new = min(max_val_param_exp, max_val_param_exp - (abs(max_val_param_exp - best_param_exp) / bound_exp) * (bound_exp / learning_rate))
+
+        name_import = key_edge + '.import'
+        name_demand = key_edge + '.demand'
+
+        space_to_append = [Real(min_val_param_imp_new, max_val_param_imp_new, name=name_import),
+                           Real(min_val_param_exp_new, max_val_param_exp_new, name=name_demand)]
+        space.append(space_to_append)
+        names.append(key_edge)
+
+        # Dictionary for later adaption of the space
+        adapted_space[key_edge] = [[min_val_param_imp_new, max_val_param_imp_new], [min_val_param_exp_new, max_val_param_exp_new]]
+
+    return space, names, adapted_space
+
 
 
 def energy_model(sample_points, nodes_scenarios):
