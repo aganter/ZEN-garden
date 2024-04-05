@@ -21,6 +21,8 @@ from zen_garden.postprocess.results import Results
 
 import matplotlib.pyplot as plt
 
+from itertools import cycle
+
 # fixtures
 ##########
 
@@ -316,7 +318,7 @@ def standard_plots_AX(res, save_fig=False, file_type=None):
                  save_fig=save_fig, file_type=file_type, scenario=scenario)
 
 # PLOT2: LEARNING CURVES: Plot all learning curves
-def learning_curve_plots(res, tech_carrier, scenario=None):
+def learning_curve_plots(res, carrier, scenario=None, save_fig=False, file_type=None):
     def fun_total_cost(u, c_initial: float, q_initial: float,
                        learning_rate: float) -> object:  # u is a vector
         """
@@ -345,6 +347,14 @@ def learning_curve_plots(res, tech_carrier, scenario=None):
         v = alpha * np.power(u, learning_rate)
         return v
 
+    data_total = res.get_total("capacity", scenario=scenario)
+    if carrier != None:
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        data_extract = data_extract.groupby(["technology"]).mean().T
+        tech_carrier = data_extract.columns
+    else:
+        tech_carrier = res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum().index
+
     for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
 
@@ -354,7 +364,7 @@ def learning_curve_plots(res, tech_carrier, scenario=None):
             total_cost_values = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
             total_cost_values = np.append(total_cost_values, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
 
-            plt.plot(capacity_values, total_cost_values, label=f'{tech}-{capacity_type}')
+            plt.plot(capacity_values, total_cost_values, label=f'{tech}')
             plt.legend()
             plt.title('Total cost curve linearly approximated for all technologies')
             plt.xlabel('Capacity')
@@ -362,6 +372,10 @@ def learning_curve_plots(res, tech_carrier, scenario=None):
 
     plt.show()
 
+    colors = cycle(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray',
+                    'tab:olive', 'tab:cyan'])
+
+    fig, ax = plt.subplots()
     for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
             # get lower bound of x values
@@ -369,7 +383,7 @@ def learning_curve_plots(res, tech_carrier, scenario=None):
             # get upper bound of x values
             ub = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
             # get parameters of each tech and capacity type
-            capacity_values = np.linspace(lb, ub, 1000)
+            capacity_values = np.linspace(lb, ub, 1000000)
 
             # get initial cost
             c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
@@ -380,14 +394,31 @@ def learning_curve_plots(res, tech_carrier, scenario=None):
 
             unit_cost_values = unit_cost(capacity_values, c_initial, q_initial, learning_rate)
 
-            plt.plot(capacity_values, unit_cost_values, label=f'{tech}-{capacity_type}')
-            plt.legend()
-            plt.xlabel('Capacity')
-            plt.ylabel('Unit Cost')
-            plt.title('Unit cost curve for all technologies')
-            # plt.ylim(0, 2000)
-            plt.xlim(0,30)
+            color = next(colors)
 
+            ax.plot(capacity_values, unit_cost_values, label=f'{tech}', color=color)
+            ax.plot(q_initial, c_initial, marker='x', color=color)
+            ax.legend()
+            ax.set_xlabel('Capacity [GW]')
+            ax.set_ylabel('CAPEX [€/kW]')
+            # ax.set_title('Unit cost curve for all technologies')
+            if carrier=="hydrogen":
+                ax.set_xlim(0, 150)
+                ax.set_ylim(0, 5000)
+            else:
+                ax.set_xlim(0, 1000)
+                ax.set_ylim(0, 5000)
+
+            print(f"Floor value of CAPEX for {tech}: {unit_cost_values[-1]}")
+
+
+    if save_fig:
+        path = os.path.join(os.getcwd(), "outputs")
+        path = os.path.join(path, os.path.basename(res.results[scenario]["analysis"]["dataset"]))
+        path = os.path.join(path, "result_plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(os.path.join(path, "learning_curve_plot_" + carrier + "." + file_type))
 
     plt.show()
 
@@ -564,9 +595,12 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
 
     fig1, ax1 = plt.subplots()
     fig2, ax2 = plt.subplots()
+    colors = cycle(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan'])
+
     for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values(
                 "capacity_type").unique():
+            # get initial cost
             # get initial cost
             c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
             # get initial capacity
@@ -578,16 +612,19 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
             pwa_range = np.linspace(pwa_lower_bound, pwa_upper_bound, 1000)
 
-            data_total_cap = res.get_total("global_cumulative_capacity", scenario=scenario)
+            data_total_cap = res.get_df("global_cumulative_capacity", scenario=scenario).unstack()
             data_extract_cap = res.extract_reference_carrier(data_total_cap, carrier, scenario)
             data_extract_cap = data_extract_cap.groupby(["technology", "capacity_type"]).sum().T
 
             cap_tech = data_extract_cap.T.loc[tech, capacity_type]
             point_on_curve = unit_cost(cap_tech, c_initial, q_initial, learning_rate)
 
+            print(f"The unit cost of {tech} is {point_on_curve[:-1]} in the end.")
             learning_curve = unit_cost(pwa_range, c_initial, q_initial, learning_rate)
 
-            ax1.plot(point_on_curve, marker='.', label=f'{tech}-{capacity_type}')
+            color = next(colors)
+
+            ax1.plot(point_on_curve, marker='.', label=f'{tech}-{capacity_type}', color = color)
             ax1.legend()
             ax1.set_xlabel('Years')
             ax1.set_ylabel('Unit Cost')
@@ -595,17 +632,15 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             # plt.ylim(0, 2000)
             # plt.xlim(0, 60)
 
-            ax2.scatter(cap_tech, point_on_curve, marker='.')
-            ax2.plot(pwa_range, learning_curve, label=f'{tech}-{capacity_type}')
+            ax2.scatter(cap_tech, point_on_curve, marker='.', color = color)
+            ax2.plot(pwa_range, learning_curve, label=f'{tech}-{capacity_type}', color = color)
+            ax2.plot(q_initial, c_initial, marker='x', color = color)
             ax2.legend()
             ax2.set_xlabel('Cum. Global Capacity')
             ax2.set_ylabel('Unit Cost')
             ax2.set_title('Cost Evolution of Technologies over cumulative global capacity')
-
+            # ax2.set_xlim(0,1000)
     plt.show()
-
-
-
 
 
 
@@ -613,7 +648,7 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240209_Hydrogen_endog"
+data_set_name = "20240319_H2_learning_variation_extra_files"
 
 res = Results(os.path.join(folder_path, data_set_name))
 
@@ -622,9 +657,26 @@ save_fig = True
 file_type = "png"
 
 ############################################## PLOTS ##############################################
-
 # Create custom standard_plots for all scenarios
 standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
+
+# Unit cost graph
+plot_unit_cost_over_time(res, "electricity", scenario="scenario_1")
+plot_unit_cost_over_time(res, "hydrogen",  scenario="scenario_1")
+plot_unit_cost_over_time(res, "carbon",  scenario="scenario_1")
+plot_unit_cost_over_time(res, "biomethane",  scenario="scenario_1")
+
+# Plot a map
+from geopy.geocoders import Nominatim
+# Initialize the geocoder
+geolocator = Nominatim(user_agent="myGeocoder")
+
+# Fill dictionary with coordinates
+coordinates_nodes = {}
+
+for location in res.results["scenario_"]["system"]["set_nodes"]:
+    coordinates_nodes[location] = geolocator.geocode(location)
+
 
 # Do indivudal checks for the scenarios
 check2(res, scenario, save_fig=save_fig, file_type=file_type)
@@ -642,38 +694,79 @@ for carrier in demand.index.levels[0].values:
     if carrier in demand:
         plot_average_unit_cost(res, carrier, scenario=scenario)
 
-# Plot cost capex
-res.get_total("cost_capex").groupby(["technology"]).sum().T.plot.bar(stacked=True, width=0.8)
 
-# Unit cost graph
-plot_unit_cost_over_time(res, "electricity")
-plot_unit_cost_over_time(res, "hydrogen")
 
+# Plot the Net present cost split
+df = pd.DataFrame({'cost_capex_total': res.get_total("cost_capex_total", scenario=scenario),
+                   'cost_opex_total': res.get_total("cost_opex_total", scenario=scenario),
+                   'cost_carrier_total': res.get_total("cost_carrier_total", scenario=scenario),
+                   'cost_carbon_emissions_total': res.get_total("cost_carbon_emissions_total", scenario=scenario)})
+
+df.plot.bar(stacked=True)
+plt.xlabel('Years')
+plt.ylabel('Costs')
+plt.title('Total costs over the years')
+plt.show()
+
+scenario = "scenario_1"
 save_total(res, scenario=scenario)
-
-import plotly.io as pio
+year = "1"
 target_technologies = ["electrolysis", "SMR", "SMR_CCS", "gasification", "gasification_CCS"]
-intermediate_technologies = ["pv_ground", "biomethane_conversion", "anaerobic_digestion", "wind_onshore", "wind_offshore"]
-year = "13"
+intermediate_technologies = ["pv_ground", "pv_rooftop","biomethane_conversion", "anaerobic_digestion", "wind_onshore", "wind_offshore"]
 title = data_set_name
 generate_sankey_diagram(scenario, target_technologies, intermediate_technologies, year, title)
 
 
-
+# Variante 1: Nur Hydrogen Tech
 df_extact = res.extract_reference_carrier(res.get_df("capacity_addition", scenario=scenario), "hydrogen", scenario).groupby(["technology"]).sum()
-plt.pie(df_extact, labels=df_extact.index, autopct='%1.1f%%')
-plt.title("Shares of Hydrogen Generating Technologies in Capacity Additions over full horizon")
+# Variante 2: All Tech
+df_extact = res.get_df("capacity_addition", scenario=scenario).groupby(["technology"]).sum()
+plt.pie(round(df_extact), labels=df_extact.index, autopct='%1.1f%%')
+plt.title(f"Shares of Hydrogen Generating Technologies in Capacity Additions over full horizon {scenario}")
 plt.show()
 
 
 df_full = res.get_df("flow_conversion_input", scenario=scenario)
-flow_biomethane = df_full.groupby(["carrier"]).sum().loc["biomethane"]
 df_extract = res.extract_reference_carrier(df_full, "hydrogen", scenario).groupby(["carrier"]).sum()
-df_extract["natural_gas"]= df_extract["natural_gas"] - flow_biomethane
-df_extract=pd.concat([df_extract,pd.Series({"biomethane": flow_biomethane})])
+try:
+    flow_biomethane = df_full.groupby(["carrier"]).sum().loc["biomethane"]
+    df_extract["natural_gas"]= df_extract["natural_gas"] - flow_biomethane
+    df_extract=pd.concat([df_extract,pd.Series({"biomethane": flow_biomethane})])
+except:
+    pass
 plt.pie(df_extract, labels=df_extract.index, autopct='%1.1f%%')
 plt.title("Shares of Hydrogen Generating Carriers over full horizon")
 plt.show()
+
+# Hydrogen Production
+df_full = res.get_df("flow_conversion_output", scenario=scenario)
+df_extract = res.extract_reference_carrier(df_full, "hydrogen", scenario).groupby(["technology", "carrier"]).sum()
+filtered_df = df_extract[df_extract.index.get_level_values(1) == 'hydrogen']
+plt.pie(filtered_df, labels=filtered_df.index.levels[0], autopct='%1.1f%%')
+plt.title("Shares of Production of Hydrogen Generating Technologies over full horizon")
+plt.show()
+
+# Electricity Production
+df_full = res.get_df("flow_conversion_output", scenario=scenario)
+df_extract = res.extract_reference_carrier(df_full, "electricity", scenario).groupby(["technology", "carrier"]).sum()
+filtered_df = df_extract[df_extract.index.get_level_values(1) == 'electricity']
+plt.pie(filtered_df, labels=filtered_df.index.levels[0], autopct='%1.1f%%')
+plt.title("Shares of Production of Electricity Generating Technologies over full horizon")
+plt.show()
+
+# Carrier impots
+carrier_imports = res.get_df("flow_import", scenario=scenario).groupby(["carrier"]).sum()
+plt.pie(carrier_imports, labels=carrier_imports.index, autopct='%1.1f%%')
+plt.title("Import of carriers over whole horizon")
+plt.show()
+
+# Carbon storage
+cap_limit = res.get_df("capacity_limit", scenario=scenario).groupby(["technology", "location"]).max()[res.get_df("capacity_limit", scenario=scenario).groupby(["technology", "location"]).max().index.get_level_values(0) == 'carbon_storage']
+cap_access = cap_limit[cap_limit != 0.0]
+cap_storage = res.get_df("capacity", scenario=scenario).groupby(["technology", "location"]).max()[res.get_df("capacity", scenario=scenario).groupby(["technology", "location"]).max().index.get_level_values(0) == 'carbon_storage']
+cap_storage = cap_storage[cap_storage != 0.0]
+
+storage_load = cap_storage/cap_access* 100
 
 res.get_df("flow_conversion_input").groupby(["technology"]).sum()
 
@@ -726,6 +819,16 @@ for carrier in demand.index.levels[0].values:
         plt.xticks(range(len(df_capex_specific.index)))
         plt.show()
 
+# cost of transport technolog
+data_total = res.get_total("capex_specific_transport", scenario=scenario).groupby(["technology"]).mean().T
+plt.plot(data_total)
+plt.title(f"Capex specific of Transport Technologies")
+plt.xlabel("Year")
+plt.ylabel("Capex")
+plt.legend(data_total.columns, loc='center right')
+plt.xticks(range(len(data_total.index)))
+plt.show()
+
 
 # Look at the average price of imports of the carriers
 res.get_total("price_import").groupby(["carrier"]).mean()
@@ -737,16 +840,10 @@ plt.show()
 # res.get_df("capacity_existing", scenario=scenario).groupby(["technology","capacity_type"]).sum()
 #
 # ENDOG Learning Curve
-demand = res.get_df("demand", scenario=scenario)
-# remove carriers without demand
-demand = demand.loc[(demand != 0), :]
-for carrier in demand.index.levels[0].values:
-    if carrier in demand:
-        data_total = res.get_total("capacity", scenario=scenario)
-        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
-        data_extract = data_extract.groupby(["technology"]).mean().T
-        tech_carrier = data_extract.columns
-        learning_curve_plots(res, tech_carrier=tech_carrier, scenario=scenario)
+learning_curve_plots(res, carrier="electricity", scenario=scenario, save_fig=True, file_type="svg")
+learning_curve_plots(res, carrier="hydrogen", scenario=scenario, save_fig=True, file_type="svg")
+learning_curve_plots(res, carrier=None, scenario=scenario)
+
 
 plt.plot(res.get_total("price_import").groupby(["carrier"]).mean().T)
 plt.legend(res.get_total("price_import").groupby(["carrier"]).mean().T.columns, loc='center left')
@@ -754,7 +851,7 @@ plt.show()
 
 res.get_total("carbon_emissions_technology").groupby(["technology"]).sum()
 
-plt.plot(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T)
+plt.plot(res.get_total("carbon_intensity_carrier", scenario="scenario_").groupby(["carrier"]).mean().T)
 plt.legend(res.get_total("carbon_intensity_carrier").groupby(["carrier"]).mean().T.columns, loc='center left')
 plt.show()
 
@@ -780,19 +877,471 @@ res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum()
 #
 # # Biomethane post-processing
 res.get_df("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum()
+
 res.get_df("flow_import", scenario=scenario).groupby(["carrier"]).sum()
+
 # Check if the numbers add up
 res.get_total("flow_import", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"]
 # If we substract the biomethane from the natural gas flow conversion input then we should get the "real" natural gas
 # The "real" natural gas should correspond to the flow imports of natural gas
 res.get_total("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"] - res.get_total("flow_conversion_output").groupby(["carrier"]).sum().loc["natural_gas"]
 
+# Capacity Additions ROW
+data = res.get_df("cum_capacity_row", scenario="scenario_2").unstack().loc[["SMR","SMR_CCS", "electrolysis", "gasification", "gasification_CCS", "pv_ground", "pv_rooftop", "wind_onshore", "wind_offshore"]]
+data_sorted = data.loc[data.sum(axis=1).sort_values(ascending=False).index]
+data_sorted.T.plot.bar(stacked=True, width=0.6)
+plt.xlabel("Years")
+plt.ylabel("Cum Capacity [GW]")
+plt.title("Non-European Capacity Additions over the years")
+plt.show()
 
 # Net Present Cost
-res.get_df("net_present_cost").sum()
+for scenario in res.scenarios:
+    res.get_df("net_present_cost", scenario=scenario).sum()
 # Check Emissions
 res.get_df("net_present_cost").sum()
 res.get_df("carbon_emissions_annual").sum()
 res.get_df("carbon_emissions_cumulative")
 
-print("Done with result analysis")
+
+# Demand hydrogen
+demand = res.get_total("demand", scenario=scenario).loc["hydrogen"].sum()
+plt.bar(demand.index, demand, width=0.7)
+plt.show()
+
+def fun_total_cost(u, c_initial: float, q_initial: float,
+                   learning_rate: float) -> object:  # u is a vector
+    """
+    Total cumulative Cost for Learning Curve
+    :param u: Cumulative Capacity
+    :param c_initial: Initial Cost
+    :param q_initial: Initital Capacity
+    :param learning_rate: Learning Rate
+    :return: Total cumulative cot
+    """
+    alpha = c_initial / np.power(q_initial, learning_rate)
+    exp = 1 + learning_rate
+    TC = alpha / exp * (np.power(u, exp))
+
+    return TC
+
+# total cost for needed capacity for SMR
+# get initial cost
+tech = "SMR"
+capacity_type = "power"
+c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
+# get initial capacity
+q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+# get learning rate
+learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+required_capacity_smr = (demand - res.get_df("capacity_existing").sum()) * res.get_df("conversion_factor", scenario=scenario).loc["SMR"].mean()
+inv_cost_smr= fun_total_cost(demand, c_initial, q_initial, learning_rate) - fun_total_cost(q_initial, c_initial, q_initial, learning_rate)
+
+# total cost for needed capacity for electrolysis
+tech = "electrolysis"
+capacity_type = "power"
+c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
+# get initial capacity
+q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+# get learning rate
+learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+required_capacity = demand * res.get_df("conversion_factor", scenario=scenario).loc["electrolysis"].mean()
+inv_cost_ele= fun_total_cost(required_capacity, c_initial, q_initial, learning_rate) - fun_total_cost(q_initial, c_initial, q_initial, learning_rate)
+
+tech = "pv_ground"
+capacity_type = "power"
+c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
+# get initial capacity
+q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+# get learning rate
+learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+
+
+inv_cost_pv = fun_total_cost(required_capacity, c_initial, q_initial, learning_rate) - fun_total_cost(q_initial, c_initial, q_initial, learning_rate)
+
+
+# LCOH calculation
+year = 13
+tech = "electrolysis"
+scenario = "scenario_1"
+capital_cost = res.get_total("capex_specific_conversion", scenario=scenario).groupby(["technology"]).mean().loc[tech, year]
+discount_rate = res.get_df("discount_rate", scenario=scenario)
+lifetime = res.get_df("lifetime", scenario=scenario).loc[tech]
+f_h = pow((1+discount_rate),lifetime)/(pow((1+discount_rate),lifetime)-1)
+demand = res.get_df("demand", scenario=scenario).loc["hydrogen"].sum()
+
+
+scenario = "scenario_1"
+capex = res.get_df("capex_yearly_all_positions", scenario=scenario).unstack().groupby(["technology"]).sum()
+opex = res.get_total("opex_yearly", scenario=scenario).groupby(["technology"]).sum()
+
+carrier = "hydrogen"
+data_total = res.get_total("flow_conversion_output", scenario=scenario)
+data_h2 = res.extract_reference_carrier(data_total, carrier, scenario)
+produced_h2 = data_h2.groupby(["technology"]).sum()
+
+lcoh = ((capex + opex)/produced_h2).dropna()
+
+plt.plot(lcoh.T)
+plt.xlabel("Years")
+plt.ylabel("LCOH [Euro/kW H2]")
+plt.legend(lcoh.T.columns, loc='center left')
+plt.show()
+
+plt.plot(capex.loc[["SMR", "SMR_CCS", "electrolysis", "gasification", "gasification_CCS"]].T)
+plt.xlabel("Years")
+plt.ylabel("Capex [Euro/kW H2]")
+plt.legend(capex.loc[["SMR", "SMR_CCS", "electrolysis", "gasification", "gasification_CCS"]].T.columns, loc='center left')
+plt.show()
+
+plt.plot(opex.loc[["SMR", "SMR_CCS", "electrolysis", "gasification", "gasification_CCS"]].T)
+plt.xlabel("Years")
+plt.ylabel("Opex [Euro/kW H2]")
+plt.legend(opex.loc[["SMR", "SMR_CCS", "electrolysis", "gasification", "gasification_CCS"]].T.columns, loc='center left')
+plt.show()
+
+plt.plot(produced_h2.loc[["SMR", "SMR_CCS", "electrolysis", "gasification", "gasification_CCS"]].T)
+plt.xlabel("Years")
+plt.ylabel("Produced H2 [kW]")
+plt.legend(produced_h2.loc[["SMR", "SMR_CCS", "electrolysis", "gasification", "gasification_CCS"]].T.columns, loc='center left')
+plt.show()
+
+
+
+lcoh.T.mean()
+
+print(f"Cost of electrolysis and pv_ground if all demand supplied by electricity: {inv_cost_pv + inv_cost_ele}")
+print(f"Cost of SMR if all demand supplied by natural gas: {inv_cost_smr}")
+
+# Look at investments or look at hydrogen production
+# a) hydrogen production
+flow_conversion_output = res.extract_reference_carrier(res.get_total("flow_conversion_output", scenario=scenario), "hydrogen", scenario).groupby(["technology","carrier"]).sum()
+hydrogen_output = flow_conversion_output[flow_conversion_output.index.get_level_values(1) == "hydrogen"]
+hydrogen_output.T.plot.bar(stacked=True, width=0.6)
+plt.show()
+
+# b) investments
+res.plot("capex_yearly", yearly=True, plot_strings={"title": "Total Capex", "ylabel": "Capex"},
+                 save_fig=save_fig, file_type=file_type, scenario=scenario)
+
+# Plot cost capex
+res.get_df("capex_yearly_all_positions", scenario="scenario_1").unstack().T.plot.bar(stacked=True, width=0.5)
+plt.xlabel('Years')
+plt.ylabel('Cost Capex [kEuro]')
+plt.legend(loc='center right', bbox_to_anchor=(1.4, 0.5))
+plt.tight_layout()
+plt.show()
+
+plt.pie(res.get_df("cost_capex", scenario="scenario_").groupby(["technology"]).sum().abs().T,  labels=res.get_df("cost_capex", scenario="scenario_1").groupby(["technology"]).sum().abs().index, autopct='%1.1f%%')
+plt.show()
+
+# Compare exog vs. endog
+component = "capacity_addition"
+exog = res.get_df(component, scenario="scenario_").groupby(["technology"]).sum()
+endog = res.get_df(component, scenario="scenario_1").groupby(["technology"]).sum()
+
+categories = exog.index    # Replace 'your_column' with the column containing values for df2
+
+fig, ax = plt.subplots()
+# Plot bars to the left
+ax.barh(categories, -exog, color='blue', label='exog')
+# Plot bars to the right
+ax.barh(categories, endog, color='red', label='endog')
+# Add a vertical line in the middle
+ax.axvline(x=0, color='black', linestyle='--')
+# Adding labels and title
+ax.set_xlabel('Values')
+ax.set_ylabel('Categories')
+ax.set_title(f'Comparison of Values for {component}')
+ax.legend()
+plt.tight_layout()
+# Show plot
+plt.show()
+
+
+# Maximaler Ausbau der Technologien
+max_cap = (res.get_total("capacity", scenario="scenario_1")/res.get_total("capacity_limit", scenario="scenario_1")).max(axis=1)
+not_zero = max_cap[max_cap != 0]
+
+# STATEMENT 1: Early build out of emerging technologies (SMR CCS and gasification CCS), build out of infrastructure
+component = "capacity"
+cap_exog = res.get_total(component, scenario="scenario_").groupby(["technology"]).sum()
+cap_endog = res.get_total(component, scenario="scenario_1").groupby(["technology"]).sum()
+
+# Capacity addition for CCS infrastructure
+cap_CCS_exog = cap_exog.loc[["carbon_storage", "carbon_pipeline"]]
+cap_CCS_endog = cap_endog.loc[["carbon_storage", "carbon_pipeline"]]
+
+# Plot of CCS capacity
+fig, ax = plt.subplots()
+ax.plot(cap_CCS_exog.T, label= f"Exog {cap_CCS_exog.index.values}")
+ax.plot(cap_CCS_endog.T, label= f"Endog {cap_CCS_exog.index.values}")
+ax.legend()
+fig.tight_layout()
+plt.show()
+
+# Investments
+# Option 1: Emerging vs mature
+# Exlcuded components: capex_yearly
+# Problem with capacity: Not the same unit
+# Only include hydrogen poducing technology
+component = "capacity_addition"
+
+# Load data
+cost_capex_exog = res.get_total(component, scenario="scenario_").groupby(["technology"]).sum()
+if component == "capex_yearly":
+    cost_capex_endog = res.get_df( "capex_yearly_all_positions", scenario="scenario_1").unstack().groupby(["technology"]).sum()
+else:
+    cost_capex_endog = res.get_total(component, scenario="scenario_1").groupby(["technology"]).sum()
+
+
+# Classification 1 a: all tech
+emerging_tech = ["SMR_CCS", "gasification_CCS", "carbon_storage", "carbon_removal", "electrolysis", "pv_ground", "pv_rooftop", "wind_offshore"]
+mature_tech = ["SMR", "gasification", "wind_onshore", "anaerobic_digestion"]
+supporting_tech = ["hydrogen_pipeline", "dry_biomass_truck", "carbon_pipeline"]
+
+# Emerging vs mature
+investments_exog = pd.DataFrame()
+investments_exog["mature"] = 100* cost_capex_exog.loc[mature_tech].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_exog["emerging"] = 100* cost_capex_exog.loc[emerging_tech].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_exog["supporting"] = 100* cost_capex_exog.loc[supporting_tech].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+
+investments_endog = pd.DataFrame()
+investments_endog["mature"] = 100* cost_capex_endog.loc[mature_tech].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_endog["emerging"] = 100* cost_capex_endog.loc[emerging_tech].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_endog["supporting"] = 100* cost_capex_endog.loc[supporting_tech].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+
+
+investments_exog.plot.bar(stacked=True, width=0.7)
+plt.title(f"{component} Comparison Exog vs. endog")
+plt.show()
+
+investments_endog.plot.bar(stacked=True, width=0.7)
+plt.title(f"{component} Comparison Exog vs. endog")
+plt.show()
+
+fig, ax = plt.subplots()
+ax.plot(investments_exog["emerging"]+investments_exog["supporting"], label="No Learning")
+ax.plot(investments_endog["emerging"]+investments_endog["supporting"], label="Technology Learning")
+plt.title(f"{component} Comparison Exog vs. endog")
+ax.set_xticks(range(len(investments_exog)))
+ax.set_xlabel("Year")
+ax.set_ylabel("Capacity share of emerging and supporting technologies [%]")
+ax.set_ylim([0, 100])
+plt.legend()
+plt.show()
+
+# Classification 1 b: only h2 tech
+emerging_tech = ["SMR_CCS", "gasification_CCS", "electrolysis"]
+mature_tech = ["SMR", "gasification"]
+h2_tech = ["SMR_CCS", "gasification_CCS", "electrolysis", "SMR", "gasification"]
+
+# Emerging vs mature
+investments_exog = pd.DataFrame()
+investments_exog["mature"] = 100* cost_capex_exog.loc[mature_tech].sum() / cost_capex_exog.loc[emerging_tech + mature_tech].sum()
+investments_exog["emerging"] = 100* cost_capex_exog.loc[emerging_tech].sum() / cost_capex_exog.loc[emerging_tech + mature_tech].sum()
+
+investments_endog = pd.DataFrame()
+investments_endog["mature"] = 100* cost_capex_endog.loc[mature_tech].sum() / cost_capex_endog.loc[emerging_tech + mature_tech].sum()
+investments_endog["emerging"] = 100* cost_capex_endog.loc[emerging_tech].sum() / cost_capex_endog.loc[emerging_tech + mature_tech].sum()
+
+investments_exog.plot.bar(stacked=True, width=0.7)
+plt.title(f"{component} Comparison Exog vs. endog")
+plt.show()
+
+investments_endog.plot.bar(stacked=True, width=0.7)
+plt.title(f"{component} Comparison Exog vs. endog")
+plt.show()
+
+fig, ax = plt.subplots()
+ax.plot(investments_exog["emerging"], label="No Learning")
+ax.plot(investments_endog["emerging"], label="Technology Learning")
+plt.title(f"{component.capitalize()} Comparison Exog vs. endog")
+ax.set_xticks(range(len(investments_exog)))
+ax.set_xlabel("Year")
+ax.set_ylabel("Capacity share of emerging technologies [%]")
+ax.set_ylim([0, 100])
+plt.legend()
+plt.show()
+
+# No Classification
+investments_exog = pd.DataFrame()
+investments_exog = 100 * cost_capex_exog.loc[mature_tech+emerging_tech] / cost_capex_exog.loc[mature_tech+emerging_tech].sum()
+
+investments_endog = pd.DataFrame()
+investments_endog = 100 * cost_capex_endog.loc[mature_tech+emerging_tech] / cost_capex_endog.loc[mature_tech+emerging_tech].sum()
+
+investments_exog.T.plot.bar(stacked=True, width=0.7)
+plt.title(f"{component} exogenous")
+plt.show()
+
+
+
+# Option 2: Decarbonization pathways
+biomethane_path = ["anaerobic_digestion"]
+CCS_path = ["SMR_CCS", "gasification_CCS", "carbon_storage", "carbon_removal", "carbon_pipeline"]
+electrification_path = ["electrolysis", "pv_ground", "pv_rooftop", "wind_offshore", "wind_onshore", "hydrogen_pipeline"]
+fossil_path = ["SMR", "gasification", "dry_biomass_truck"]
+
+# Emerging vs mature
+investments_exog = pd.DataFrame()
+investments_exog["biomethane"] = 100* cost_capex_exog.loc[biomethane_path].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_exog["CCS"] = 100* cost_capex_exog.loc[CCS_path].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_exog["electrification"] = 100* cost_capex_exog.loc[electrification_path].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_exog["fossil"] = 100* cost_capex_exog.loc[fossil_path].sum() / cost_capex_exog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+
+investments_endog = pd.DataFrame()
+investments_endog["biomethane"] = 100* cost_capex_endog.loc[biomethane_path].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_endog["CCS"] = 100* cost_capex_endog.loc[CCS_path].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_endog["electrification"] = 100* cost_capex_endog.loc[electrification_path].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+investments_endog["fossil"] = 100* cost_capex_endog.loc[fossil_path].sum() / cost_capex_endog.drop(["biomethane_conversion", "biomethane_transport"]).sum()
+
+investments_exog.plot.bar(stacked=True, width=0.7)
+plt.show()
+
+investments_endog.plot.bar(stacked=True, width=0.7)
+plt.show()
+
+fig, ax = plt.subplots()
+ax.plot(investments_exog["fossil"], label="Exog Fossil")
+ax.plot(investments_endog["fossil"], label="Endog Fossil")
+plt.show()
+
+# Compare exog vs. endog
+
+
+component = "capacity_addition"
+year = 1
+exog = res.get_total(component, scenario="scenario_").groupby(["technology"]).sum()[year]
+endog = res.get_total(component, scenario="scenario_1").groupby(["technology"]).sum()[year]    # Replace 'your_column' with the column containing values for df2
+
+# Define colors for each technology
+tech_colors = {
+    'SMR': 'darkgrey',
+    'gasification': 'brown',
+    'electrolysis': 'green',
+    'gasification_CCS': 'darkblue',
+    'SMR_CCS': 'lightblue',
+    'biomethane': 'lightgreen'
+}
+
+fig, ax = plt.subplots()
+# Plot bars to the left
+for tech in mature_tech:
+    ax.barh("mature", -exog[tech], color=tech_colors[tech], label=tech)
+    ax.barh("mature", endog[tech], color=tech_colors[tech])
+for tech in emerging_tech:
+    ax.barh("emerging", -exog[tech], color=tech_colors[tech], label=tech)
+    ax.barh("emerging", endog[tech], color=tech_colors[tech])
+
+# Add a vertical line in the middle
+ax.axvline(x=0, color='black', linestyle='--')
+# Adding labels and title
+ax.set_xlabel('Capacity Addition [GW]')
+ax.set_ylabel('Categories')
+ax.set_title(f'Comparison of Values for {component}')
+ax.set_xlim([-1.2, 1.2])
+ax.legend()
+plt.tight_layout()
+# Show plot
+plt.show()
+
+
+
+# STATEMENT 2: Produced hydrogen
+flow_conversion_output_exog = res.get_total("flow_conversion_output", scenario="scenario_").groupby(["technology","carrier"]).sum()
+flow_conversion_output_endog = res.get_total("flow_conversion_output", scenario="scenario_1").groupby(["technology","carrier"]).sum()
+
+hydrogen_output_exog = flow_conversion_output_exog[flow_conversion_output_exog.index.get_level_values(1) == "hydrogen"]
+hydrogen_output_endog = flow_conversion_output_endog[flow_conversion_output_endog.index.get_level_values(1) == "hydrogen"]
+
+
+# Endogenous case
+# Convert to numpy arrays for easier manipulation
+y1 = np.array(hydrogen_output_endog.loc["SMR"])
+y2 = np.array(hydrogen_output_endog.loc["SMR_CCS"])
+y3 = np.array(hydrogen_output_endog.loc["gasification"])
+y4 = np.array(hydrogen_output_endog.loc["gasification_CCS"])
+y5 = np.array(hydrogen_output_endog.loc["electrolysis"])
+
+# Accumulate the y-values to stack the lines
+y_stack = np.vstack([y1, y2, y3, y4, y5])
+y_stack = np.cumsum(y_stack, axis=0)
+
+x = hydrogen_output_endog.columns
+# Plot the stacked lines
+plt.plot(x, y_stack[0], color='darkgrey', label='SMR')
+plt.plot(x, y_stack[1], color='lightblue', label='SMR_CCS')
+plt.plot(x, y_stack[2], color='brown', label='gasification')
+plt.plot(x, y_stack[3], color='darkblue', label='gasification_CCS')
+plt.plot(x, y_stack[4], color='green', label='electrolysis')
+
+# Fill the area between lines
+plt.fill_between(x, 0, y_stack[0], color='darkgrey', alpha=0.3)
+plt.fill_between(x, y_stack[0], y_stack[1], color='lightblue', alpha=0.3)
+plt.fill_between(x, y_stack[1], y_stack[2], color='brown', alpha=0.3)
+plt.fill_between(x, y_stack[2], y_stack[3], color='darkblue', alpha=0.3)
+plt.fill_between(x, y_stack[3], y_stack[4], color='green', alpha=0.3)
+
+# Add labels, title, legend, etc.
+plt.xlabel('Year')
+plt.ylabel('Hydrogen Production [GW]')
+plt.title('Hydrogen Production of Technologies')
+plt.xticks(x)
+plt.legend()
+
+# Show plot
+plt.show()
+
+
+# Exogenous case
+# Convert to numpy arrays for easier manipulation
+y1 = np.array(hydrogen_output_exog.loc["SMR"])
+y2 = np.array(hydrogen_output_exog.loc["SMR_CCS"])
+y3 = np.array(hydrogen_output_exog.loc["gasification"])
+y4 = np.array(hydrogen_output_exog.loc["gasification_CCS"])
+y5 = np.array(hydrogen_output_exog.loc["electrolysis"])
+
+# Accumulate the y-values to stack the lines
+y_stack = np.vstack([y1, y2, y3, y4, y5])
+y_stack = np.cumsum(y_stack, axis=0)
+
+x = hydrogen_output_exog.columns
+# Plot the stacked lines
+plt.plot(x, y_stack[0], color='darkgrey', label='SMR')
+plt.plot(x, y_stack[1], color='lightblue', label='SMR_CCS')
+plt.plot(x, y_stack[2], color='brown', label='gasification')
+plt.plot(x, y_stack[3], color='darkblue', label='gasification_CCS')
+plt.plot(x, y_stack[4], color='green', label='electrolysis')
+
+# Fill the area between lines
+plt.fill_between(x, 0, y_stack[0], color='darkgrey', alpha=0.3)
+plt.fill_between(x, y_stack[0], y_stack[1], color='lightblue', alpha=0.3)
+plt.fill_between(x, y_stack[1], y_stack[2], color='brown', alpha=0.3)
+plt.fill_between(x, y_stack[2], y_stack[3], color='darkblue', alpha=0.3)
+plt.fill_between(x, y_stack[3], y_stack[4], color='green', alpha=0.3)
+
+# Add labels, title, legend, etc.
+plt.xlabel('Year')
+plt.ylabel('Hydrogen Production [GW]')
+plt.title('Hydrogen Production of Technologies')
+plt.xticks(x)
+plt.legend()
+
+# Show plot
+plt.show()
+
+
+# For plot with myopic foresight
+component = "capacity_addition"
+for scenario in res.scenarios:
+    res.get_total(component, scenario=scenario).groupby(["technology"]).sum().loc[h2_tech].T.plot.bar(stacked=True, width=0.5)
+    plt.title(f"Capacity of Hydrogen Technologies {scenario}")
+    plt.show()
+    res.get_total("carbon_emissions_annual", scenario=scenario).plot.bar(stacked=True, width=0.5)
+    plt.title(f"Carbon Emissions {scenario}")
+    plt.show()
+    res.get_total("cost_carrier", scenario=scenario).groupby(["carrier"]).sum().T.plot.bar(stacked=True,
+                                                                                                      width=0.5)
+    plt.title(f"Capacity of Hydrogen Technologies {scenario}")
+    plt.show()
