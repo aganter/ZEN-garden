@@ -574,7 +574,7 @@ def plot_average_unit_cost(res, carrier, scenario=None):
     plt.show()
 
 # PLOT 6: UNIT COST OVER TIME
-def plot_unit_cost_over_time(res, carrier,scenario=None):
+def plot_unit_cost_over_time(res, carrier= None,scenario=None):
 
     def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object: # u is a vector
         """
@@ -589,13 +589,17 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
         return v
 
     data_total = res.get_total("capacity", scenario=scenario)
-    data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
-    data_extract = data_extract.groupby(["technology"]).mean().T
-    tech_carrier = data_extract.columns
+    if carrier != None:
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        data_extract = data_extract.groupby(["technology"]).mean().T
+        tech_carrier = data_extract.columns
+    else:
+        tech_carrier = res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum().index
 
     fig1, ax1 = plt.subplots()
-    fig2, ax2 = plt.subplots()
     colors = cycle(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan'])
+
+    unit_cost_over_time = {}
 
     for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values(
@@ -619,52 +623,225 @@ def plot_unit_cost_over_time(res, carrier,scenario=None):
             cap_tech = data_extract_cap.T.loc[tech, capacity_type]
             point_on_curve = unit_cost(cap_tech, c_initial, q_initial, learning_rate)
 
-            print(f"The unit cost of {tech} is {point_on_curve[:-1]} in the end.")
+            unit_cost_over_time[tech] = {'cap': cap_tech, 'cost': point_on_curve}
+
             learning_curve = unit_cost(pwa_range, c_initial, q_initial, learning_rate)
 
             color = next(colors)
 
-            ax1.plot(point_on_curve, marker='.', label=f'{tech}-{capacity_type}', color = color)
-            ax1.legend()
+            ax1.plot(point_on_curve, label=f'{tech}', color = color)
+            ax1.legend(loc='center right')
             ax1.set_xlabel('Years')
-            ax1.set_ylabel('Unit Cost')
+            if carrier != "carbon":
+                ax1.set_ylabel('Unit cost [EUR/kW]')
+            else:
+                ax1.set_ylabel('Unit cost [EUR/ton/h]')
             ax1.set_title('Cost Evolution of Technologies over the years')
+            ax1.set_xticks(range(0, len(point_on_curve.index),2))
+            xtick_labels = [year * 2 + 2024 for year in range(0, len(point_on_curve.index),2)]
+            ax1.set_xticklabels(xtick_labels)
             # plt.ylim(0, 2000)
             # plt.xlim(0, 60)
+    plt.show()
 
-            ax2.scatter(cap_tech, point_on_curve, marker='.', color = color)
-            ax2.plot(pwa_range, learning_curve, label=f'{tech}-{capacity_type}', color = color)
-            ax2.plot(q_initial, c_initial, marker='x', color = color)
+    # Flatten the dictionary to create a DataFrame
+    df_unit_cost_over_time = pd.DataFrame({(outerKey, innerKey): values for outerKey, innerDict in unit_cost_over_time.items() for innerKey, values in
+                       innerDict.items()}, index=range(14))
+
+    # Rename the columns
+    df_unit_cost_over_time.columns = pd.MultiIndex.from_tuples(df_unit_cost_over_time.columns, names=['tech', 'cap/cost'])
+
+    return df_unit_cost_over_time.T
+
+def plot_unit_cost_over_capacity(res, carrier= None,scenario=None):
+    def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object: # u is a vector
+        """
+        Exponential regression for Learning Curve
+        Input: Cumulative Capacity u
+        Parameters: c_initial, q_initial, learning_rate
+        Output: Unit cost of technology
+            :rtype:
+            """
+        alpha = c_initial / np.power(q_initial, learning_rate)
+        v = alpha * np.power(u, learning_rate)
+        return v
+
+    data_total = res.get_total("capacity", scenario=scenario)
+    if carrier != None:
+        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
+        data_extract = data_extract.groupby(["technology"]).mean().T
+        tech_carrier = data_extract.columns
+    else:
+        tech_carrier = res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum().index
+
+    fig2, ax2 = plt.subplots()
+    colors = cycle(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan'])
+
+    unit_cost_over_time = {}
+
+    for tech in tech_carrier:
+        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values(
+                "capacity_type").unique():
+            # get initial cost
+            # get initial cost
+            c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
+            # get initial capacity
+            q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+            # get learning rate
+            learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+            # PWA range
+            pwa_lower_bound = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
+            pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
+            pwa_range = np.linspace(pwa_lower_bound, pwa_upper_bound, 1000)
+
+            data_total_cap = res.get_df("global_cumulative_capacity", scenario=scenario).unstack()
+            data_extract_cap = res.extract_reference_carrier(data_total_cap, carrier, scenario)
+            data_extract_cap = data_extract_cap.groupby(["technology", "capacity_type"]).sum().T
+
+            cap_tech = data_extract_cap.T.loc[tech, capacity_type]
+            point_on_curve = unit_cost(cap_tech, c_initial, q_initial, learning_rate)
+
+            unit_cost_over_time[tech] = {'cap': cap_tech, 'cost': point_on_curve}
+
+            learning_curve = unit_cost(pwa_range, c_initial, q_initial, learning_rate)
+
+            color = next(colors)
+
+            ax2.scatter(cap_tech, point_on_curve, marker='.', color=color)
+            ax2.plot(pwa_range, learning_curve, label=f'{tech}-{capacity_type}', color=color)
+            ax2.plot(q_initial, c_initial, marker='x', color=color)
             ax2.legend()
             ax2.set_xlabel('Cum. Global Capacity')
             ax2.set_ylabel('Unit Cost')
             ax2.set_title('Cost Evolution of Technologies over cumulative global capacity')
             # ax2.set_xlim(0,1000)
+        plt.show()
+
+
+def plot_cost_reductions(res, df_unit_cost_over_time, scenario=None, save_fig=False, file_type=None):
+    cost_reduction = {}
+    for tech in df_unit_cost_over_time.index.levels[0]:
+        c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, "power"]
+        c_end = df_unit_cost_over_time.loc[tech, "cost"].iloc[-1]
+        cost_reduction[tech] = (c_initial - c_end) / c_initial * 100
+
+    # sort the cost reductions
+    cost_reduction_df = pd.Series(cost_reduction)
+
+    # Reverse the order of the DataFrame index
+    cost_reduction_df = cost_reduction_df[::-1]
+
+    # plot the cost reductions
+    plt.figure(figsize=(6, 6))
+    plt.barh(cost_reduction_df.index, cost_reduction_df.values)  # Using plt.barh() for horizontal bars
+    plt.xlabel('Cost Reduction [%]')  # Adjusting x-label
+    plt.ylabel('Technology')  # Adjusting y-label
+    plt.title('Cost Reduction Rank for Technologies')
+    plt.tight_layout()
+    if save_fig:
+        path = os.path.join(os.getcwd(), "outputs")
+        path = os.path.join(path, os.path.basename(res.results[scenario]["analysis"]["dataset"]))
+        path = os.path.join(path, "result_plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(os.path.join(path, "cost_reduction_rank" + "." + file_type))
     plt.show()
-
-
 
 ############################################## Result anaylsis ##############################################
 
 # I. Read the results of the two models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240319_H2_learning_variation_extra_files"
+data_set_name = "20240309_H2_myopic"
 
 res = Results(os.path.join(folder_path, data_set_name))
 
-scenario = None
-save_fig = True
+scenario = "scenario_1"
+save_fig = False
 file_type = "png"
 
-############################################## PLOTS ##############################################
+############################################## PLOTS #########################################################
+
+##### WE MAKE SINGLE PLOTS FOR EACH CASE HERE, NO COMPARISON OF THE CASES YET
+
+#### Plot 1: Description of the costs of the technologies
+
+# Plot 1a: Evolution of the costs over time
+carriers = ["electricity", "hydrogen", "carbon"]
+for carrier in carriers:
+    plot_unit_cost_over_time(res, carrier=carrier,  scenario=scenario)
+
+unit_cost_all = plot_unit_cost_over_time(res, carrier=None,  scenario=scenario)
+
+
+# Plot 1b: Cost reduction rank for technologies
+plot_cost_reductions(res, unit_cost_all, scenario=scenario, save_fig=save_fig, file_type=file_type)
+
+
+#### Plot 2: Description of the capacities of technologies --> Capacity addition
+# todo: Change the years ib tge x axis and the unit of the capacity
+# Plot 2a: Plot of the hydrogen producing technologies
+carrier = "hydrogen"
+res.plot("capacity", yearly=True, tech_type="conversion", reference_carrier=carrier,
+         plot_strings={"title": f"Capacities of {carrier.capitalize()} Generating Conversion Technologies",
+             "ylabel": "Capacity"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+
+# Plot 2b: Plot for the CCS supporting technologies
+carrier = "carbon"
+res.plot("capacity", yearly=True,  reference_carrier=carrier,
+         plot_strings={"title": f"Capacities of {carrier.capitalize()} Generating Conversion Technologies",
+             "ylabel": "Capacity"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+
+# Plot 2c: Plot for the electricity producing technologies
+carrier = "electricity"
+res.plot("capacity", yearly=True, tech_type="conversion", reference_carrier=carrier,
+         plot_strings={"title": f"Capacities of {carrier.capitalize()} Generating Conversion Technologies",
+             "ylabel": "Capacity"}, save_fig=save_fig, file_type=file_type, scenario=scenario)
+
+
+# Plot 2d: Pot for anaerobic digestion
+cap_anaerobic = res.get_total("capacity", scenario=scenario).groupby(["technology"]).sum().loc["anaerobic_digestion"]
+plt.bar(cap_anaerobic.index, cap_anaerobic.values, width = 0.7, label ="anaerobic digestion")
+plt.title("Capacities of Biomethane Generating Conversion Technologies")
+plt.xlabel("Year")
+plt.ylabel("Capacity [GW]")
+plt.show()
+
+
+
+#### Plot 3: Description of the flows of technologies
+
+# Plot 3a: Hydrogen production from technologies
+flow_conversion_output = res.get_total("flow_conversion_output", scenario=scenario).groupby(["technology","carrier"]).sum()
+
+hydrogen_output = flow_conversion_output[flow_conversion_output.index.get_level_values(1) == "hydrogen"].droplevel(1)
+
+hydrogen_output.T.plot.bar(stacked=True)
+plt.show()
+
+
+# Plot 3b: Input natural gas
+flow_input_gas = res.get_total("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"]
+
+biomethane_input = flow_conversion_output.loc["biomethane_conversion", "natural_gas"]
+natural_gas_input = flow_input_gas.values - biomethane_input.values
+df_gas = pd.DataFrame()
+df_gas["natural_gas"] = natural_gas_input
+df_gas["biomethane"] = biomethane_input
+
+df_gas.plot.bar(stacked=True)
+plt.xlabel("Year")
+plt.ylabel("Input Flow [GWh]")
+plt.title("Input Flow of Natural Gas and Biomethane")
+plt.show()
+
+# Plot 3c: Input electricity
+
+
+
+#######################################################################################################################
 # Create custom standard_plots for all scenarios
 standard_plots_AX(res, save_fig=save_fig, file_type=file_type)
 
-# Unit cost graph
-plot_unit_cost_over_time(res, "electricity", scenario="scenario_1")
-plot_unit_cost_over_time(res, "hydrogen",  scenario="scenario_1")
-plot_unit_cost_over_time(res, "carbon",  scenario="scenario_1")
-plot_unit_cost_over_time(res, "biomethane",  scenario="scenario_1")
 
 # Plot a map
 from geopy.geocoders import Nominatim
@@ -710,7 +887,7 @@ plt.show()
 
 scenario = "scenario_1"
 save_total(res, scenario=scenario)
-year = "1"
+year = "13"
 target_technologies = ["electrolysis", "SMR", "SMR_CCS", "gasification", "gasification_CCS"]
 intermediate_technologies = ["pv_ground", "pv_rooftop","biomethane_conversion", "anaerobic_digestion", "wind_onshore", "wind_offshore"]
 title = data_set_name
@@ -1345,3 +1522,5 @@ for scenario in res.scenarios:
                                                                                                       width=0.5)
     plt.title(f"Capacity of Hydrogen Technologies {scenario}")
     plt.show()
+
+
