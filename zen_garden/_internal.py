@@ -528,17 +528,21 @@ def main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts
 
 def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
     """
-    This function creates the space/range for the all (input-)variables to vary in the bayesian optimization based on the data
-    in the flow_at_nodes dict.
+    This function creates the optimization space for the all variables involved in the bayesian optimization based
+    on the data in the flow_at_nodes dict.
 
     Parameters:
         flow_at_nodes (dict): Dict containing the data for every edge from the design calculation to define the space
-        dummy_edges (list): List with the edges involved in the bayesian optimization
+        dummy_edges (list): List with all the dummy edges
         years (list): (Nested) List with the years to be optimized in the run
 
     Returns:
         space (list): List containing the space for every variable involved in the bayesian optimization
         names (list): List containing the variable names for every variable involved in the bayesian optimization
+        flag_separate (bool): Flag to check if the scenarios can be calculated seperately without any
+        bayesian optimization (True) or not (False)
+        space_for_adaption (dict): Dict with the name of the variable as the key, and the corresponding optimization
+        as the value (needed for the dynamic space refinement).
     """
 
 
@@ -578,8 +582,8 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
                 # node_import = nodes[0] + 'dummy'
                 # node_export = nodes[1] + 'dummy'
 
-                min_value = 0 #min(import_at_nodes[transport][node_import][year], export_at_nodes[transport][node_export][year])
-                max_value = flow_at_nodes[transport][edge][year]
+                min_value = 0 + 2000 #min(import_at_nodes[transport][node_import][year], export_at_nodes[transport][node_export][year])
+                max_value = flow_at_nodes[transport][edge][year] + 1000
 
                 # Define space for the import_availability side and the demand side
                 name_import = str(edge) + '.' + str(transport) + '.' + str(year) + '.import'
@@ -804,7 +808,7 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
         create_new_export_files_bayesian(demand_data, specific_carrier_path, years, all_nodes, nodes_scenarios)
 
         # Price Import/Export files
-        # create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years)
+        create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, all_nodes, years)
         create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_nodes, years, result, config)
 
     elif flag_iter == False:
