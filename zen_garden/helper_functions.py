@@ -5,19 +5,21 @@ import copy
 import shutil
 import warnings
 
+from pathlib import Path
 from zen_garden.postprocess.results import Results
 
 # Control of function to import in _internal.py
 __all__ = ['remove_dummy_nodes_and_edges', 'modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian',
-           'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian']
+           'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian',
+           'delete_old_files']
 
 
 def remove_dummy_nodes_and_edges(config):
     """
-    Preprocessing: Remove all dummy elements from nodes and edges file
+    Preprocessing: Remove all dummy elements from set_nodes.csv and set_edges.csv files.
 
     Parameters:
-        config: A config instance for the specific run
+        config: A config instance for the specific run.
 
     Returns:
         None
@@ -40,42 +42,65 @@ def remove_dummy_nodes_and_edges(config):
 
     return None
 
+def delete_old_files(config):
+    """
+    Preprocessing 2.0: Remove all old files from previous calculations.
+
+    Parameters:
+        config: A config instance for the specific run.
+
+    Returns:
+        None
+    """
+    set_carrier_path = Path(config.analysis['dataset']) / 'set_carriers'
+    # Use glob to find all files that contain 'new' in their name within the set_carrier path
+    files_to_delete = set_carrier_path.glob('**/*new*')
+
+    for file_path in files_to_delete:
+        file_path.unlink()
+
+    return None
+
 
 def modify_configs(config, destination_folder):
     """
     Prepare files for the run by performing a number of functions in a specific order.
 
     Parameters:
-        config: A config instance for the specific run
-        destination_folder (str): Path to read the results from
+        config: A config instance for the specific run.
+        destination_folder (str): Path to read the results from.
 
     Returns:
-        flow_at_nodes (dict): Dict with info about the flow transport over the edges for every transport technology and every year
-        dummy_edges (list): List containing all dummy edges
-        nodes_scenarios (list): List containing lists of nodes involved in each individual scenario
+        flow_at_nodes (dict): Dict with info about the flow transport over the edges.
+        dummy_edges (list): List containing all dummy edges.
+        nodes_scenarios (list): List containing lists of nodes involved in each individual scenario.
     """
 
     # Get results from design calculaiton
     run_path = config.analysis['dataset']
     result = Results(destination_folder)
+    result_system = result.solution_loader.scenarios['none'].system
 
     # Get all the carrier and conversion technologies paths
     set_carrier_folder = os.path.join(run_path, 'set_carriers')
     set_conversion_folder = os.path.join(run_path, 'set_technologies', 'set_conversion_technologies')
 
     # Path to the carriers
-    specific_carrier_paths = [os.path.join(set_carrier_folder, carrier)
-                              for carrier in result.solution_loader.scenarios['none'].system.set_carriers]
+    specific_carrier_paths = [os.path.join(set_carrier_folder, carrier) for carrier in result_system.set_carriers]
     # Path to the conversion technologies
     specific_conversiontech_paths = [os.path.join(set_conversion_folder, conversion)
-                                     for conversion in result.solution_loader.scenarios['none'].system.set_conversion_technologies]
+                                     for conversion in result_system.set_conversion_technologies]
+
 
     # Check set_nodes and set_edges file for completeness
     dummy_nodes, dummy_edges, nodes_scenarios = new_setnodes_setedges_file(result, run_path, config)
+
     # Limitation for dummy nodes regarding capacity installation
     adapt_capacity_limit(dummy_nodes, specific_conversiontech_paths)
+
     # Analysis of flow transports from design calculation
     flow_at_nodes = analyze_imports_exports_bayesian_modified(result, dummy_edges)
+
     # Modify attributes file
     modifiy_attribute_file(specific_carrier_paths)
 
@@ -106,12 +131,13 @@ def create_dummy_nodes(clustering_nodes, set_nodes):
 
 def copy_resultsfolder(calculation_flag, config, iteration=None):
     """
-    This function copies the results folder from the original place to another folder.
+    This function copies for each iteration the results folder from the original place to another folder.
+    First iteration: iteration=None.
 
     Parameters:
-        calculation_flag (str): Type of calculation in algorithm-process
-        config: A config instance for the specific run
-        iteration (int): Natural number (number of interation in loop)
+        calculation_flag (str): Type of calculation in algorithm-process.
+        config: A config instance for the specific run.
+        iteration (int): Natural number (number of interation in loop).
 
     Returns:
         destination_folder (str): The path to the destination folder where results are copied.
@@ -1936,7 +1962,7 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
                     carrier_path = os.path.join(set_carrier_folder, carrier)
 
                     price_export_file_new = os.path.join(carrier_path, 'price_export_new_' + str(scenario) + '.csv')
-                    price_export_var_file_new = os.path.join(carrier_path, 'price_export_yearly_variation_new.csv')
+                    price_export_var_file_new = os.path.join(carrier_path, f'price_export_yearly_variation_new_{scenario}.csv')
 
                     shadow_prices = result.get_dual('constraint_transport_technology_capex')
 
