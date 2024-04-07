@@ -81,11 +81,16 @@ def main(config, dataset_path=None, job_index=None):
         run_path = config.analysis['dataset']
         result = Results(destination_folder)
 
-        # Get needed information and needed paths
+        # Get needed information
         all_nodes = config.system["set_nodes"]
-        years = [config.system['reference_year'] + year for year in
-                 range(0, config.system['optimized_years'] * config.system['interval_between_years'],
-                       config.system['interval_between_years'])]
+        reference_year = config.system['reference_year']
+        optimized_years = config.system['optimized_years']
+        interval = config.system['interval_between_years']
+
+        # Get actual years (not only indexes)
+        years = [reference_year + year for year in range(0, optimized_years * interval, interval)]
+
+        # Get paths to all carriers
         set_carrier_folder = os.path.join(run_path, 'set_carriers')
         all_carriers = result.solution_loader.scenarios['none'].system.set_carriers
         specific_carrier_path = [os.path.join(set_carrier_folder, carrier) for carrier in all_carriers]
@@ -539,17 +544,17 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
     on the data in the flow_at_nodes dict.
 
     Parameters:
-        flow_at_nodes (dict): Dict containing the data for every edge from the design calculation to define the space
-        dummy_edges (list): List with all the dummy edges
-        years (list): (Nested) List with the years to be optimized in the run
+        flow_at_nodes (dict): Dict containing the data for every edge from the design calculation to define the space.
+        dummy_edges (list): List with all the dummy edges.
+        years (list): (Nested) List with the years to be optimized in the run.
 
     Returns:
         space (list): List containing the space for every variable involved in the bayesian optimization
         names (list): List containing the variable names for every variable involved in the bayesian optimization
-        flag_separate (bool): Flag to check if the scenarios can be calculated seperately without any
+        flag_separate (bool): Flag to check if the scenarios can be calculated separately without any
         bayesian optimization (True) or not (False)
         space_for_adaption (dict): Dict with the name of the variable as the key, and the corresponding optimization
-        as the value (needed for the dynamic space refinement).
+        space as the value (needed for the dynamic space refinement).
     """
 
 
@@ -585,21 +590,18 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
     for transport in flow_at_nodes:
         for year in range(len(years)):
             for edge in dummy_edges:
-                nodes = edge.split('-')
-                # node_import = nodes[0] + 'dummy'
-                # node_export = nodes[1] + 'dummy'
 
-                min_value = 0 #min(import_at_nodes[transport][node_import][year], export_at_nodes[transport][node_export][year])
+                min_value = 0
                 max_value = flow_at_nodes[transport][edge][year]
 
-                # Define space for the import_availability side and the demand side
-                name_import = str(edge) + '.' + str(transport) + '.' + str(year) + '.import'
-                name_demand = str(edge) + '.' + str(transport) + '.' + str(year) + '.demand'
+                # Define space for the import_availability side and the demand (export) side
+                name_import = f'{edge}.{transport}.{year}.import'
+                name_demand = f'{edge}.{transport}.{year}.demand'
 
-                name_to_append = str(edge) + '.' + str(transport) + '.' + str(year)
+                name_to_append = f'{edge}.{transport}.{year}'
 
                 if min_value != max_value:
-                    # Define space for the variation of the availability_import and the demand for the specific edge
+                    # Define space for the variation of the availability_import and the demand (export) for the specific edge
                     diff = max_value - min_value
                     min_value = min_value + diff*0.5
                     max_value = max_value + diff*0.25
@@ -613,7 +615,7 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
 
     # Check if list is empty
     if len(space) == 0:
-        print('No edge to be optimized. Subproblems can be calculated seperately.')
+        print('No edge to be optimized. Subproblems can be calculated separately.')
         flag_seperate = True
     else:
         flag_seperate = False
