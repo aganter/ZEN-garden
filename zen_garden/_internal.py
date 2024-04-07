@@ -10,10 +10,14 @@ Compilation  of the optimization problem.
 import importlib.util
 import logging
 import os
+import shutil
+import time
 import importlib
 
 from skopt import Optimizer
 from skopt.space import Real
+from contextlib import contextmanager
+from pathlib import Path
 
 from .model.optimization_setup import OptimizationSetup
 from .postprocess.postprocess import Postprocess
@@ -35,43 +39,40 @@ def main(config, dataset_path=None, job_index=None):
     :param job_index: The index of the scenario to run or a list of indices, if None, all scenarios are run in sequence
     """
 
-    if config.system['calculation_mode'] == 'ZEN-GARDEN':
+
+    calculation_mode = config.system['calculation_mode']
+
+    if calculation_mode == 'ZEN-GARDEN':
 
         optimization_setup = main_zen(config, dataset_path, job_index)
 
         return optimization_setup
 
 
-    elif config.system['calculation_mode'] == 'ALGORITHM':
+    elif calculation_mode == 'ALGORITHM':
 
         # Preprocess
         remove_dummy_nodes_and_edges(config)
 
-        # Design calculation
+        # Perform design calculation
         calculation_flag = 'design'
-        optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
+        with timed_operation("Design calculation"):
+            optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
 
         # Copy the results to the protocol folder
         destination_folder = copy_resultsfolder(calculation_flag, config)
 
-        # Delete everything in set carriers
-        set_carrier_path = os.path.join(config.analysis['dataset'], 'set_carriers')
-        elements_set_carriers = os.listdir(set_carrier_path)
-        for folder in elements_set_carriers:
-            folder_to_check = os.path.join(set_carrier_path, folder)
-            files = os.listdir(folder_to_check)
-            for file_name in files:
-                if 'new' in file_name:
-                    file_path = os.path.join(folder_to_check, file_name)
-                    os.remove(file_path)
+        # Delete old files
+        delete_old_files(config)
 
-        # TODO: Delete notebooks protocol_results
 
         # Do the clustering and define the cluster_nodes variable in the config file
         # List should be emtpy, check it and force it
-        if len(config.system.set_cluster_nodes) != 0:
-            config.system.set_cluster_nodes = []
-        config = clustering_performance(destination_folder, config)
+        # if len(config.system.set_cluster_nodes) != 0:
+        #     config.system.set_cluster_nodes = []
+        # config = clustering_performance(destination_folder, config)
+
+        config.system.set_cluster_nodes = [['CH', 'DE', 'FR', 'IT'], ['CZ', 'PL', 'AT']]
 
         # Function to modify all the needed files/configurations, based on results from design
         flow_at_nodes, dummy_edges, nodes_scenarios = modify_configs(config, destination_folder)
@@ -80,7 +81,7 @@ def main(config, dataset_path=None, job_index=None):
         run_path = config.analysis['dataset']
         result = Results(destination_folder)
 
-        # Get all the carrier paths
+        # Get needed information and needed paths
         all_nodes = config.system["set_nodes"]
         years = [config.system['reference_year'] + year for year in
                  range(0, config.system['optimized_years'] * config.system['interval_between_years'],
@@ -159,9 +160,9 @@ def main(config, dataset_path=None, job_index=None):
         flag_iter = True
 
         # Number of iterations for the optimization loop
-        agg_ts_list = [100, 500, 1400]
+        agg_ts_list = [2, 3, 4]
         # n_improvements = 4
-        n_iterations = [18, 9, 1]
+        n_iterations = [2, 3, 2]
         actual_iteration = 0
 
         # Define variables needed to check convergence
@@ -302,6 +303,8 @@ def main(config, dataset_path=None, job_index=None):
                 # Keep track of iteration
                 actual_iteration = actual_iteration + 1
 
+                shutil.rmtree(destination_folder)
+
 
             # Get the best value out of the calculated points
             best_vals = dict()
@@ -362,6 +365,10 @@ def main(config, dataset_path=None, job_index=None):
 
 
         return optimization_setup
+
+    else:
+        error_msg = f'The specified calculation mode "{calculation_mode}" is not allowed. Please choose between "ALGORITHM" and "ZEN-GARDEN".'
+        raise RuntimeError(error_msg)
 
 
 
@@ -582,8 +589,8 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
                 # node_import = nodes[0] + 'dummy'
                 # node_export = nodes[1] + 'dummy'
 
-                min_value = 0 + 2000 #min(import_at_nodes[transport][node_import][year], export_at_nodes[transport][node_export][year])
-                max_value = flow_at_nodes[transport][edge][year] + 1000
+                min_value = 0 #min(import_at_nodes[transport][node_import][year], export_at_nodes[transport][node_export][year])
+                max_value = flow_at_nodes[transport][edge][year]
 
                 # Define space for the import_availability side and the demand side
                 name_import = str(edge) + '.' + str(transport) + '.' + str(year) + '.import'
@@ -593,6 +600,10 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
 
                 if min_value != max_value:
                     # Define space for the variation of the availability_import and the demand for the specific edge
+                    diff = max_value - min_value
+                    min_value = min_value + diff*0.5
+                    max_value = max_value + diff*0.25
+
                     space_to_append = [Real(min_value, max_value, name=name_import), Real(min_value, max_value, name=name_demand)]
                     space.append(space_to_append)
                     names.append(name_to_append)
@@ -609,7 +620,13 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
 
     return space, names, flag_seperate, space_for_adaption
 
-
+@contextmanager
+def timed_operation(operation_name):
+    """Context manager for timing operations."""
+    start_time = time.time()
+    yield
+    end_time = time.time()
+    logging.info(f"{operation_name} took {end_time - start_time} seconds.")
 
 def space_generation_bayesian_adaption(best_vars, old_space):
     """
