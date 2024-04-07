@@ -99,7 +99,7 @@ def main(config, dataset_path=None, job_index=None):
         space, names, flag_seperate, space_for_adaption = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
 
         if flag_seperate == True:
-            print('There is no flow among the scenarios. Do a separate optimization for each of the scenarios')
+            logging.info('There is no flow among the scenarios. Do a separate optimization for each of the scenarios')
             cluster_nodes = config.system.model_extra['set_cluster_nodes']
 
             # The length of the cluster_nodes is the number of the scenarios to calculate
@@ -615,7 +615,7 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
 
     # Check if list is empty
     if len(space) == 0:
-        print('No edge to be optimized. Subproblems can be calculated separately.')
+        logging.info('No edge to be optimized. Subproblems can be calculated separately.')
         flag_seperate = True
     else:
         flag_seperate = False
