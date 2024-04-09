@@ -8,14 +8,15 @@ import os
 
 def clustering_performance(destination_folder, config):
     """
-    Create files for the calculation of the scenarios (availability_import, demand, price_import)
+    Performing the clustering based on the louvain method and updates the config instance
+    (with the new clustered nodes).
 
     Parameters:
         destination_folder (str): Path to the results in the protocol folder.
-        config (): A config instance used for the run.
+        config: A config instance used for the run.
 
     Returns:
-        None
+        config: Updated config instance.
     """
 
     # Get path and results object from design calculation
