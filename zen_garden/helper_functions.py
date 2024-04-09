@@ -3,6 +3,7 @@ import csv
 import json
 import copy
 import shutil
+import logging
 import warnings
 
 from pathlib import Path
@@ -11,7 +12,7 @@ from zen_garden.postprocess.results import Results
 # Control of function to import in _internal.py
 __all__ = ['remove_dummy_nodes_and_edges', 'modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian',
            'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian',
-           'delete_old_files']
+           'delete_old_files', 'create_logs']
 
 
 def remove_dummy_nodes_and_edges(config):
@@ -61,6 +62,80 @@ def delete_old_files(config):
 
     return None
 
+def setup_logger(name, log_file, level=logging.INFO):
+    """
+    Function to setup a logger with a file handler and formatter
+
+    Parameters:
+        name (str): String defining the name of the .log-file
+        log_file (str): String defining the path of the .log-file
+        level: logging.INFO
+
+    Returns:
+        logger
+    """
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    file_handler = logging.FileHandler(log_file)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+def create_logs(destination_folder, optimizer_edge, nodes_scenarios, years):
+    '''
+    This function creates loggers, to keep track of some important values.
+
+    Parameters
+        destination_folder (str): Path to the destination folder (where the.log-file should be saved).
+        optimizer_edge (dict): Dictionary with the Optimizer object for every involved edge.
+        nodes_scenarios (list): Nested list with containing all nodes for each individual scenario.
+        years (list): List with years to be optimized.
+
+    Returns:
+        loggers (dict): Dict with each individual logger for every value.
+    '''
+
+    # Define file paths for .log-files
+    file_names = ['protocol_actual_flows.log', 'protocol_diff_flows.log', 'protocol_costs.log', 'protocol_attr.log']
+    protocol_files = [os.path.join(os.path.dirname(destination_folder), file_name) for file_name in file_names]
+
+    # Delete all existing files
+    for file in protocol_files:
+        if os.path.exists(file):
+            os.remove(file)
+
+    # Dynamic logger creation
+    loggers = {}
+    log_names = ['actual_flows', 'difference_flows', 'costs', 'import_demand']
+    for name, file in zip(log_names, protocol_files):
+        loggers[name] = setup_logger(f'{name}_log', file, logging.INFO)
+
+    # First, create column names
+    # Flow difference
+    edge_names = [edge_name for edge_name in optimizer_edge]
+    edge_names_str = ': '.join(edge_names)
+    loggers['difference_flows'].info(edge_names_str)
+
+    # Import and demand values
+    edge_names_attr = [[edge_name + '.import', edge_name + '.demand'] for edge_name in optimizer_edge]
+    flattened_data = [item for sublist in edge_names_attr for item in sublist]
+    flattened_data_str = ': '.join(flattened_data)
+    loggers['import_demand'].info(flattened_data_str)
+
+    # Actual flows in both directions
+    flows_in_out = [[edge_name + '.in', edge_name + '.out'] for edge_name in optimizer_edge]
+    flattened_data = [item for sublist in flows_in_out for item in sublist]
+    flattened_data_str = ': '.join(flattened_data)
+    loggers['actual_flows'].info(flattened_data_str)
+
+    # Costs
+    cost_scen = [f'cost_scen_{scen_idx}_year_{year}' for scen_idx, _ in enumerate(nodes_scenarios) for year in years]
+    cost_scen_str = ': '.join(cost_scen)
+    loggers['costs'].info(cost_scen_str)
+
+    return loggers
 
 def modify_configs(config, destination_folder):
     """
