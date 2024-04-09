@@ -39,7 +39,7 @@ def main(config, dataset_path=None, job_index=None):
     :param job_index: The index of the scenario to run or a list of indices, if None, all scenarios are run in sequence
     """
 
-
+    # Get calculation mode from config
     calculation_mode = config.system['calculation_mode']
 
     if calculation_mode == 'ZEN-GARDEN':
@@ -65,14 +65,12 @@ def main(config, dataset_path=None, job_index=None):
         # Delete old files
         delete_old_files(config)
 
+        # List should be emtpy for clustering process. Check it and force it
+        if len(config.system.set_cluster_nodes) != 0:
+             config.system.set_cluster_nodes = []
 
-        # Do the clustering and define the cluster_nodes variable in the config file
-        # List should be emtpy, check it and force it
-        # if len(config.system.set_cluster_nodes) != 0:
-        #     config.system.set_cluster_nodes = []
-        # config = clustering_performance(destination_folder, config)
-
-        config.system.set_cluster_nodes = [['CH', 'DE', 'FR', 'IT'], ['CZ', 'PL', 'AT']]
+        # Do the clustering and define the cluster_nodes variable in the updated config file
+        config = clustering_performance(destination_folder, config)
 
         # Function to modify all the needed files/configurations, based on results from design
         flow_at_nodes, dummy_edges, nodes_scenarios = modify_configs(config, destination_folder)
@@ -119,43 +117,7 @@ def main(config, dataset_path=None, job_index=None):
             optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gp", n_initial_points=10,
                                              acq_func="gp_hedge", random_state=42)
 
-        # Define file paths for .log-files
-        file_names = ['protocol_actual_flows.log', 'protocol_diff_flows.log', 'protocol_costs.log', 'protocol_attr.log']
-        protocol_files = [os.path.join(os.path.dirname(destination_folder), file_name) for file_name in file_names]
-
-        # Delete all existing files
-        for file in protocol_files:
-            if os.path.exists(file):
-                os.remove(file)
-
-        # Dynamic logger creation
-        loggers = {}
-        log_names = ['actual_flows', 'difference_flows', 'costs', 'import_demand']
-        for name, file in zip(log_names, protocol_files):
-            loggers[name] = setup_logger(f'{name}_log', file, logging.INFO)
-
-        # First, create column names
-        # Flow difference
-        edge_names = [edge_name for edge_name in optimizer_edge]
-        edge_names_str = ': '.join(edge_names)
-        loggers['difference_flows'].info(edge_names_str)
-
-        # Import and demand values
-        edge_names_attr = [[edge_name + '.import', edge_name + '.demand'] for edge_name in optimizer_edge]
-        flattened_data = [item for sublist in edge_names_attr for item in sublist]
-        flattened_data_str = ': '.join(flattened_data)
-        loggers['import_demand'].info(flattened_data_str)
-
-        # Actual flows in both directions
-        flows_in_out = [[edge_name + '.in', edge_name + '.out'] for edge_name in optimizer_edge]
-        flattened_data = [item for sublist in flows_in_out for item in sublist]
-        flattened_data_str = ': '.join(flattened_data)
-        loggers['actual_flows'].info(flattened_data_str)
-
-        # Costs
-        cost_scen = [f'cost_scen_{scen_idx}_year_{year}' for scen_idx, _ in enumerate(nodes_scenarios) for year in years]
-        cost_scen_str = ': '.join(cost_scen)
-        loggers['costs'].info(cost_scen_str)
+        loggers = create_logs(destination_folder, optimizer_edge, nodes_scenarios, years)
 
         # Use dct to automatically handle missing keys
         protocol_flow = dict()
@@ -164,9 +126,8 @@ def main(config, dataset_path=None, job_index=None):
         # Flag to check if it is the first iteration
         flag_iter = True
 
-        # Number of iterations for the optimization loop
+        # Number of iterations for the optimization loop ¦¦ fixes configuration based on empirical values
         agg_ts_list = [2, 3, 4]
-        # n_improvements = 4
         n_iterations = [2, 3, 2]
         actual_iteration = 0
 
@@ -213,8 +174,8 @@ def main(config, dataset_path=None, job_index=None):
                 # Start optimization
                 agg_ts = agg_ts_list[n_impr]
                 optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts=agg_ts)
-                # Results object
 
+                # Results object
                 destination_folder = copy_resultsfolder(calculation_flag, config, iteration=actual_iteration)
                 res = Results(destination_folder)
 
@@ -368,6 +329,32 @@ def main(config, dataset_path=None, job_index=None):
 
                         optimizer_edge[key_edge].tell(variable_val, return_val)
 
+        # Do a last calculation with the best configuration.
+
+        # Ask the optimizer for the next point to sample
+        # sample_points_last_calc = {}
+        # for key_edge, opt in optimizer_edge.items():
+        #
+        # for key_edge in names:
+        #     best_val = min(return_information[key_edge])
+        #     best_val_index = return_information[key_edge].index(best_val)
+        #
+        #     for variable_val, return_val in zip(variable_information[key_edge], return_information[key_edge])
+        #
+        #     if optimizer_convergence[key_edge] == False:
+        #         sample_points[key_edge] = opt.ask()
+        #     else:
+        #         sample_points[key_edge] = sample_points_fixed[key_edge]
+        #
+        # # Modify input csv files with the new sample points
+        # avail_import_data, demand_data = energy_model(sample_points_last_calc, nodes_scenarios)
+        # create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years,
+        #              all_nodes, nodes_scenarios, result, flag_iter, config)
+        #
+        # # Start optimization
+        # agg_ts = agg_ts_list[n_impr]
+        # optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag,
+        #                                 adapted_agg_ts=agg_ts)
 
         return optimization_setup
 
@@ -495,6 +482,7 @@ def main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts
     # Set scenario flag to False, if the design is being calculated
     if calculation_flag == 'design':
         config.system["conduct_scenario_analysis"] = False
+        config.system.aggregated_time_steps_per_year = 1
     else:
         config.system["conduct_scenario_analysis"] = True
 
@@ -556,30 +544,6 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
         space_for_adaption (dict): Dict with the name of the variable as the key, and the corresponding optimization
         space as the value (needed for the dynamic space refinement).
     """
-
-
-    # Filter the dicts if there is no flow over the edge for specific transport type.
-    # import_at_nodes = {key: val for key, val in import_at_nodes.items() if sum(sum(node_imp) for node_imp in val.values()) != 0}
-    # export_at_nodes = {key: val for key, val in export_at_nodes.items() if sum(sum(node_exp) for node_exp in val.values()) != 0}
-
-    # Filter the dicts if there is no flow over the edge for specific transport type.
-    # sum_flow_import = dict()
-    # sum_flow_export = dict()
-    # for key_transport in import_at_nodes:
-    #     sum_flow_import[key_transport] = []
-    #     sum_flow_export[key_transport] = []
-    #
-    #     for key_node in import_at_nodes[key_transport]:
-    #         sum_node_imp = import_at_nodes[key_transport][key_node]
-    #         sum_flow_import[key_transport].append(sum(sum_node_imp))
-    #         sum_node_exp = export_at_nodes[key_transport][key_node]
-    #         sum_flow_export[key_transport].append(sum(sum_node_exp))
-    #
-    # for key_zero_imp, key_zero_ex in zip(sum_flow_import, sum_flow_export):
-    #     if sum(sum_flow_import[key_zero_imp]) == 0:
-    #         del import_at_nodes[key_zero_imp]
-    #     if sum(sum_flow_export[key_zero_ex]) == 0:
-    #         del export_at_nodes[key_zero_ex]
 
     # With the values from the dict, define the space for each edge and suproblem
     space = []
@@ -783,27 +747,6 @@ def energy_model(sample_points, nodes_scenarios):
     return avail_import_dict, demand_dict
 
 
-def setup_logger(name, log_file, level=logging.INFO):
-    """
-    Function to setup a logger with a file handler and formatter
-
-    Parameters:
-        name (str): String defining the name of the .log-file
-        log_file (str): String defining the path of the .log-file
-        level: logging.INFO
-
-    Returns:
-        logger
-    """
-
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    file_handler = logging.FileHandler(log_file)
-    logger.addHandler(file_handler)
-
-    return logger
-
-
 def create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios, result, flag_iter, config):
     """
     Create files for the calculation of the scenarios (availability_import, demand, price_import)
@@ -840,10 +783,19 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
 
 
 def create_scenario_dict(cluster_nodes):
+    """
+    Creates the dict where the scenarios are defined
+
+    Parameters:
+        cluster_nodes (list): Nested list with nodes from each individual cluster.
+
+    Returns:
+        scenario_dict (dict): Dictionary with the defined scenarios.
+    """
     scenario_dict = dict()
 
     for idx_cl, cluster_info in enumerate(cluster_nodes):
         scenario_dict[str(idx_cl)] = {'system': {'set_nodes': cluster_info,
-                                                 'aggregated_time_steps_per_year': 4}
+                                                 'aggregated_time_steps_per_year': 380}
                                       }
     return scenario_dict
