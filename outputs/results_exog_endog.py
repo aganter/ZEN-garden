@@ -574,7 +574,53 @@ def plot_average_unit_cost(res, carrier, scenario=None):
     plt.show()
 
 # PLOT 6: UNIT COST OVER TIME
-def plot_unit_cost_over_time(res, carrier= None,scenario=None, save_fig=False, file_type=None):
+
+# Cost Evolution of technologies
+def plot_unit_cost_over_time(res, unit_cost, fig, ax, save_fig=False, file_type=None):
+    def get_change_point(res, scenario, tech):
+        initial_capacity = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+        cum_capacity = res.get_total("global_cumulative_capacity", scenario=scenario).droplevel(1).loc[tech]
+        cap_diff = cum_capacity.diff().fillna(cum_capacity.iloc[0]-initial_capacity)
+        if cap_diff.iloc[-1] ==0:
+            change_point = (cap_diff==0).idxmax()
+        else:
+            change_point = len(cap_diff)
+        return change_point
+
+    # Plot
+    for tech in unit_cost.index.levels[0]:
+        change_point= get_change_point(res, scenario=scenario, tech=tech)
+        if change_point ==0:
+            ax.plot(unit_cost.loc[tech, "cost"].index, unit_cost.loc[tech, "cost"], label=tech, color=tech_colors[tech], linestyle="--")
+        else:
+            ax.plot(unit_cost.loc[tech, "cost"].iloc[:change_point].index, unit_cost.loc[tech, "cost"].iloc[:change_point], label=tech, color=tech_colors[tech], linestyle="-")
+            ax.plot(unit_cost.loc[tech, "cost"].iloc[change_point-1:].index, unit_cost.loc[tech, "cost"].iloc[change_point-1:], label=tech, color=tech_colors[tech], linestyle="--")
+            ax.scatter(unit_cost.loc[tech, "cost"].iloc[:change_point].index, unit_cost.loc[tech, "cost"].iloc[:change_point], label=tech, color=tech_colors[tech],marker='.')
+    xtick_labels = [year * 2 + 2024 for year in range(len(unit_cost.columns))]
+    ax.set_xlabel("Years")
+    ax.set_ylabel("Unit cost [EUR/kW]")
+    ax.set_ylim(0, 2500)
+    ax.set_xticks(range(len(unit_cost.columns)))
+    ax.set_xticklabels(xtick_labels, rotation=90)
+    ax.legend(loc="upper right",labels=unit_cost.index.levels[0], ncols=2)
+
+    if save_fig:
+        path = os.path.join(os.getcwd(), "outputs")
+        path = os.path.join(path, os.path.basename(res.results[scenario]["analysis"]["dataset"]))
+        path = os.path.join(path, "result_plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        try:
+            file_path = os.path.join(path, scenario + "cost_over_time_" + carrier + "." + file_type)
+        except:
+            file_path = os.path.join(path, scenario + "cost_over_time_all_tech" + "." + file_type)
+        print("Saving plot to:", file_path)  # Debug print statement
+        fig.savefig(file_path)
+
+    fig.show()
+
+
+def calculate_unit_cost_over_time(res, carrier= None,scenario=None):
 
     def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object: # u is a vector
         """
@@ -596,9 +642,6 @@ def plot_unit_cost_over_time(res, carrier= None,scenario=None, save_fig=False, f
     else:
         tech_carrier = res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum().index
 
-    fig1, ax1 = plt.subplots()
-    colors = cycle(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan'])
-
     unit_cost_over_time = {}
 
     if res.results[scenario]["system"]["use_endogenous_learning"]:
@@ -612,9 +655,6 @@ def plot_unit_cost_over_time(res, carrier= None,scenario=None, save_fig=False, f
                 q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
                 # get learning rate
                 learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
-                # PWA range
-                pwa_lower_bound = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
-                pwa_upper_bound = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
 
                 data_total_cap = res.get_df("global_cumulative_capacity", scenario=scenario).unstack()
                 data_extract_cap = res.extract_reference_carrier(data_total_cap, carrier, scenario)
@@ -624,63 +664,17 @@ def plot_unit_cost_over_time(res, carrier= None,scenario=None, save_fig=False, f
                 point_on_curve = unit_cost(cap_tech, c_initial, q_initial, learning_rate)
 
                 unit_cost_over_time[tech] = {'cap': cap_tech, 'cost': point_on_curve}
-
-                color = next(colors)
-
-                ax1.plot(point_on_curve, label=f'{tech}', color=tech_colors[tech])
-                ax1.legend(loc='center right')
-                ax1.set_xlabel('Years')
-                if carrier != "carbon":
-                    ax1.set_ylabel('Unit cost [EUR/kW]')
-                else:
-                    ax1.set_ylabel('Unit cost [EUR/ton/h]')
-                ax1.set_title('Cost Evolution of Technologies over the years')
-                ax1.set_xticks(range(0, len(point_on_curve.index),2))
-                xtick_labels = [year * 2 + 2024 for year in range(0, len(point_on_curve.index),2)]
-                ax1.set_xticklabels(xtick_labels)
     else:
         for tech in tech_carrier:
             try:
                 point_on_curve = res.get_total("capex_specific_conversion", scenario=scenario).groupby(["technology"]).mean().loc[tech]
             except:
                 point_on_curve = res.get_total("capex_specific_transport", scenario=scenario).groupby(["technology"]).mean().loc[tech]
-
             cap_tech = res.get_total("capacity", scenario=scenario).groupby(["technology"]).sum().loc[tech]
-
             unit_cost_over_time[tech] = {'cap': cap_tech, 'cost': point_on_curve}
 
-            color = next(colors)
-
-            ax1.plot(point_on_curve, label=f'{tech}', color=tech_colors[tech])
-            ax1.legend(loc='center right')
-            ax1.set_xlabel('Years')
-            if carrier != "carbon":
-                ax1.set_ylabel('Unit cost [EUR/kW]')
-            else:
-                ax1.set_ylabel('Unit cost [EUR/ton/h]')
-            ax1.set_title('Cost Evolution of Technologies over the years')
-            ax1.set_xticks(range(0, len(point_on_curve.index), 2))
-            xtick_labels = [year * 2 + 2024 for year in range(0, len(point_on_curve.index), 2)]
-            ax1.set_xticklabels(xtick_labels)
-
-    if save_fig:
-        path = os.path.join(os.getcwd(), "outputs")
-        path = os.path.join(path, os.path.basename(res.results[scenario]["analysis"]["dataset"]))
-        path = os.path.join(path, "result_plots")
-        if not os.path.exists(path):
-            os.makedirs(path)
-        try:
-            file_path = os.path.join(path, scenario + "cost_over_time_" + carrier + "." + file_type)
-        except:
-            file_path = os.path.join(path, scenario +  "cost_over_time_all_tech" + "." + file_type)
-        print("Saving plot to:", file_path)  # Debug print statement
-        plt.savefig(file_path)
-
-    plt.show()
-
     # Flatten the dictionary to create a DataFrame
-    df_unit_cost_over_time = pd.DataFrame({(outerKey, innerKey): values for outerKey, innerDict in unit_cost_over_time.items() for innerKey, values in
-                       innerDict.items()}, index=range(14))
+    df_unit_cost_over_time = pd.DataFrame({(outerKey, innerKey): values for outerKey, innerDict in unit_cost_over_time.items() for innerKey, values in innerDict.items()}, index=range(14))
 
     # Rename the columns
     df_unit_cost_over_time.columns = pd.MultiIndex.from_tuples(df_unit_cost_over_time.columns, names=['tech', 'cap/cost'])
@@ -960,6 +954,75 @@ def convert_tech_output_2_pathway_output(hydrogen_output, df_gas):
     production_share_path["Fossil"] = production_share.loc["SMR gas"]
 
     return production_share_path
+
+
+def plot_capacity_multi_bar(res, tech_selection, plot_style=None, annotation=None, save_fig=False, file_type=None):
+    # Plot style
+    bar_width = 0.6 / len(res.scenarios)
+    if plot_style is not None:
+        edgecolor = plot_style["edgecolor"]
+        tech_colors = plot_style["tech_colors"]
+        tech_hatches = plot_style["tech_hatches"]
+    else:
+        edgecolor = 'black'
+        tech_colors = tech_colors_1
+        tech_hatches = tech_hatches_1
+
+    # Double Bar Plot
+    fig, axis = plt.subplots(figsize=(10, 5))
+    for i, scenario in enumerate(res.scenarios):
+        # Get the capacity
+        cap = res.get_total("capacity", scenario=scenario).groupby(["technology"]).sum().loc[tech_selection]
+        # Sort the hydrogen producing technologies
+        if tech_selection == h2_tech:
+            # Get the hydrogen production
+            hydrogen_output, df_gas = plot_hydrogen_production(res, scenario=scenario, save_fig=False, file_type=file_type)
+            # Production share of CCS technologies
+            production_share_path = convert_tech_output_2_pathway_output(hydrogen_output, df_gas)
+            # Production share of biomethane
+            df_gas_share = pd.DataFrame()
+            df_gas_share["natural_gas"] = df_gas["natural_gas"] / df_gas.sum(axis=1)
+            df_gas_share["biomethane"] = df_gas["biomethane"] / df_gas.sum(axis=1)
+            # Adjust cap df for biomethane and natural gas
+            cap.loc["SMR"] = cap.loc["SMR"] * df_gas_share["natural_gas"]
+            cap.loc["SMR biomethane"] = cap.loc["SMR"] * df_gas_share["biomethane"]
+            cap.loc["SMR_CCS"] = cap.loc["SMR_CCS"] * df_gas_share["natural_gas"]
+            cap.loc["SMR_CCS biomethane"] = cap.loc["SMR_CCS"] * df_gas_share["biomethane"]
+            # Sort the index
+            cap = cap.reindex(h2_tech_meth)
+
+        # Plotting the stacked bar chart for cap_endog_transposed
+        bar_center = np.arange(len(cap.columns))
+        bottom = np.zeros(len(cap.columns))
+        offset = (2 * i - (len(res.scenarios) - 1)) * bar_width / 2
+        x = bar_center + offset
+        opacity = 1-i*0.2
+        for tech in cap.index:
+            # Calculate the x-positions for the bars in the current scenario
+            axis.bar(x, cap.loc[tech], bottom=bottom, alpha=opacity, width=bar_width, color=tech_colors[tech],hatch=tech_hatches[tech], edgecolor=edgecolor)
+            bottom += cap.loc[tech]
+        if annotation is not None:
+            anno_index = annotation.loc[i, 0]
+            anno_label = annotation.loc[i, "index"]
+            y_position = cap[anno_index].sum()
+            axis.annotate(anno_label, xy=(x[anno_index], y_position + 0.5),xytext=(x[anno_index], y_position + 2.5 + i),arrowprops=dict(facecolor='black', arrowstyle='->'), fontsize=10, ha='center')
+
+    axis.legend(loc="upper right", labels =cap.index.values, ncols=2)
+    axis.set_xlabel("Year")
+    axis.set_ylabel("Capacity [GW]")
+    axis.set_xlim(-0.5, len(cap.columns))
+    axis.set_xticks(range(len(cap.columns)))
+    axis.set_xticklabels(xtick_labels, rotation=90)
+
+    fig.tight_layout()
+    if save_fig:
+        path = os.path.join(os.getcwd(), "outputs")
+        path = os.path.join(path, data_set_name)
+        path = os.path.join(path, "result_plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        fig.savefig(os.path.join(path, "NON-EUROPEAN_capacity_one_plot" + "." + file_type))
+    fig.show()
 ############################################## Result anaylsis ##############################################
 
 # I. Read the results of the models
@@ -970,6 +1033,8 @@ res = Results(os.path.join(folder_path, data_set_name))
 
 save_fig = False
 file_type = "svg"
+
+df_path = os.path.join(os.getcwd(), "outputs", data_set_name)
 
 ############################################## PLOTS #########################################################
 
@@ -1085,7 +1150,7 @@ tech_groups = [h2_tech, power_tech, ccs_tech, biometh_tech]
 ##### WE MAKE SINGLE PLOTS FOR EACH CASE HERE, NO COMPARISON OF THE CASES YET
 for scenario in res.scenarios:
     #### Plot 1: Description of the costs of the technologies
-
+    tech_colors = tech_colors_1
     # Plot 1a: Evolution of the costs over time
     carriers = ["electricity", "hydrogen", "carbon"]
     for carrier in carriers:
@@ -1110,7 +1175,7 @@ for scenario in res.scenarios:
 
 ##### Comparison of Scenarios
 # Base Analysis
-if data_set_name == "20240405_H2_base":
+if data_set_name.endswith('_base'):
     # Cost Evolution of technologies
     unit_cost_exog = plot_unit_cost_over_time(res, carrier="hydrogen",  scenario="scenario_", save_fig=False, file_type=file_type)
     unit_cost_endog = plot_unit_cost_over_time(res, carrier="hydrogen",  scenario="scenario_1", save_fig=False, file_type=file_type)
@@ -1268,7 +1333,7 @@ if data_set_name == "20240405_H2_base":
         plt.show()
 
 # Myopic foresight Analysis
-elif data_set_name == "20240405_H2_myopic":
+elif data_set_name.endswith('_myopic'):
     # Cost Evolution of technologies
     df_path = os.path.join(os.getcwd(), "outputs", data_set_name)
     unit_cost_endog = pd.read_pickle(os.path.join(df_path, 'unit_cost_endog.pkl')).loc[h2_tech]
@@ -1455,48 +1520,43 @@ elif data_set_name == "20240405_H2_myopic":
 
 
 # Non-European Analysis
-elif data_set_name == "20240405_H2_non_European":
-    # Cost Evolution of technologies
-    unit_cost_endog = plot_unit_cost_over_time(res, carrier="hydrogen", scenario="scenario_", save_fig=False,file_type=file_type)
-    unit_cost_non_European = plot_unit_cost_over_time(res, carrier="hydrogen", scenario="scenario_1", save_fig=False,file_type=file_type)
-
-    experience = pd.DataFrame()
-    experience["row"] = res.get_df("cum_capacity_row",scenario="scenario_1").unstack().loc[h2_tech].sum()
-    experience["eu"] = res.get_total("european_cumulative_capacity", scenario="scenario_1").groupby(["technology"]).sum().loc[h2_tech].sum()-experience["row"]
-
-    df_path = os.path.join(os.getcwd(), "outputs", data_set_name)
+elif data_set_name.endswith('_non_European'):
+    # Cost Evolution
+    unit_cost_endog = calculate_unit_cost_over_time(res, carrier="hydrogen", scenario="scenario_")
+    unit_cost_non_European = calculate_unit_cost_over_time(res, carrier="hydrogen", scenario="scenario_1")
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    for tech in unit_cost_endog.index.levels[0]:
-        color = tech_colors.get(tech)
-        ax[0].plot(unit_cost_endog.loc[tech, "cost"], label=tech, color=tech_colors[tech])
-        ax[1].plot(unit_cost_non_European.loc[tech, "cost"], label=tech, color=tech_colors[tech])
-        ax_right = ax[1].twinx()
-        # experience_Europe_endog.T.plot.bar(stacked=True, ax=ax[0], color=[tech_colors[tech] for tech in tech_colors], alpha=0.5)
-        experience.plot.bar(stacked=True, ax=ax_right, color=[tech_colors[tech] for tech in tech_colors], alpha=0.05)
-        ax_right.set_ylim([0, 10000])
-        ax_right.set_ylabel("Cumulative Capacity [GW]")
-        ax_right.legend(labels=["ROW","EU"])
-        xtick_labels = [year * 2 + 2024 for year in range(len(unit_cost_endog.columns))]
-        for axis in ax:
-            axis.set_xlabel("Years")
-            axis.set_ylabel("Unit cost [EUR/kW]")
-            axis.set_ylim(0, 2500)
-            axis.set_xticks(range(len(unit_cost_endog.columns)))
-            axis.set_xticklabels(xtick_labels, rotation=90)
-            axis.legend(loc="upper right")
-        ax[0].set_title("Exogenous Learning")
-        ax[1].set_title("Endogenous Learning")
-    plt.tight_layout()
+    plot_unit_cost_over_time(res, unit_cost_endog, fig, ax[0], save_fig=False, file_type=None)
+    plot_unit_cost_over_time(res, unit_cost_non_European, fig, ax[1], save_fig=False, file_type=None)
+    # Add non-European vs. European capacities in background
+    experience = pd.DataFrame()
+    experience["row"] = res.get_df("cum_capacity_row", scenario="scenario_1").unstack().loc[h2_tech].sum()
+    experience["eu"] = res.get_total("european_cumulative_capacity", scenario="scenario_1").groupby(["technology"]).sum().loc[h2_tech].sum() - experience["row"]
+    ax_right = ax[1].twinx()
+    experience.plot.bar(stacked=True, ax=ax_right, color=[tech_colors[tech] for tech in tech_colors], alpha=0.1)
+    ax_right.set_ylim([0, 10000])
+    ax_right.set_ylabel("Cumulative Capacity [GW]")
+    ax_right.legend(labels=["ROW","EU"])
+
+    fig.tight_layout()
     if save_fig:
         path = os.path.join(os.getcwd(), "outputs")
         path = os.path.join(path, data_set_name)
         path = os.path.join(path, "result_plots")
         if not os.path.exists(path):
             os.makedirs(path)
-        plt.savefig(os.path.join(path, "NON_EUROPEAN_cost_evolution" + "." + file_type))
-    plt.show()
+        fig.savefig(os.path.join(path, "NON_EUROPEAN_cost_evolution" + "." + file_type))
+    fig.show()
 
+    # Capacity
+    for tech_selection in tech_groups:
+        plot_style = {"edgecolor" : 'black',
+                      "tech_colors": tech_colors_1,
+                      "tech_hatches": tech_hatches_1}
+        annotation = pd.Series({'Base': 5, 'ROW': 5}).reset_index()
+        plot_capacity_multi_bar(res, tech_selection, plot_style=plot_style, annotation=annotation)
+
+    # Extras
     diff_unit_cost = (unit_cost_non_European - unit_cost_endog) / unit_cost_endog * 100
 
     fig, ax = plt.subplots(nrows=1, ncols=5, figsize=(18, 5))
@@ -1508,8 +1568,8 @@ elif data_set_name == "20240405_H2_non_European":
             axis.set_xlabel("Years")
             axis.set_ylabel("Relative cost difference [%]")
             axis.set_ylim(-100, 10)
-            axis.set_xticks(range(len(unit_cost_endog.columns)))
-            axis.set_xticklabels(xtick_labels, rotation=90)
+            axis.set_xticks(range(-1,len(unit_cost_endog.columns)))
+            axis.set_xticklabels(["initial"]&xtick_labels, rotation=90)
             axis.legend(loc="lower right")
             axis.axhline(y=0, color='black', linestyle='--', linewidth=0.1)
         i = i + 1
@@ -1549,85 +1609,9 @@ elif data_set_name == "20240405_H2_non_European":
         df_non_European_normalized.loc[tech].plot(kind="bar", stacked=True, alpha=0.7, ax=ax, position=0, width=0.3)
     plt.show()
 
-    # Capacity
-    for tech_selection in tech_groups:
-        # Get the capacity and sort them in the order of the h2_tech
-        cap_non_European = res.get_total("capacity", scenario="scenario_1").groupby(["technology"]).sum().loc[tech_selection]
-        cap_endog = res.get_total("capacity", scenario="scenario_").groupby(["technology"]).sum().loc[tech_selection]
-
-        # Calculate the hydrogen production share of CCS
-        hydrogen_output_endog, df_gas_endog = plot_hydrogen_production(res, scenario="scenario_", save_fig=False,file_type=file_type)
-        hydrogen_output_non_European, df_gas_non_European = plot_hydrogen_production(res, scenario="scenario_1", save_fig=False,file_type=file_type)
-
-        # Production share of CCS technologies
-        production_share_path_non_European = convert_tech_output_2_pathway_output(hydrogen_output_non_European, df_gas_non_European)
-        production_share_path_endog = convert_tech_output_2_pathway_output(hydrogen_output_endog, df_gas_endog)
-
-        # Production share of biomethane
-        df_gas_share_endog = pd.DataFrame()
-        df_gas_share_endog["natural_gas"] = df_gas_endog["natural_gas"] / df_gas_endog.sum(axis=1)
-        df_gas_share_endog["biomethane"] = df_gas_endog["biomethane"] / df_gas_endog.sum(axis=1)
-
-        df_gas_share_non_European = pd.DataFrame()
-        df_gas_share_non_European["natural_gas"] = df_gas_non_European["natural_gas"] / df_gas_non_European.sum(axis=1)
-        df_gas_share_non_European["biomethane"] = df_gas_non_European["biomethane"] / df_gas_non_European.sum(axis=1)
-
-        # Get the capacity of anaerobic digestion
-        cap_anaerobic_endog = res.get_total("capacity", scenario="scenario_").groupby(["technology"]).sum().loc["anaerobic_digestion"]
-        cap_anaerobic_non_European = res.get_total("capacity", scenario="scenario_1").groupby(["technology"]).sum().loc["anaerobic_digestion"]
-
-        # Adjust cap df for biomethane and natural gas
-        cap_endog_meth = cap_endog.copy()
-        cap_endog_meth.loc["SMR"] = cap_endog_meth.loc["SMR"]*df_gas_share_endog["natural_gas"]
-        cap_endog_meth.loc["SMR biomethane"] = cap_endog_meth.loc["SMR"]*df_gas_share_endog["biomethane"]
-        cap_endog_meth.loc["SMR_CCS"] = cap_endog_meth.loc["SMR_CCS"]*df_gas_share_endog["natural_gas"]
-        cap_endog_meth.loc["SMR_CCS biomethane"] = cap_endog_meth.loc["SMR_CCS"]*df_gas_share_endog["biomethane"]
-        cap_endog_meth=cap_endog_meth.reindex(h2_tech_meth)
-
-        cap_non_European_meth = cap_non_European.copy()
-        cap_non_European_meth.loc["SMR"] = cap_non_European_meth.loc["SMR"]*df_gas_share_non_European["natural_gas"]
-        cap_non_European_meth.loc["SMR biomethane"] = cap_non_European_meth.loc["SMR"]*df_gas_share_non_European["biomethane"]
-        cap_non_European_meth.loc["SMR_CCS"] = cap_non_European_meth.loc["SMR_CCS"]*df_gas_share_non_European["natural_gas"]
-        cap_non_European_meth.loc["SMR_CCS biomethane"] = cap_non_European_meth.loc["SMR_CCS"]*df_gas_share_non_European["biomethane"]
-        cap_non_European_meth=cap_non_European_meth.reindex(h2_tech_meth)
-
-        # Double Bar Plot
-        fig, ax = plt.subplots(figsize=(10, 8))
-        # Plotting the stacked bar chart
-        edgecolor = 'black'
-        tech_colors = tech_colors_1
-        tech_hatches = tech_hatches_1
-        # Plotting the stacked bar chart for cap_endog_transposed
-        x = np.arange(len(cap_endog_meth.columns))
-        bottom = np.zeros(len(x))
-        for tech in cap_endog_meth.index:
-            ax.bar(x - 0.15, cap_endog_meth.loc[tech], bottom=bottom, alpha=0.7, width=0.3, color=tech_colors[tech],hatch=tech_hatches[tech], edgecolor=edgecolor)
-            bottom += cap_endog_meth.loc[tech]
-
-        bottom = np.zeros(len(x))
-        for tech in cap_non_European_meth.index:
-            ax.bar(x + 0.15, cap_non_European_meth.loc[tech], bottom=bottom, alpha=1.0, width=0.3,color=tech_colors[tech], hatch=tech_hatches[tech], label=tech, edgecolor=edgecolor)
-            bottom += cap_non_European_meth.loc[tech]
-
-        ax.legend(loc="upper right")
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Capacity [GW]")
-        ax.set_xlim(-0.5, len(cap_non_European_meth.columns))
-        ax.set_xticks(range(len(cap_non_European_meth.columns)))
-        ax.set_xticklabels(xtick_labels, rotation=90)
-
-        plt.tight_layout()
-        if save_fig:
-            path = os.path.join(os.getcwd(), "outputs")
-            path = os.path.join(path, data_set_name)
-            path = os.path.join(path, "result_plots")
-            if not os.path.exists(path):
-                os.makedirs(path)
-            plt.savefig(os.path.join(path, "NON-EUROPEAN_capacity_one_plot" + "." + file_type))
-        plt.show()
 
 # Analysis for learning rate variation
-elif data_set_name == "20240405_H2_learning_variation_extreme":
+elif data_set_name.endswith('_learning_variation_extreme'):
     # Cost Evolution of technologies
     df_path = os.path.join(os.getcwd(), "outputs", data_set_name)
     unit_cost_endog = plot_unit_cost_over_time(res, carrier="hydrogen", scenario="scenario_", save_fig=False,file_type=file_type)
