@@ -895,10 +895,8 @@ def plot_component(res, component="capacity", scenario=None, save_fig=False, fil
 
 def plot_hydrogen_production(res, scenario=None, save_fig=False, file_type=None):
     # Plot 3a: Hydrogen production from technologies
-    flow_conversion_output = res.get_total("flow_conversion_output", scenario=scenario).groupby(
-        ["technology", "carrier"]).sum()
-    hydrogen_output = flow_conversion_output[flow_conversion_output.index.get_level_values(1) == "hydrogen"].droplevel(
-        1).reindex(h2_tech)
+    flow_conversion_output = res.get_total("flow_conversion_output", scenario=scenario).groupby(["technology", "carrier"]).sum()
+    hydrogen_output = flow_conversion_output[flow_conversion_output.index.get_level_values(1) == "hydrogen"].droplevel(1).reindex(h2_tech)
 
     hydrogen_output.T.plot.bar(stacked=True, color=[tech_colors[tech] for tech in hydrogen_output.index])
     plt.legend(loc="center right")
@@ -918,8 +916,7 @@ def plot_hydrogen_production(res, scenario=None, save_fig=False, file_type=None)
     plt.show()
 
     # Plot 3b: Input natural gas
-    flow_input_gas = res.get_total("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc[
-        "natural_gas"]
+    flow_input_gas = res.get_total("flow_conversion_input", scenario=scenario).groupby(["carrier"]).sum().loc["natural_gas"]
 
     biomethane_input = flow_conversion_output.loc["biomethane_conversion", "natural_gas"]
     natural_gas_input = flow_input_gas.values - biomethane_input.values
@@ -977,7 +974,7 @@ file_type = "svg"
 ############################################## PLOTS #########################################################
 
 # Colors
-tech_colors = {
+tech_colors_1 = {
     'anaerobic_digestion': (1, 0.8, 0),
     'biomethane_conversion':(0.5, 0.5, 0),
     'biomethane_transport':  (0.5, 0.5, 0),
@@ -995,12 +992,12 @@ tech_colors = {
     'SMR': (0.65, 0.74, 0.87),
     'dry_biomass_truck':  (0.6, 0.3, 0),
     'hydrogen_pipeline': (0.5, 0.5, 0.5),
-    'biomethane_SMR': (0.2, 0.58, 0.67),
-    'biomethane_SMR_CCS':  (0.2, 0.58, 0.67)
+    'SMR biomethane': (0.2, 0.58, 0.67),
+    'SMR_CCS biomethane':  (0.2, 0.58, 0.67)
 }
 
 # Hatches
-tech_hatches = {
+tech_hatches_1 = {
     'anaerobic_digestion': None,
     'biomethane_conversion':None,
     'biomethane_transport':  None,
@@ -1019,7 +1016,9 @@ tech_hatches = {
     'dry_biomass_truck':None,
     'hydrogen_pipeline': None,
     'biomethane_SMR': None,
-    'biomethane_SMR_CCS': '//'
+    'biomethane_SMR_CCS': '//',
+    'SMR biomethane':None,
+    'SMR_CCS biomethane': '//'
 }
 
 # Carrier colors
@@ -1047,8 +1046,8 @@ tech_colors_2 = {
     'SMR':  (0.65, 0.74, 0.87),
     'dry_biomass_truck':  (0.6, 0.3, 0),
     'hydrogen_pipeline': (0.5, 0.5, 0.5),
-    'biomethane_SMR': (0.2, 0.58, 0.67),
-    'biomethane_SMR_CCS':  (0.2, 0.58, 0.67)
+    'SMR biomethane': (0.2, 0.58, 0.67),
+    'SMR_CCS biomethane':  (0.2, 0.58, 0.67),
 }
 
 # Hatches
@@ -1070,8 +1069,8 @@ tech_hatches_2 = {
     'SMR': None,
     'dry_biomass_truck':None,
     'hydrogen_pipeline': None,
-    'biomethane_SMR': None,
-    'biomethane_SMR_CCS': None
+    'SMR biomethane': None,
+    'SMR_CCS biomethane': None
 }
 
 
@@ -1080,6 +1079,7 @@ h2_tech = [ "SMR","SMR_CCS","gasification", "gasification_CCS", "electrolysis"]
 power_tech = ["pv_ground", "pv_rooftop", "wind_onshore", "wind_offshore"]
 ccs_tech = ["carbon_removal", "carbon_storage", "carbon_pipeline"]
 biometh_tech = ["anaerobic_digestion"]
+h2_tech_meth = ["SMR", "SMR_CCS", "SMR biomethane", "SMR_CCS biomethane", "gasification", "gasification_CCS", "electrolysis"]
 tech_groups = [h2_tech, power_tech, ccs_tech, biometh_tech]
 
 ##### WE MAKE SINGLE PLOTS FOR EACH CASE HERE, NO COMPARISON OF THE CASES YET
@@ -1551,62 +1551,70 @@ elif data_set_name == "20240405_H2_non_European":
 
     # Capacity
     for tech_selection in tech_groups:
+        # Get the capacity and sort them in the order of the h2_tech
         cap_non_European = res.get_total("capacity", scenario="scenario_1").groupby(["technology"]).sum().loc[tech_selection]
         cap_endog = res.get_total("capacity", scenario="scenario_").groupby(["technology"]).sum().loc[tech_selection]
 
-        cap_endog_transposed = cap_endog.T
-        cap_non_European_transposed = cap_non_European.T
-
-        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-        # Plotting the stacked bar chart
-        cap_endog_transposed.plot(kind='bar', stacked=True, ax=ax[0],color=[tech_colors[tech] for tech in cap_endog_transposed.columns], figsize=(12, 6))
-        cap_non_European_transposed.plot(kind='bar', stacked=True, ax=ax[1],color=[tech_colors[tech] for tech in cap_non_European_transposed.columns], figsize=(12, 6))
-        for axis in ax:
-            axis.set_xlabel("Years")
-            axis.set_ylabel("Capacity [GW]")
-            axis.set_ylim(0, 65)
-            axis.set_xticks(range(len(cap_non_European.columns)))
-            axis.set_xticklabels(xtick_labels, rotation=90)
-            axis.legend(loc="upper right")
-        plt.tight_layout()
-        if save_fig:
-            path = os.path.join(os.getcwd(), "outputs")
-            path = os.path.join(path, data_set_name)
-            path = os.path.join(path, "result_plots")
-            if not os.path.exists(path):
-                os.makedirs(path)
-            plt.savefig(os.path.join(path, "NON_EUROPEAN_capacity_two_plots" + "." + file_type))
-        plt.show()
-
-        # Plot with share of hydrogen production
+        # Calculate the hydrogen production share of CCS
         hydrogen_output_endog, df_gas_endog = plot_hydrogen_production(res, scenario="scenario_", save_fig=False,file_type=file_type)
         hydrogen_output_non_European, df_gas_non_European = plot_hydrogen_production(res, scenario="scenario_1", save_fig=False,file_type=file_type)
 
+        # Production share of CCS technologies
         production_share_path_non_European = convert_tech_output_2_pathway_output(hydrogen_output_non_European, df_gas_non_European)
         production_share_path_endog = convert_tech_output_2_pathway_output(hydrogen_output_endog, df_gas_endog)
 
+        # Production share of biomethane
+        df_gas_share_endog = pd.DataFrame()
+        df_gas_share_endog["natural_gas"] = df_gas_endog["natural_gas"] / df_gas_endog.sum(axis=1)
+        df_gas_share_endog["biomethane"] = df_gas_endog["biomethane"] / df_gas_endog.sum(axis=1)
+
+        df_gas_share_non_European = pd.DataFrame()
+        df_gas_share_non_European["natural_gas"] = df_gas_non_European["natural_gas"] / df_gas_non_European.sum(axis=1)
+        df_gas_share_non_European["biomethane"] = df_gas_non_European["biomethane"] / df_gas_non_European.sum(axis=1)
+
+        # Get the capacity of anaerobic digestion
         cap_anaerobic_endog = res.get_total("capacity", scenario="scenario_").groupby(["technology"]).sum().loc["anaerobic_digestion"]
         cap_anaerobic_non_European = res.get_total("capacity", scenario="scenario_1").groupby(["technology"]).sum().loc["anaerobic_digestion"]
 
+        # Adjust cap df for biomethane and natural gas
+        cap_endog_meth = cap_endog.copy()
+        cap_endog_meth.loc["SMR"] = cap_endog_meth.loc["SMR"]*df_gas_share_endog["natural_gas"]
+        cap_endog_meth.loc["SMR biomethane"] = cap_endog_meth.loc["SMR"]*df_gas_share_endog["biomethane"]
+        cap_endog_meth.loc["SMR_CCS"] = cap_endog_meth.loc["SMR_CCS"]*df_gas_share_endog["natural_gas"]
+        cap_endog_meth.loc["SMR_CCS biomethane"] = cap_endog_meth.loc["SMR_CCS"]*df_gas_share_endog["biomethane"]
+        cap_endog_meth=cap_endog_meth.reindex(h2_tech_meth)
+
+        cap_non_European_meth = cap_non_European.copy()
+        cap_non_European_meth.loc["SMR"] = cap_non_European_meth.loc["SMR"]*df_gas_share_non_European["natural_gas"]
+        cap_non_European_meth.loc["SMR biomethane"] = cap_non_European_meth.loc["SMR"]*df_gas_share_non_European["biomethane"]
+        cap_non_European_meth.loc["SMR_CCS"] = cap_non_European_meth.loc["SMR_CCS"]*df_gas_share_non_European["natural_gas"]
+        cap_non_European_meth.loc["SMR_CCS biomethane"] = cap_non_European_meth.loc["SMR_CCS"]*df_gas_share_non_European["biomethane"]
+        cap_non_European_meth=cap_non_European_meth.reindex(h2_tech_meth)
+
+        # Double Bar Plot
         fig, ax = plt.subplots(figsize=(10, 8))
         # Plotting the stacked bar chart
-        cap_endog_transposed.plot(kind='bar', stacked=True, alpha=0.6, ax=ax, position=1, width=0.3,color=[tech_colors[tech] for tech in cap_endog_transposed.columns])
-        cap_non_European_transposed.plot(kind='bar', stacked=True, ax=ax, position=0, width=0.3,color=[tech_colors[tech] for tech in cap_non_European_transposed.columns], legend=False)
-        ax.legend(loc="upper right", labels=cap_non_European_transposed.columns)
-        ax.scatter(cap_anaerobic_endog.index - 0.15, cap_anaerobic_endog, alpha=0.6,color=tech_colors["anaerobic_digestion"], marker='d', label="anaerobic digestion")
-        ax.scatter(cap_anaerobic_non_European.index + 0.15, cap_anaerobic_non_European, color=tech_colors["anaerobic_digestion"],marker='o', label="")
-        ax.set_xlabel("Years")
-        ax.set_ylabel("Capacity [GW]")
-        ax.set_xlim(-0.5, len(cap_non_European.columns))
-        ax.set_xticks(range(len(cap_non_European.columns)))
-        ax.set_xticklabels(xtick_labels, rotation=90)
+        edgecolor = 'black'
+        tech_colors = tech_colors_1
+        tech_hatches = tech_hatches_1
+        # Plotting the stacked bar chart for cap_endog_transposed
+        x = np.arange(len(cap_endog_meth.columns))
+        bottom = np.zeros(len(x))
+        for tech in cap_endog_meth.index:
+            ax.bar(x - 0.15, cap_endog_meth.loc[tech], bottom=bottom, alpha=0.7, width=0.3, color=tech_colors[tech],hatch=tech_hatches[tech], edgecolor=edgecolor)
+            bottom += cap_endog_meth.loc[tech]
 
-        ax_right = ax.twinx()
-        ax_right.plot(production_share_path_endog["CCS"] * 100, linestyle="-", color="blue", label="CCS share base")
-        ax_right.plot(production_share_path_non_European["CCS"] * 100, linestyle=":", color="blue", label="CCS share non-European")
-        ax_right.set_ylabel('Hydrogen production share [%]')
-        ax_right.set_ylim(0, 100)
-        ax_right.legend(loc="lower right")
+        bottom = np.zeros(len(x))
+        for tech in cap_non_European_meth.index:
+            ax.bar(x + 0.15, cap_non_European_meth.loc[tech], bottom=bottom, alpha=1.0, width=0.3,color=tech_colors[tech], hatch=tech_hatches[tech], label=tech, edgecolor=edgecolor)
+            bottom += cap_non_European_meth.loc[tech]
+
+        ax.legend(loc="upper right")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Capacity [GW]")
+        ax.set_xlim(-0.5, len(cap_non_European_meth.columns))
+        ax.set_xticks(range(len(cap_non_European_meth.columns)))
+        ax.set_xticklabels(xtick_labels, rotation=90)
 
         plt.tight_layout()
         if save_fig:
@@ -1617,29 +1625,6 @@ elif data_set_name == "20240405_H2_non_European":
                 os.makedirs(path)
             plt.savefig(os.path.join(path, "NON-EUROPEAN_capacity_one_plot" + "." + file_type))
         plt.show()
-
-        fig, ax = plt.subplots(figsize=(10, 8))
-        # Plotting the stacked bar chart
-        cap_endog_transposed.plot(kind='bar', stacked=True, ax=ax, position=1, width=0.3,
-                                 color=[tech_colors[tech] for tech in cap_endog_transposed.columns], label=[tech for tech in cap_endog_transposed.columns])
-        cap_non_European_transposed.plot(kind='bar', stacked=True, ax=ax, position=0, width=0.3,
-                                  color=[tech_colors[tech] for tech in cap_non_European_transposed.columns], label="")
-        ax.set_xlabel("Years")
-        ax.set_ylabel("Capacity [GW]")
-        ax.set_xticks(range(len(cap_non_European.columns)))
-        ax.set_xticklabels(xtick_labels, rotation=90)
-        ax.legend(loc="upper right")
-        plt.tight_layout()
-        if save_fig:
-            path = os.path.join(os.getcwd(), "outputs")
-            path = os.path.join(path, data_set_name)
-            path = os.path.join(path, "result_plots")
-            if not os.path.exists(path):
-                os.makedirs(path)
-            plt.savefig(os.path.join(path, "NON_EUROPEAN_capacity_one_plot" + "." + file_type))
-        plt.show()
-
-
 
 # Analysis for learning rate variation
 elif data_set_name == "20240405_H2_learning_variation_extreme":
