@@ -2133,7 +2133,7 @@ class TechnologyRules(GenericRule):
 
                . math::
                    S_{h,y}^{glo} = \sum_{\tilde{y}=y_0}^y\sum_{p\in\mathcal{P}}\Delta S_{h,p,\tilde{y}}
-                   + \sum_{\hat{y}=y_0}^{y} \Delta s_{h,\hat{y}}^{\mathrm{glo}}
+                   +  s_{h,\hat{y}}^{\mathrm{row}}
                     + s_{\mathrm{initial}}^{\mathrm{glo}}
 
 
