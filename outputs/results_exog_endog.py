@@ -318,7 +318,18 @@ def standard_plots_AX(res, save_fig=False, file_type=None):
                  save_fig=save_fig, file_type=file_type, scenario=scenario)
 
 # PLOT2: LEARNING CURVES: Plot all learning curves
-def learning_curve_plots(res, carrier, scenario=None, save_fig=False, file_type=None):
+def get_learning_curve_total_cost_values(res, tech, scenario=None):
+    def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
+        """
+        Exponential regression for Learning Curve
+        Input: Cumulative Capacity u
+        Parameters: c_initial, q_initial, learning_rate
+        Output: Unit cost of technology
+            :rtype:
+            """
+        alpha = c_initial / np.power(q_initial, learning_rate)
+        v = alpha * np.power(u, learning_rate)
+        return v
     def fun_total_cost(u, c_initial: float, q_initial: float,
                        learning_rate: float) -> object:  # u is a vector
         """
@@ -335,7 +346,48 @@ def learning_curve_plots(res, carrier, scenario=None, save_fig=False, file_type=
 
         return TC
 
-    def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object: # u is a vector
+    tc_pwa_x = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, "power",:].values
+    tc_pwa_x = np.append(tc_pwa_x, res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, "power", :].values[-1])
+    tc_pwa_y = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, "power", :].values
+    tc_pwa_y = np.append(tc_pwa_y, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, "power", :].values[-1])
+
+    # get lower bound of x values
+    lb = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, "power", :].values[0]
+    # get upper bound of x values
+    ub = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, "power", :].values[-1]
+    # get parameters of each tech and capacity type
+    capacity_values = np.linspace(lb, ub, 10000)
+
+    # get initial cost
+    c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, "power"]
+    # get initial capacity
+    q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+    # get learning rate
+    learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
+
+    unit_cost_values = unit_cost(capacity_values, c_initial, q_initial, learning_rate)
+
+    return tc_pwa_x, tc_pwa_y, capacity_values, unit_cost_values
+
+def plot_tc_curve(res, tech, scenario):
+
+    def fun_total_cost(u, c_initial: float, q_initial: float,
+                       learning_rate: float) -> object:  # u is a vector
+        """
+        Total cumulative Cost for Learning Curve
+        :param u: Cumulative Capacity
+        :param c_initial: Initial Cost
+        :param q_initial: Initital Capacity
+        :param learning_rate: Learning Rate
+        :return: Total cumulative cot
+        """
+        alpha = c_initial / np.power(q_initial, learning_rate)
+        exp = 1 + learning_rate
+        TC = alpha / exp * (np.power(u, exp))
+
+        return TC
+
+    def unit_cost(u, c_initial: float, q_initial: float, learning_rate: float) -> object:  # u is a vector
         """
         Exponential regression for Learning Curve
         Input: Cumulative Capacity u
@@ -347,67 +399,97 @@ def learning_curve_plots(res, carrier, scenario=None, save_fig=False, file_type=
         v = alpha * np.power(u, learning_rate)
         return v
 
-    data_total = res.get_total("capacity", scenario=scenario)
-    if carrier != None:
-        data_extract = res.extract_reference_carrier(data_total, carrier, scenario)
-        data_extract = data_extract.groupby(["technology"]).mean().T
-        tech_carrier = data_extract.columns
-    else:
-        tech_carrier = res.get_df("capacity", scenario=scenario).groupby(["technology"]).sum().index
+    tc_pwa_x = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, "power", :].values
+    tc_pwa_x = np.append(tc_pwa_x,res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, "power",:].values[-1])
+    tc_pwa_y = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, "power", :].values
+    tc_pwa_y = np.append(tc_pwa_y, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, "power",:].values[-1])
 
-    for tech in tech_carrier:
-        for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
+    # get lower bound of x values
+    lb = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, "power", :].values[0]
+    # get upper bound of x values
+    ub = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, "power", :].values[-1]
+    # get parameters of each tech and capacity type
+    capacity_values = np.linspace(lb, ub, 10000)
 
-            # Plot interpolation points
-            capacity_values = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
-            capacity_values = np.append(capacity_values, res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
-            total_cost_values = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
-            total_cost_values = np.append(total_cost_values, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
+    # get initial cost
+    c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, "power"]
+    # get initial capacity
+    q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
+    # get learning rate
+    learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
 
-            plt.plot(capacity_values, total_cost_values, label=f'{tech}')
-            plt.legend()
-            plt.title('Total cost curve linearly approximated for all technologies')
-            plt.xlabel('Capacity')
-            plt.ylabel('Total Cost')
+    tc = fun_total_cost(capacity_values, c_initial, q_initial, learning_rate)
+    uc = unit_cost(capacity_values, c_initial, q_initial, learning_rate)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.plot(capacity_values, uc, label='Unit cost', color='green')
+    ax.scatter(q_initial, c_initial, marker='o')
+    ax.text(q_initial, c_initial, r'$\overline{s}, \overline{\alpha}$', fontsize=12, verticalalignment='bottom')
+    ax_right = ax.twinx()
+    ax_right.plot(capacity_values, tc, label='Total cost', color='blue')
+    ax_right.plot(tc_pwa_x, tc_pwa_y, marker='.', label='PWA total cost', color='red', linestyle="--")
+    ax_right.set_ylabel('Total cost [€]')
+    ax.legend()
+    ax_right.legend()
+    ax.set_ylim(0, 500)
+    ax.set_xlabel('Capacity [GW]')
+    ax.set_ylabel('Unit cost [€/kW]')
+
+    # Filling the area
+    fill_x = np.concatenate([[0], capacity_values[100]])
+    fill_y = np.concatenate([[0], uc[100]])
+    ax.fill(fill_x, fill_y, color='gray', alpha=0.2)
 
     plt.show()
 
-    colors = cycle(['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray',
-                    'tab:olive', 'tab:cyan'])
+
+
+
+
+def learning_curve_plots(res, carrier, scenario=None, save_fig=False, file_type=None):
+
+
+
+
+
+
+    # for tech in tech_carrier:
+    #     for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
+    #
+    #         # Plot interpolation points
+    #         capacity_values = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
+    #         capacity_values = np.append(capacity_values, res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
+    #         total_cost_values = res.get_df("total_cost_pwa_TC_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values
+    #         total_cost_values = np.append(total_cost_values, res.get_df("total_cost_pwa_TC_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1])
+    #
+    #         plt.plot(capacity_values, total_cost_values, label=f'{tech}')
+    #         plt.legend()
+    #         plt.title('Total cost curve linearly approximated for all technologies')
+    #         plt.xlabel('Capacity')
+    #         plt.ylabel('Total Cost')
+    #
+    # plt.show()
 
     fig, ax = plt.subplots()
     for tech in tech_carrier:
         for capacity_type in res.get_df("capacity", scenario=scenario).loc[tech].index.get_level_values("capacity_type").unique():
-            # get lower bound of x values
-            lb = res.get_df("total_cost_pwa_points_lower_bound", scenario=scenario).loc[tech, capacity_type, :].values[0]
-            # get upper bound of x values
-            ub = res.get_df("total_cost_pwa_points_upper_bound", scenario=scenario).loc[tech, capacity_type, :].values[-1]
-            # get parameters of each tech and capacity type
-            capacity_values = np.linspace(lb, ub, 1000000)
 
-            # get initial cost
-            c_initial = res.get_df("total_cost_pwa_initial_unit_cost", scenario=scenario).loc[tech, capacity_type]
-            # get initial capacity
-            q_initial = res.get_df("global_initial_capacity", scenario=scenario).loc[tech]
-            # get learning rate
-            learning_rate = res.get_df("learning_rate", scenario=scenario).loc[tech]
-
-            unit_cost_values = unit_cost(capacity_values, c_initial, q_initial, learning_rate)
-
-            color = next(colors)
 
             ax.plot(capacity_values, unit_cost_values, label=f'{tech}', color=tech_colors[tech])
             ax.plot(q_initial, c_initial, marker='x', color=tech_colors[tech])
             ax.legend()
             ax.set_xlabel('Capacity [GW]')
             ax.set_ylabel('CAPEX [€/kW]')
-            # ax.set_title('Unit cost curve for all technologies')
+            ax.set_title('Unit cost curve for all technologies')
             if carrier=="hydrogen":
-                ax.set_xlim(0, 150)
-                ax.set_ylim(0, 5000)
+                ax.set_xlim(0.1, 300)
+                ax.set_ylim(0.1, 5000)
             else:
                 ax.set_xlim(0, 1000)
                 ax.set_ylim(0, 5000)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
 
             print(f"Floor value of CAPEX for {tech}: {unit_cost_values[-1]}")
 
@@ -1074,7 +1156,6 @@ def plot_capacity_multi_bar(res, tech_selection, plot_style, normalize=False, an
         edgecolor = plot_style["edgecolor"]
         tech_colors = plot_style["tech_colors"]
         tech_hatches = plot_style["tech_hatches"]
-        tech_markers = plot_style["tech_markers"]
 
     # Double Bar Plot
     if normalize:
@@ -1228,12 +1309,12 @@ def plot_capex_multi_bar(res, plot_style, normalize=False, save_fig=False, file_
 
 # I. Read the results of the models
 folder_path = os.path.dirname(__file__)
-data_set_name = "20240409_H2_learning_variation_extreme"
+data_set_name = "20240303_Hydrogen_endog"
 
 res = Results(os.path.join(folder_path, data_set_name))
 
 save_fig = True
-file_type = "svg"
+file_type = "png"
 
 df_path = os.path.join(os.getcwd(), "outputs", data_set_name)
 
@@ -1463,19 +1544,19 @@ if data_set_name.endswith('_base'):
     fig.show()
 
 
-
     # Capacity
     for tech_selection in tech_groups:
         plot_capacity_multi_bar(res, tech_selection, normalize=False, plot_style=plot_style, annotation=annotation, save_fig=save_fig, file_type=file_type)
 
     # Costs
-    plot_capex_multi_bar(res, plot_style=plot_style, normalize=True, save_fig=save_fig, file_type=file_type)
+    plot_capex_multi_bar(res, plot_style=plot_style, normalize=False, save_fig=save_fig, file_type=file_type)
 
-    # Overestimation of cost recuctions
+    # Overestimation of cost reductions
     unit_cost_forecast = calculate_unit_cost_over_time(res, carrier="electricity", scenario="scenario_1", forecast_scenario="scenario_")
     unit_cost_exog = calculate_unit_cost_over_time(res, carrier="electricity", scenario="scenario_")
 
     fig, ax = plt.subplots()
+    tech_colors = tech_colors_1
     for tech in unit_cost_exog.index.levels[0]:
             ax.plot(unit_cost_exog.loc[tech, "cost"].index, unit_cost_exog.loc[tech, "cost"], label=tech, color=tech_colors[tech], linewidth=0.8)
             ax.plot(unit_cost_forecast.loc[tech, "cost"].index, unit_cost_forecast.loc[tech, "cost"],  color=tech_colors[tech], linewidth=0.8, linestyle="--")
@@ -1493,6 +1574,8 @@ if data_set_name.endswith('_base'):
 
 
 
+
+
 # Myopic foresight Analysis
 elif data_set_name.endswith('_myopic'):
     ncols = len(res.scenarios)
@@ -1505,7 +1588,10 @@ elif data_set_name.endswith('_myopic'):
         row = i//ncols
         col = i % ncols
         unit_cost = calculate_unit_cost_over_time(res, carrier="hydrogen", scenario=scenario)
-        plot_unit_cost_over_time(res, unit_cost, scenario, fig, axis[row, col], plot_style=plot_style, save_fig=save_fig, file_type=file_type)
+        if nrows == 1:
+            plot_unit_cost_over_time(res, unit_cost, scenario, fig, axis[i], plot_style=plot_style, save_fig=save_fig, file_type=file_type)
+        else:
+            plot_unit_cost_over_time(res, unit_cost, scenario, fig, axis[row, col], plot_style=plot_style, save_fig=save_fig, file_type=file_type)
 
     fig.tight_layout()
     if save_fig:
@@ -1852,7 +1938,8 @@ elif data_set_name.endswith('_learning_variation_extreme'):
         plot_capacity_multi_bar(res, tech_selection, annotation=annotation, separate_base=True, plot_style=plot_style,
                                 save_fig=save_fig, file_type=file_type)
 
-    # Extras
+    # Plot costs
+    plot_capex_multi_bar(res, plot_style=plot_style, normalize=True, save_fig=save_fig, file_type=file_type)
 
 elif data_set_name.endswith('_single_pathway'):
     # Net present cost of each scenario
@@ -1872,7 +1959,6 @@ elif data_set_name.endswith('_single_pathway'):
         cap_hydrogen_transposed.plot.bar(stacked=True, ax=axis[i])
     fig.tight_layout()
     fig.show()
-
 
 else:
     # Standard Plots
@@ -1903,7 +1989,7 @@ else:
 
     # Capacity
     for tech_selection in tech_groups:
-        annotation= pd.Series({'Base':5, 'EU':5}).reset_index()
+        annotation= None
         plot_capacity_multi_bar(res, tech_selection, annotation=annotation ,separate_base=True, plot_style=plot_style, save_fig=save_fig, file_type=file_type)
 
 
@@ -2094,7 +2180,7 @@ plt.show()
 #
 # ENDOG Learning Curve
 learning_curve_plots(res, carrier="electricity", scenario=scenario, save_fig=True, file_type="svg")
-learning_curve_plots(res, carrier="hydrogen", scenario=scenario, save_fig=True, file_type="svg")
+learning_curve_plots(res, carrier="hydrogen", scenario=scenario, save_fig=False, file_type="svg")
 learning_curve_plots(res, carrier=None, scenario=scenario)
 
 
