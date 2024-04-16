@@ -83,18 +83,18 @@ def setup_logger(name, log_file, level=logging.INFO):
     return logger
 
 
-def create_logs(destination_folder, optimizer_edge, nodes_scenarios, years):
+def create_logs(destination_folder, names, nodes_scenarios, years):
     '''
     This function creates loggers, to keep track of some important values.
 
     Parameters
         destination_folder (str): Path to the destination folder (where the.log-file should be saved).
-        optimizer_edge (dict): Dictionary with the Optimizer object for every involved edge.
-        nodes_scenarios (list): Nested list with containing all nodes for each individual scenario.
+        names (list): List with the names of the involved optimization variables.
+        nodes_scenarios (list): Nested list containing all nodes for each individual scenario.
         years (list): List with years to be optimized.
 
     Returns:
-        loggers (dict): Dict with each individual logger for every value.
+        loggers (dict): Dict with each individual logger for every value to keep track of.
     '''
 
     # Define file paths for .log-files
@@ -114,18 +114,17 @@ def create_logs(destination_folder, optimizer_edge, nodes_scenarios, years):
 
     # First, create column names
     # Flow difference
-    edge_names = [edge_name for edge_name in optimizer_edge]
-    edge_names_str = ': '.join(edge_names)
+    edge_names_str = ': '.join(names)
     loggers['difference_flows'].info(edge_names_str)
 
     # Import and demand values
-    edge_names_attr = [[edge_name + '.import', edge_name + '.demand'] for edge_name in optimizer_edge]
+    edge_names_attr = [[edge_name + '.import', edge_name + '.demand'] for edge_name in names]
     flattened_data = [item for sublist in edge_names_attr for item in sublist]
     flattened_data_str = ': '.join(flattened_data)
     loggers['import_demand'].info(flattened_data_str)
 
     # Actual flows in both directions
-    flows_in_out = [[edge_name + '.in', edge_name + '.out'] for edge_name in optimizer_edge]
+    flows_in_out = [[edge_name + '.in', edge_name + '.out'] for edge_name in names]
     flattened_data = [item for sublist in flows_in_out for item in sublist]
     flattened_data_str = ': '.join(flattened_data)
     loggers['actual_flows'].info(flattened_data_str)
