@@ -2297,7 +2297,6 @@ class TechnologyRules(GenericRule):
         ### index loop
         # we loop over all technologies and yearly time steps because we need to calculate the lifetime range
         # we vectorize over capacities and locations
-        # todo: check this
         constraints = []
         for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
             if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
