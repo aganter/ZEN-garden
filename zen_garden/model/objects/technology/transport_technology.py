@@ -69,16 +69,6 @@ class TransportTechnology(Technology):
         else:
             self.transport_loss_factor_exponential = np.nan
 
-    def get_transport_loss_factor(self):
-        """get transport loss factor
-        # check which transport loss factor is used"""
-        self.transport_loss_factor_linear = self.data_input.extract_input_data("transport_loss_factor_linear", index_sets=[], unit_category={"distance": -1})
-        if self.name in self.optimization_setup.system["set_transport_technologies_loss_exponential"]:
-            assert "transport_loss_factor_exponential" in self.data_input.attribute_dict, f"The transport technology {self.name} has no transport_loss_factor_exponential attribute."
-            self.transport_loss_factor_exponential = self.data_input.extract_input_data("transport_loss_factor_exponential", index_sets=[], unit_category={"distance": -1})
-        else:
-            self.transport_loss_factor_exponential = np.nan
-
     def get_capex_transport(self):
         """get capex of transport technology"""
         # check if there are separate capex for capacity and distance
