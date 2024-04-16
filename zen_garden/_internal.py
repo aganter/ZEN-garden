@@ -10,8 +10,9 @@ Compilation  of the optimization problem.
 import importlib.util
 import logging
 import os
-import shutil
 import time
+import pickle
+import shutil
 import importlib
 
 from skopt import Optimizer
@@ -54,7 +55,7 @@ def main(config, dataset_path=None, job_index=None):
         # Preprocess
         remove_dummy_nodes_and_edges(config)
 
-        # Perform design calculation
+        # Perform design calculation and measure time
         calculation_flag = 'design'
         with timed_operation("Design calculation"):
             optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag)
@@ -67,7 +68,7 @@ def main(config, dataset_path=None, job_index=None):
 
         # List should be emtpy for clustering process. Check it and force it
         if len(config.system.set_cluster_nodes) != 0:
-             config.system.set_cluster_nodes = []
+            config.system.set_cluster_nodes = []
 
         # Do the clustering and define the cluster_nodes variable in the updated config file
         config = clustering_performance(destination_folder, config)
@@ -96,6 +97,7 @@ def main(config, dataset_path=None, job_index=None):
         # Create the parameter space for all edges
         space, names, flag_seperate, space_for_adaption = space_generation_bayesian(flow_at_nodes, dummy_edges, years)
 
+        # Check if no optimization with the bayesian is needed
         if flag_seperate == True:
             logging.info('There is no flow among the scenarios. Do a separate optimization for each of the scenarios')
             cluster_nodes = config.system.model_extra['set_cluster_nodes']
@@ -111,71 +113,56 @@ def main(config, dataset_path=None, job_index=None):
         # Next step: Operational calculation
         calculation_flag = 'loop'
 
+        # Create loggers
+        loggers = create_logs(destination_folder, names, nodes_scenarios, years)
+
+        # Flag to check if it is the first iteration
+        flag_iter = True
+
+        # Number of iterations for the optimization loop ¦¦ fixes configuration based on empirical values
+        agg_ts_list = [4]
+        n_iterations = [2]
+
+        protocol_flow = dict()
+        protocol_imp_dem = dict()
+        old_spaces_protocol = dict()
+        variable_information = dict()
+        return_information = dict()
+
         # Initialize the optimizer with the Gaussian process estimator
         optimizer_edge = dict()
         for edge, name in zip(space, names):
             optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gp", n_initial_points=10,
                                              acq_func="gp_hedge", random_state=42)
 
-        loggers = create_logs(destination_folder, optimizer_edge, nodes_scenarios, years)
-
-        # Use dct to automatically handle missing keys
-        protocol_flow = dict()
-        protocol_imp_dem = dict()
-
-        # Flag to check if it is the first iteration
-        flag_iter = True
-
-        # Number of iterations for the optimization loop ¦¦ fixes configuration based on empirical values
-        agg_ts_list = [2, 3, 4]
-        n_iterations = [2, 3, 2]
+        # Keep track of iteration number
         actual_iteration = 0
-
-        # Define variables needed to check convergence
-        optimizer_convergence = dict()
-        for name in names:
-            optimizer_convergence[name] = False
-        # tolerance = 150
-        sample_points_fixed = dict()
-        converged_edges = []
-        old_spaces_protocol = dict()
-        variable_information = dict()
-        return_information = dict()
-
-
         for n_impr in range(len(n_iterations)):
 
-            if n_impr == 0:
-                # Initialize the optimizer with the Gaussian process estimator
-                optimizer_edge = dict()
-                for edge, name in zip(space, names):
-                    optimizer_edge[name] = Optimizer(dimensions=edge, base_estimator="gp", n_initial_points=10,
-                                                     acq_func="gp_hedge", random_state=42)
-
             for n_iter in range(n_iterations[n_impr]):
-
-
+                iter_start = time.time()
 
                 # Ask the optimizer for the next point to sample
                 sample_points = {}
                 for key_edge, opt in optimizer_edge.items():
-
-                    if optimizer_convergence[key_edge] == False:
-                        sample_points[key_edge] = opt.ask()
-                    else:
-                        sample_points[key_edge] = sample_points_fixed[key_edge]
-
+                    sample_points[key_edge] = opt.ask()
 
                 # Modify input csv files with the new sample points
+                file_time_start = time.time()
                 avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
                 create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes,
                              nodes_scenarios, result, flag_iter, config)
+                file_time_end = time.time()
+                print('time file')
+                print(file_time_end-file_time_start)
 
                 # Start optimization
                 agg_ts = agg_ts_list[n_impr]
-                optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts=agg_ts)
+                with timed_operation("Operation calculation"):
+                    optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts=agg_ts)
 
                 # Results object
+                post_time_start = time.time()
                 destination_folder = copy_resultsfolder(calculation_flag, config, iteration=actual_iteration)
                 res = Results(destination_folder)
 
@@ -216,17 +203,7 @@ def main(config, dataset_path=None, job_index=None):
                         protocol_flow[key_edge].append(flow_diff)
 
                         # Tell the optimizer about the objective function value at the sampled point
-                        if key_edge not in converged_edges:
-                            optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
-                        else:
-                            print(key_edge + ': Edge no need to be further optimized')
-
-                        # Convergence Check for every edge
-                        # if flow_diff <= tolerance and key_edge not in converged_edges:
-                        #     optimizer_convergence[key_edge] = True
-                        #     converged_edges.append(key_edge)
-                        #     sample_points_fixed[key_edge] = sample_points[key_edge]
-                        #     print('Edge ' + key_edge + ' is optimized.')
+                        optimizer_edge[key_edge].tell(sample_points[key_edge], flow_diff)
 
                     else:
                         error_msg = 'Error while reading out results object.'
@@ -270,7 +247,20 @@ def main(config, dataset_path=None, job_index=None):
                 actual_iteration = actual_iteration + 1
 
                 shutil.rmtree(destination_folder)
+                post_time_end = time.time()
+                print('post time')
+                print(post_time_end-post_time_start)
 
+                iter_end = time.time()
+                print(iter_end-iter_start)
+
+
+
+            # Save optimizer object
+            for name in names:
+                filename = os.path.join(r'C:\Users\bekaj\Documents\ETH\Master\Masterarbeit\Model_Code\Software\ZEN-garden\notebooks\optimizer_objects' , f'opt_{name}.pkl')
+                with open(filename, 'wb') as f:
+                    pickle.dump(optimizer_edge[name], f)
 
             # Get the best value out of the calculated points
             best_vals = dict()
@@ -532,13 +522,13 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
     on the data in the flow_at_nodes dict.
 
     Parameters:
-        flow_at_nodes (dict): Dict containing the data for every edge from the design calculation to define the space.
+        flow_at_nodes (dict): Dict containing the info for every edge from the design calculation to define the space.
         dummy_edges (list): List with all the dummy edges.
         years (list): (Nested) List with the years to be optimized in the run.
 
     Returns:
         space (list): List containing the space for every variable involved in the bayesian optimization
-        names (list): List containing the variable names for every variable involved in the bayesian optimization
+        names (list): List containing the variable names of every variable involved in the bayesian optimization
         flag_separate (bool): Flag to check if the scenarios can be calculated separately without any
         bayesian optimization (True) or not (False)
         space_for_adaption (dict): Dict with the name of the variable as the key, and the corresponding optimization
@@ -749,7 +739,7 @@ def energy_model(sample_points, nodes_scenarios):
 
 def create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios, result, flag_iter, config):
     """
-    Create files for the calculation of the scenarios (availability_import, demand, price_import)
+    Create files for the calculation of the scenarios (availability_import, demand, price_import, price_export)
 
     Parameters:
         avail_import_data (dict): Dict with the information to the availability import for all nodes, all carriers and all years.
@@ -759,6 +749,9 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
         years (list): List with the years defined to optimize.
         all_nodes (list): List containing all nodes present in the specific run.
         nodes_scenarios (list): (Nested) list with lists containing the nodes of the different scenarios.
+        result (object): Result object from design calculation
+        flag_iter (bool): Bool to check if it is the first time in this function
+        config (): config instance of this run
 
     Returns:
         None
@@ -784,7 +777,7 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
 
 def create_scenario_dict(cluster_nodes):
     """
-    Creates the dict where the scenarios are defined
+    Creates the dict with the scenarios defined.
 
     Parameters:
         cluster_nodes (list): Nested list with nodes from each individual cluster.
