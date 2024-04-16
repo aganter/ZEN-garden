@@ -664,9 +664,10 @@ class OptimizationSetup(object):
                 for tech in self.get_all_elements(Technology):
                     total_global_cost = self.model.solution["total_cost_pwa_global_cost"].loc[tech.name].to_series().dropna()
                     global_cumulative_capacity = self.model.solution["global_cumulative_capacity"].loc[tech.name].to_series().dropna()
-                    tech.update_initial_global_cost_capacity_tech(total_global_cost, global_cumulative_capacity)
+                    tech.update_initial_global_cost_capacity_tech(total_global_cost, global_cumulative_capacity, step_horizon)
                 else:  # reset to initial values
                     logging.info(f"Need to reset global capacity and global cost to initial values.") # todo
+
     def initialize_component(self, calling_class, component_name, index_names=None, set_time_steps=None, capacity_types=False):
         """ this method initializes a modeling component by extracting the stored input data.
 

@@ -180,14 +180,14 @@ class Technology(Element):
                 setattr(self, "capacity_investment_existing" + energy_string, capacity_investment_existing.stack())
 
     # anyaxie
-    def update_initial_global_cost_capacity_tech(self, total_global_cost, global_cumulative_capacity):
+    def update_initial_global_cost_capacity_tech(self, total_global_cost, global_cumulative_capacity, step_horizon):
         """ updates initial global cost of the technology
 
         :param total_global_cost: pd.Series of total cost """
 
         for type_capacity in list(set(total_global_cost.index.get_level_values(0))):
-            _global_initial_cost = total_global_cost.loc[type_capacity].iloc[-1]
-            _global_cum_capacity = global_cumulative_capacity.loc[type_capacity].iloc[-1]
+            _global_initial_cost = total_global_cost.loc[type_capacity].iloc[step_horizon]
+            _global_cum_capacity = global_cumulative_capacity.loc[type_capacity].iloc[step_horizon]
             # if power
             if type_capacity == self.optimization_setup.system["set_capacity_types"][0]:
                 energy_string = ""
