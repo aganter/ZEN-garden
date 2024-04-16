@@ -73,18 +73,6 @@ class Technology(Element):
         self.capacity_existing = self.data_input.extract_input_data("capacity_existing", index_sets=[set_location, "set_technologies_existing"], unit_category={"energy_quantity": 1, "time": -1})
         self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing", index_sets=[set_location, "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
         self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
-        # anyaxie
-        # endogenous learning input data
-        # segments for pwa of cumulative cost for each technology
-        if self.optimization_setup.system["use_endogenous_learning"]:
-            self.num_pwa_segments = int(self.data_input.extract_attribute("num_pwa_segments", unit_category={})["value"])
-            self.learning_rate = self.data_input.extract_attribute("learning_rate", unit_category={})["value"]
-            self.global_share_factor = self.data_input.extract_attribute("global_share", unit_category={})["value"]
-            self.learning_curve_lb = self.data_input.extract_attribute("learning_curve_lower_bound", unit_category={"energy_quantity": 1, "time": -1})["value"]
-            self.learning_curve_ub = self.data_input.extract_attribute("learning_curve_upper_bound", unit_category={"energy_quantity": 1, "time": -1})["value"]
-            self.learning_curve_npts = self.data_input.extract_attribute("learning_curve_npts", unit_category={})["value"]
-            self.global_initial_capacity= self.data_input.extract_attribute("global_initial_capacity", unit_category={"energy_quantity": 1, "time": -1})["value"]
-            self.cum_capacity_row = self.data_input.extract_input_data("cum_capacity_row", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities

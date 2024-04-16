@@ -3,10 +3,10 @@ glpk
 geopandas
 gurobipy
 hdfdict
-pyyaml
 pandas
 pip
 ordered-set
+xarray==2023.8.0
 linopy==0.1.5
 coverage
 pytest
@@ -21,4 +21,5 @@ mpmath
 tsam
 tables
 filelock
-piecewise-regression
+pydantic
+pyyaml<5.4

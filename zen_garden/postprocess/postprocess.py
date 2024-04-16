@@ -136,7 +136,7 @@ class Postprocess:
 
         elif format == "gzip" or format == "json":
             # serialize to string
-
+            
             serialized_dict = json.dumps(dictionary, indent=2)
 
             # if the string is larger than the max output size we compress anyway
