@@ -2143,11 +2143,8 @@ class TechnologyRules(GenericRule):
                         term_neg_previous_capacity_additions.append((-1/global_share_factor)*self.variables["capacity_addition"].loc[tech, :, :,previous_year].sum(dims="set_location"))
                         term_global_capacities = self.parameters.global_initial_capacity.loc[tech]
             else:
-                if index.get_unique(["set_time_steps_yearly"])[0]==0:
-                    year_range = year+1
-                else:
-                    year_range = year
                 # No decommissioning
+                year_range = year - index.get_unique(["set_time_steps_yearly"])[0] + 1
                 for previous_year in self.sets["set_time_steps_yearly"][:year_range]:
                     if self.system["use_exogenous_cap_add_row"]:
                         term_neg_previous_capacity_additions.append((-1.0) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
