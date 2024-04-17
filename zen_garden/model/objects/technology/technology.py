@@ -195,7 +195,7 @@ class Technology(Element):
             else:
                 energy_string = "_energy"
             # new initial cost and capacity
-            # setattr(self, "total_cost_pwa_initial_global_cost" + energy_string, _global_initial_cost)
+            setattr(self, "total_cost_pwa_initial_global_cost" + energy_string, _global_initial_cost)
             setattr(self, "global_initial_capacity" + energy_string, _global_cum_capacity)
 
 
@@ -2143,8 +2143,12 @@ class TechnologyRules(GenericRule):
                         term_neg_previous_capacity_additions.append((-1/global_share_factor)*self.variables["capacity_addition"].loc[tech, :, :,previous_year].sum(dims="set_location"))
                         term_global_capacities = self.parameters.global_initial_capacity.loc[tech]
             else:
+                if index.get_unique(["set_time_steps_yearly"])[0]==0:
+                    year_range = year+1
+                else:
+                    year_range = year
                 # No decommissioning
-                for previous_year in self.sets["set_time_steps_yearly"][:year+1]:
+                for previous_year in self.sets["set_time_steps_yearly"][:year_range]:
                     if self.system["use_exogenous_cap_add_row"]:
                         term_neg_previous_capacity_additions.append((-1.0) * self.variables["capacity_addition"].loc[tech, :, :, previous_year].sum(dims="set_location"))
                         term_global_capacities = self.parameters.global_initial_capacity.loc[tech] + self.parameters.cum_capacity_row.loc[tech, year]
