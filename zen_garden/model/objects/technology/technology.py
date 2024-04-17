@@ -195,7 +195,7 @@ class Technology(Element):
             else:
                 energy_string = "_energy"
             # new initial cost and capacity
-            setattr(self, "total_cost_pwa_initial_global_cost" + energy_string, _global_initial_cost)
+            # setattr(self, "total_cost_pwa_initial_global_cost" + energy_string, _global_initial_cost)
             setattr(self, "global_initial_capacity" + energy_string, _global_cum_capacity)
 
 
@@ -2242,7 +2242,6 @@ class TechnologyRules(GenericRule):
         if self.system["use_exogenous_cap_add_row"]:
             for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
                 if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
-                    # todo: Correct this for transport technologies that have distance-related costs
                     lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
                            - self.variables["total_cost_pwa_european_cost"].loc[tech,:,year])
                     rhs = (-1.0) * self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
@@ -2257,7 +2256,6 @@ class TechnologyRules(GenericRule):
             for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
                 global_share_factor = self.parameters.global_share_factor.loc[tech].item()
                 if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
-                    # todo: Correct this for transport technologies that have distance-related costs
                     lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
                            - global_share_factor * self.variables["total_cost_pwa_global_cost"].loc[tech, :, year])
                     rhs = (-global_share_factor) * self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
