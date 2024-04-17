@@ -154,7 +154,12 @@ class Technology(Element):
                 setattr(self, "capacity_existing" + energy_string, capacity_existing.stack())
                 # calculate capex of existing capacity
                 capex_capacity_existing = capex_capacity_existing.unstack()
-                capex_capacity_existing[index_new_technology] = new_capex.loc[type_capacity]
+                # anyaxie
+                if self.optimization_setup.system["use_endogenous_learning"]:
+                    share_addition = new_capacity_addition.loc[type_capacity]/new_capacity_addition.loc[type_capacity].sum()
+                    capex_capacity_existing[index_new_technology] = new_capex.loc[type_capacity] * share_addition
+                else:
+                    capex_capacity_existing[index_new_technology] = new_capex.loc[type_capacity]
                 setattr(self, "capex_capacity_existing" + energy_string, capex_capacity_existing.stack())
 
     def add_new_capacity_investment(self, capacity_investment: pd.Series, step_horizon):
