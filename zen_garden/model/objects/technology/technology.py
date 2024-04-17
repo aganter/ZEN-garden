@@ -186,8 +186,8 @@ class Technology(Element):
         :param total_global_cost: pd.Series of total cost """
 
         for type_capacity in list(set(total_global_cost.index.get_level_values(0))):
-            _global_initial_cost = total_global_cost.loc[type_capacity].iloc[step_horizon]
-            _global_cum_capacity = global_cumulative_capacity.loc[type_capacity].iloc[step_horizon]
+            _global_initial_cost = total_global_cost.loc[type_capacity].loc[step_horizon]
+            _global_cum_capacity = global_cumulative_capacity.loc[type_capacity].loc[step_horizon]
             # if power
             if type_capacity == self.optimization_setup.system["set_capacity_types"][0]:
                 energy_string = ""
