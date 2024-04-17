@@ -728,13 +728,13 @@ class Technology(Element):
         variables.add_variable(model, name="capacity_investment", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of invested technology at location l and time t',unit_category={"energy_quantity": 1, "time": -1})
         # anyaxie:
-        if not optimization_setup.system["use_endogenous_learning"]:
-            # capex of building capacity
-            variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
-                bounds=(0, np.inf), doc='capex for building technology at location l and time t', unit_category={"money": 1})
-        else:
-            variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"],optimization_setup),
-                bounds=(0, np.inf), doc='capex for building technology at location l and time t',unit_category={"money": 1})
+        # if not optimization_setup.system["use_endogenous_learning"]:
+        # capex of building capacity
+        variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+            bounds=(0, np.inf), doc='capex for building technology at location l and time t', unit_category={"money": 1})
+        # else:
+        #     variables.add_variable(model, name="cost_capex", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"],optimization_setup),
+        #         bounds=(0, np.inf), doc='capex for building technology at location l and time t',unit_category={"money": 1})
         # annual capex of having capacity
         variables.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='annual capex for having technology at location l', unit_category={"money": 1})
@@ -760,9 +760,13 @@ class Technology(Element):
         # anyaxie
         if optimization_setup.system["use_endogenous_learning"]:
             # yearly capex as sum over all nodes
-            variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(
-                ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
-                                   bounds=(0, np.inf), doc="yearly capex of technology h over all positions", unit_category={"money": 1})
+            # variables.add_variable(model, name="capex_yearly_all_positions", index_sets=cls.create_custom_set(
+            #     ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+            #                        bounds=(0, np.inf), doc="yearly capex of technology h over all positions", unit_category={"money": 1})
+            # investment cost sum over all nodes
+            variables.add_variable(model, name="cost_capex_all_positions", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
+                                   bounds=(0, np.inf), doc="investment cost of technology h over all positions", unit_category={"money": 1})
+
             # global cumulative capacity
             variables.add_variable(model, name="global_cumulative_capacity", index_sets=cls.create_custom_set(
                 ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], optimization_setup),
@@ -859,8 +863,8 @@ class Technology(Element):
                                          constraint=rules.constraint_capacity_factor_block(),
                                          doc='limit max load by installed capacity')
         # annual capex of having capacity
-        if not optimization_setup.system["use_endogenous_learning"]:
-            constraints.add_constraint_block(model, name="constraint_capex_yearly",
+        # if not optimization_setup.system["use_endogenous_learning"]:
+        constraints.add_constraint_block(model, name="constraint_capex_yearly",
                                              constraint=rules.constraint_capex_yearly_block(),
                                              doc='annual capex of having capacity of technology.')
         # total capex of all technologies
@@ -918,10 +922,10 @@ class Technology(Element):
                                              constraint=rules.constraint_global_cum_capacity_block(),
                                              doc="constraint for cumulative global capacity")
 
-            # sum of capacities as difference of total cumulative cost over all nodes
-            constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
-                                             constraint=rules.constraint_capex_yearly_all_positions_block(),
-                                             doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
+            # # sum of capacities as difference of total cumulative cost over all nodes
+            # constraints.add_constraint_block(model, name="constraint_capex_yearly_all_positions",
+            #                                  constraint=rules.constraint_capex_yearly_all_positions_block(),
+            #                                  doc="yearly capex of all nodes as difference of total cumulative cost between timesteps")
             # segment capacity sum Europe
             constraints.add_constraint_block(model, name="constraint_pwa_total_cost_european_cum_capacity_segment",
                                              constraint=rules.constraint_pwa_total_cost_european_cum_capacity_segment_block(),
@@ -943,16 +947,18 @@ class Technology(Element):
                                              doc="segment selection with binary variable for pwa of cumulative cost")
 
             # pwa approximation for total cumulative cost Europe
-            constraints.add_constraint_block(model, name="constraint_approximate_total_european_cost",
-                                             constraint=rules.constraint_approximate_total_european_cost_block(),
+            constraints.add_constraint_block(model, name="constraint_approximate_total_european_cost",constraint=rules.constraint_approximate_total_european_cost_block(),
                                              doc="approximation of cumulative cost with pwa")
             # constraint for cumulative global capacity Europe
-            constraints.add_constraint_block(model, name="constraint_european_addition",
-                                             constraint=rules.constraint_european_addition_block(),
+            constraints.add_constraint_block(model, name="constraint_european_addition",constraint=rules.constraint_european_addition_block(),
                                              doc="constraint for cumulative global capacity")
             # cost capex constraint
             constraints.add_constraint_block(model, name="constraint_cost_capex", constraint=rules.constraint_cost_capex_block(),
                                                          doc="Calculate european investment cost")
+
+            # split cost capex constraint
+            constraints.add_constraint_block(model, name="constraint_cost_capex_split", constraint=rules.constraint_split_capex_across_all_positions_block(),
+                                                         doc="Split european investment cost across all nodes")
 
 
         # disjunct if technology is on
@@ -1117,10 +1123,10 @@ class TechnologyRules(GenericRule):
         # skipped because rule-based constraint
 
         ### auxiliary calculations
-        if self.system["use_endogenous_learning"]:
-            term_sum_yearly = self.variables["capex_yearly_all_positions"].loc[..., year].sum()
-        else:
-            term_sum_yearly = self.variables["capex_yearly"].loc[..., year].sum()
+        # if self.system["use_endogenous_learning"]:
+            # term_sum_yearly = self.variables["capex_yearly_all_positions"].loc[..., year].sum()
+        # else:
+        term_sum_yearly = self.variables["capex_yearly"].loc[..., year].sum()
 
         ### formulate constraint
         lhs = (self.variables["cost_capex_total"].loc[year]
@@ -2181,8 +2187,7 @@ class TechnologyRules(GenericRule):
 
         ### index sets
         index_values, index_names = Element.create_custom_set(
-            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"],
-            self.optimization_setup)
+            ["set_technologies", "set_capacity_types", "set_time_steps_yearly"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
 
         ### masks
@@ -2197,21 +2202,21 @@ class TechnologyRules(GenericRule):
             ### auxiliary calculations
             discount_rate = self.parameters.discount_rate
             lifetime = self.parameters.lifetime.loc[tech].item()
-
             if discount_rate != 0:
                 annuity = ((1 + discount_rate) ** lifetime * discount_rate) / ((1 + discount_rate) ** lifetime - 1)
             else:
                 annuity = 1 / lifetime
             term_neg_annuity_cost_capex_previous = []
             for previous_year in Technology.get_lifetime_range(self.optimization_setup, tech, year):
-                term_neg_annuity_cost_capex_previous.append(-annuity*self.variables["cost_capex"].loc[tech, :, previous_year])
+                term_neg_annuity_cost_capex_previous.append(-annuity * self.variables["cost_capex"].loc[tech, :, previous_year])
 
             ### formulate constraint
             lhs = lp_sum([1.0 * self.variables["capex_yearly_all_positions"].loc[tech, :, year],
                           *term_neg_annuity_cost_capex_previous])
             rhs = annuity * self.parameters.existing_capex.loc[tech, :, :, year].sum(dim=["set_location"])
             constraints.append(lhs == rhs)
-        ### return
+
+            ### return
         return self.constraints.return_contraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(
@@ -2243,11 +2248,11 @@ class TechnologyRules(GenericRule):
         if self.system["use_exogenous_cap_add_row"]:
             for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
                 if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
-                    lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
+                    lhs = (1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year]
                            - self.variables["total_cost_pwa_european_cost"].loc[tech,:,year])
                     rhs = (-1.0) * self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
                 else:
-                    lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
+                    lhs = (1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year]
                            - self.variables["total_cost_pwa_european_cost"].loc[tech,:,year]
                            + self.variables["total_cost_pwa_global_cost"].loc[tech, :, year - 1])
                     rhs = 0
@@ -2257,12 +2262,12 @@ class TechnologyRules(GenericRule):
             for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
                 global_share_factor = self.parameters.global_share_factor.loc[tech].item()
                 if year == index.get_unique(["set_time_steps_yearly"])[0]:  # if first year of model horizon
-                    lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
+                    lhs = (1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year]
                            - global_share_factor * self.variables["total_cost_pwa_global_cost"].loc[tech, :, year])
                     rhs = (-global_share_factor) * self.parameters.total_cost_pwa_initial_global_cost.loc[tech, :]
 
                 else:
-                    lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, year]
+                    lhs = (1.0 * self.variables["cost_capex_all_positions"].loc[tech, :, year]
                            - global_share_factor * (self.variables["total_cost_pwa_global_cost"].loc[tech, :, year]
                                     - self.variables["total_cost_pwa_global_cost"].loc[tech, :, year - 1]))
                     rhs = 0
@@ -2275,6 +2280,40 @@ class TechnologyRules(GenericRule):
                                                   index_values=index.get_unique(
                                                       ["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
+
+    def constraint_split_capex_across_all_positions_block(self):
+        '''
+        Splits the capex across all nodes equally
+        '''
+
+        ### index sets
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"],
+            self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over all technologies because we need to get the global share factor
+        # we vectorize over capacity types and years
+        constraints = []
+
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            lhs = (1.0 * self.variables["cost_capex"].loc[tech, :, :, year]
+                   - self.variables["cost_capex_all_positions"].loc[tech, :, year]/len(index.get_unique(["set_location"])))
+            rhs = 0
+            constraints.append(lhs == rhs)
+
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(
+                                                      ["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+
+
 
     def constraint_european_addition_block(self):
         """ Calculates the capacity addition under neglection of the ROW capacity addition
