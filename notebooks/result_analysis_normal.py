@@ -2,8 +2,12 @@ from zen_garden.postprocess.results import Results
 import pandas as pd
 import matplotlib.pyplot as plt
 
+ref_case_storage = r'C:\Users\bekaj\Documents\ETH\Master\Masterarbeit\euler_calcs\Europe_storage_20202050_400aggts\europe_20202050_normal_storage'
 ref_case = r'C:\Users\bekaj\Documents\ETH\Master\Masterarbeit\euler_calcs\Europe_ref_2020_2050_400aggts\output'
+ref_design = r'C:\Users\bekaj\Documents\ETH\Master\Masterarbeit\Model_Code\Software\ZEN-garden\data\outputs\daten_storage_actual'
+ref_storage = Results(ref_case_storage)
 res_ref_case = Results(ref_case)
+res_design = Results(ref_design)
 years = [i for i in range(2020, 2052, 2)]
 
 def net_present_costs(res_ref_case, years):
@@ -25,7 +29,7 @@ def net_present_costs(res_ref_case, years):
 
 def flow_transport(res_ref_case, years):
     # Flow transport
-    df_ref = res_ref_case.get_total('flow_transport').round(0)
+    df_ref = res_ref_case.get_total('flow_transport').round(1)
     zero_columns = df_ref.T.columns[(df_ref.T == 0).all()]
     df_ref_T = df_ref.T.drop(columns=zero_columns)
 
@@ -76,24 +80,25 @@ def capacities_agg(res_ref_case, years):
     df_cap = res_ref_case.get_total('capacity').round(2)
     df_cap = df_cap * 8760
 
-    zero_columns = df_cap.T.columns[(df_cap.T == 0).all()]
-    df_cap_T = df_cap.T.drop(columns=zero_columns)
+    # zero_columns = df_cap.T.columns[(df_cap.T == 0).all()]
+    # df_cap_T = df_cap.T.drop(columns=zero_columns)
 
-    df_cap = df_cap_T.T
-    rows = []
-    for row in df_cap.index:
-        if row[0] not in rows:
-            rows.append(row[0])
+    # df_cap = df_cap_T.T
+    # rows = []
+    # for row in df_cap.index:
+    #     if row[0] not in rows:
+    #         rows.append(row[0])
 
+    techs = res_ref_case.solution_loader.scenarios['none'].system.set_conversion_technologies
 
-    for row in rows:
-        capacity_sum = list(df_cap.loc[row].loc['power'].sum(axis=0))
+    for tech in techs:
+        capacity_sum = list(df_cap.loc[tech].loc['power'].sum(axis=0))
 
         plt.figure(figsize=(12, 7))  # Adjust the figure size as needed
         plt.bar(years, capacity_sum, width=1.0, label='Normal Mode')  # Create a bar plot
         plt.xlabel('Years')  # Set the x-axis label
         plt.ylabel('Capacity [GWh]')  # Set the y-axis label
-        plt.title('Capacity for entire Energy System / ' + row)  # Set the title of the plot
+        plt.title('Capacity for entire Energy System / ' + tech)  # Set the title of the plot
         plt.xticks(years, rotation=45)
         plt.legend()
         plt.grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -103,6 +108,6 @@ def capacities_agg(res_ref_case, years):
 
 
 if __name__ == '__main__':
-    capacities_agg(res_ref_case, years)
+    flow_transport(res_ref_case, years)
 
     x = 0
