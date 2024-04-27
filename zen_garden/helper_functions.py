@@ -999,7 +999,10 @@ def create_new_import_files_bayesian(avail_import_data, specific_carrier_path, y
                                 'power_line': 'electricity'}
 
     reference_year = years[0]
-
+    if len(years) > 1:
+        interval = years[1]-years[0]
+    else:
+        interval = 0
     # Base path
     set_carrier_folder = os.path.dirname(specific_carrier_path[0])
 
@@ -1160,7 +1163,7 @@ def create_new_import_files_bayesian(avail_import_data, specific_carrier_path, y
                 add_dummy_nodes = []
                 for dummynode in avail_import_data[scenario][transport_type]:
                     for year in avail_import_data[scenario][transport_type][dummynode]:
-                        actual_year = int(year) + reference_year
+                        actual_year = int(year)*interval + reference_year
                         value = max(avail_import_data[scenario][transport_type][dummynode][year])
                         entry_to_add = [dummynode, actual_year, value]
                         add_dummy_nodes.append(entry_to_add)
@@ -1202,7 +1205,7 @@ def create_new_import_files_bayesian(avail_import_data, specific_carrier_path, y
                     add_dummy_nodes = []
                     for dummynode in avail_import_data[scenario][transport_type]:
                         for year in avail_import_data[scenario][transport_type][dummynode]:
-                            actual_year = int(year) + reference_year
+                            actual_year = int(year)*interval + reference_year
                             value = max(avail_import_data[scenario][transport_type][dummynode][year])
                             entry_to_add = [dummynode, actual_year, value]
                             add_dummy_nodes.append(entry_to_add)
@@ -1347,6 +1350,10 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
                                 'power_line': 'electricity'}
 
     reference_year = years[0]
+    if len(years) > 1:
+        interval = years[1]-years[0]
+    else:
+        interval = 0
 
     # Base path
     set_carrier_folder = os.path.dirname(specific_carrier_path[0])
@@ -1527,7 +1534,7 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
                 add_dummy_nodes = []
                 for dummynode in demand_data[scenario][transport_type]:
                     for year in demand_data[scenario][transport_type][dummynode]:
-                        actual_year = int(year) + reference_year
+                        actual_year = int(year)*interval + reference_year
                         value = max(demand_data[scenario][transport_type][dummynode][year])
                         entry_to_add = [dummynode, actual_year, value]
                         add_dummy_nodes.append(entry_to_add)
@@ -1569,7 +1576,7 @@ def create_new_export_files_bayesian(demand_data, specific_carrier_path, years, 
                     add_dummy_nodes = []
                     for dummynode in demand_data[scenario][transport_type]:
                         for year in demand_data[scenario][transport_type][dummynode]:
-                            actual_year = int(year) + reference_year
+                            actual_year = int(year)*interval + reference_year
                             value = max(demand_data[scenario][transport_type][dummynode][year])
                             entry_to_add = [dummynode, actual_year, value]
                             add_dummy_nodes.append(entry_to_add)
@@ -1858,7 +1865,7 @@ def create_new_priceimport_file_bayesian(avail_import_data, set_carrier_folder, 
 
             # Price import
             if carrier != 'electricity':
-                #drybiomass structure
+                #drybiomass structure or other
                 dummynodes_data_price_import = []
                 for price_data in price_import_data:
                     for dummynode in all_dummynodes:
@@ -2038,7 +2045,9 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
                     price_export_file_new = os.path.join(carrier_path, 'price_export_new_' + str(scenario) + '.csv')
                     price_export_var_file_new = os.path.join(carrier_path, f'price_export_yearly_variation_new_{scenario}.csv')
 
-                    shadow_prices = result.get_dual('constraint_transport_technology_capex')
+                    shadow_prices = result.get_total('constraint_nodal_energy_balance') # design_res.get_total('cost_carrier')
+
+                    # biomehtan potential: result.get_total('constraint_nodal_energy_balance')
 
                     header = [['node', 'price_export']]
 
@@ -2048,7 +2057,7 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
                     entries = []
                     for nodes_invl in nodes_involved:
                         if nodes_invl in demand_data[scenario][trans_type]:
-                            entries.append([nodes_invl, 60])
+                            entries.append([nodes_invl, 1]) #carrier_cost_df.loc[carrier].loc[nodes_invl][0]
                         else:
                             entries.append([nodes_invl, 0])
                     # entries = [] [[node, 60] for node in nodes_involved]
@@ -2063,12 +2072,16 @@ def create_new_priceexport_file_bayesian(demand_data, set_carrier_folder, all_no
 
                     for node in all_dummynodes:
                         for idx_year, year in enumerate(years):
-                            if abs(shadow_prices[idx_year].loc[transport][idx_year]) == 0 and abs(
-                                    shadow_prices[idx_year].loc[transport][0]) == 0:
-                                value_variation = 1
+                            # if abs(shadow_prices.loc[transport][idx_year]) == 0 and abs(
+                            #         shadow_prices.loc[transport][0]) == 0:
+                            #     value_variation = 1
+                            # else:
+                            if node in demand_data[scenario][trans_type]:
+                                node_wo_dummy = node[:2]
+                                value_variation = shadow_prices.loc[carrier].loc[node_wo_dummy][idx_year] / 87600
+                                                      # shadow_prices.loc[transport][0]
                             else:
-                                value_variation = shadow_prices[idx_year].loc[transport][idx_year] / \
-                                                  shadow_prices[idx_year].loc[transport][0]
+                                value_variation = 0
                             entry = [node, year, value_variation]
                             entries_yearly.append(entry)
 
