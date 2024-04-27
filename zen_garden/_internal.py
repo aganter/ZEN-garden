@@ -19,7 +19,6 @@ import importlib
 from skopt import Optimizer
 from skopt.space import Real
 from contextlib import contextmanager
-from pathlib import Path
 
 from .model.optimization_setup import OptimizationSetup
 from .postprocess.postprocess import Postprocess
@@ -73,7 +72,6 @@ def main(config, dataset_path=None, job_index=None):
 
         # Do the clustering and define the cluster_nodes variable in the updated config file
         config = clustering_performance(destination_folder, config)
-        # config.system.set_cluster_nodes = [['CH', 'DE', 'FR', 'IT'], ['CZ', 'PL', 'AT']]
 
         # Function to modify all the needed files/configurations, based on results from design
         flow_at_nodes, dummy_edges, nodes_scenarios = modify_configs(config, destination_folder)
@@ -118,10 +116,10 @@ def main(config, dataset_path=None, job_index=None):
         # Create loggers
         loggers = create_logs(destination_folder, names, nodes_scenarios, years)
 
-        # Flag to check if it is the first iteration
+        # Flag to check if it is the first iteration in the loop later
         flag_iter = True
 
-        # Number of iterations for the optimization loop ¦¦ fixes configuration based on empirical values
+        # Number of iterations for the optimization loop ¦¦ fixed configuration based on empirical values
         agg_ts_list = [4, 5]
         n_iterations = [12, 6]
 
@@ -142,7 +140,6 @@ def main(config, dataset_path=None, job_index=None):
         for n_impr in range(len(n_iterations)):
 
             for n_iter in range(n_iterations[n_impr]):
-                iter_start = time.time()
 
                 # Ask the optimizer for the next point to sample
                 sample_points = {}
@@ -150,13 +147,9 @@ def main(config, dataset_path=None, job_index=None):
                     sample_points[key_edge] = opt.ask()
 
                 # Modify input csv files with the new sample points
-                file_time_start = time.time()
                 avail_import_data, demand_data = energy_model(sample_points, nodes_scenarios)
                 create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes,
                              nodes_scenarios, result, flag_iter, config)
-                file_time_end = time.time()
-                print('time file')
-                print(file_time_end-file_time_start)
 
                 # Start optimization
                 agg_ts = agg_ts_list[n_impr]
@@ -164,7 +157,6 @@ def main(config, dataset_path=None, job_index=None):
                     optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag, adapted_agg_ts=agg_ts)
 
                 # Results object
-                post_time_start = time.time()
                 destination_folder = copy_resultsfolder(calculation_flag, config, iteration=actual_iteration)
                 res = Results(destination_folder)
 
@@ -211,16 +203,16 @@ def main(config, dataset_path=None, job_index=None):
                         error_msg = 'Error while reading out results object.'
                         raise RuntimeError(error_msg)
 
-                # Flow difference
+                # Flow difference to logger
                 flows_protocol = [protocol_flow[edge_prot][actual_iteration] for edge_prot in protocol_flow]
                 flows_str = ': '.join(map(str, flows_protocol))
                 loggers['difference_flows'].info(flows_str)
 
-                # Actual flows in both directions
+                # Actual flows in both directions to logger
                 flows_in_out_protocol_str = ': '.join(map(str, flows_in_out_protocol))
                 loggers['actual_flows'].info(flows_in_out_protocol_str)
 
-                # Costs
+                # Costs to logger
                 costs = []
                 for idx_scen, _ in enumerate(nodes_scenarios):
                     for idx_year, _ in enumerate(years):
@@ -231,7 +223,7 @@ def main(config, dataset_path=None, job_index=None):
                 costs_str = ': '.join(map(str, costs))
                 loggers['costs'].info(costs_str)
 
-                # Import and demand values
+                # Import and demand values to logger
                 temp_list = []
                 for key_prot in protocol_imp_dem:
                     avail_imp = protocol_imp_dem[key_prot][actual_iteration][0]
@@ -242,109 +234,34 @@ def main(config, dataset_path=None, job_index=None):
                 attrs_str = ': '.join(map(str, temp_list))
                 loggers['import_demand'].info(attrs_str)
 
-                # Change flag to False
+                # Change flag to False, since not first iteraion an
                 flag_iter = False
 
                 # Keep track of iteration
                 actual_iteration = actual_iteration + 1
 
+                # Delete folder due to memory issues
                 shutil.rmtree(destination_folder)
-                post_time_end = time.time()
-                print('post time')
-                print(post_time_end-post_time_start)
-
-                iter_end = time.time()
-                print(iter_end-iter_start)
 
 
 
             # Save optimizer object
+            notebooks_path = os.path.abspath(os.path.join(destination_folder, '..', '..'))
             for name in names:
-                filename = os.path.join(r'C:\Users\bekaj\Documents\ETH\Master\Masterarbeit\Model_Code\Software\ZEN-garden\notebooks\optimizer_objects' , f'opt_{name}.pkl')
+                filename = os.path.join(notebooks_path, 'optimizer_objects', f'opt_{name}.pkl')
                 with open(filename, 'wb') as f:
                     pickle.dump(optimizer_edge[name], f)
 
-            # Get the best value out of the calculated points
-            best_vars = dict()
-            pushing_lp_imp = dict()
-            pushing_up_imp = dict()
-            pushing_lp_exp = dict()
-            pushing_up_exp = dict()
-            for key_edge in optimizer_edge:
-
-                # Check if optimization variable is pushing against a bound
-                # Get min and max of bound for import variable
-                min_imp = space_for_adaption[key_edge][0][0]
-                max_imp = space_for_adaption[key_edge][0][1]
-
-                # Get min and max of bound for export variable
-                min_exp = space_for_adaption[key_edge][1][0]
-                max_exp = space_for_adaption[key_edge][1][1]
-
-                # Get the 20 smallest numbers
-                smallest_20_numbers = sorted((num, idx) for idx, num in enumerate(optimizer_edge[key_edge].yi))[:5]
-
-                smallest_numbers = [num for num, idx in smallest_20_numbers]
-                smallest_indices = [idx for num, idx in smallest_20_numbers]
-
-                # Get mean over the 20 smallest variable values
-                # Converting the list of optimization variables to a NumPy array for easy calculations
-                optvars_np = np.array(optimizer_edge[key_edge].Xi)
-
-                # Selecting the specific indices
-                selected_optvars = optvars_np[smallest_indices, :]
-
-                # Import variable
-                threshold = (max_imp-min_imp)*0.05
-                close_to_lb = [value[0] for value in selected_optvars if value[0] - min_imp < threshold]
-                close_to_up = [value[0] for value in selected_optvars if max_imp - value[0] < threshold]
-
-                # Check if objective of 0 is reached
-                mean_obj_func = sum(smallest_numbers) / len(smallest_numbers)
-
-                if mean_obj_func > 0:
-                    adaption_of_bound = False
-                else:
-                    adaption_of_bound = True
-
-                if len(close_to_lb) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
-                    pushing_lp_imp[key_edge] = True
-                else:
-                    pushing_lp_imp[key_edge] = False
-                if len(close_to_up) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
-                    pushing_up_imp[key_edge] = True
-                else:
-                    pushing_up_imp[key_edge] = False
-
-                # Export variable
-                threshold = (max_exp - min_exp) * 0.05
-                close_to_lb = [value[1] for value in selected_optvars if value[1] - min_exp < threshold]
-                close_to_up = [value[1] for value in selected_optvars if max_exp - value[1] < threshold]
-
-                if len(close_to_lb) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
-                    pushing_lp_exp[key_edge] = True
-                else:
-                    pushing_lp_exp[key_edge] = False
-                if len(close_to_up) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
-                    pushing_up_exp[key_edge] = True
-                else:
-                    pushing_up_exp[key_edge] = False
-
-
-                # Calculating the mean for the first and second optimization variable
-                mean_first_index = np.mean(selected_optvars[:, 0])
-                mean_last_index = np.mean(selected_optvars[:, 1])
-
-                # Add mean value for best return value
-                best_vars[key_edge] = [mean_first_index, mean_last_index]
+            # Prepare for space adaption
+            pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound = pre_spaceadaption(optimizer_edge, space_for_adaption)
 
             # Create adapted spaces
             if n_impr == 0:
-                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp)
+                space, names, adapted_space = space_generation_bayesian_adaption(space_for_adaption, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound)
                 old_spaces_protocol[n_impr] = adapted_space
             else:
                 space_for_adaption = old_spaces_protocol[n_impr-1]
-                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp)
+                space, names, adapted_space = space_generation_bayesian_adaption(space_for_adaption, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound)
                 old_spaces_protocol[n_impr] = adapted_space
 
             # Save Optimizer information for actual iteration
@@ -383,32 +300,6 @@ def main(config, dataset_path=None, job_index=None):
 
                         optimizer_edge[key_edge].tell(variable_val, return_val)
 
-        # Do a last calculation with the best configuration.
-
-        # Ask the optimizer for the next point to sample
-        # sample_points_last_calc = {}
-        # for key_edge, opt in optimizer_edge.items():
-        #
-        # for key_edge in names:
-        #     best_val = min(return_information[key_edge])
-        #     best_val_index = return_information[key_edge].index(best_val)
-        #
-        #     for variable_val, return_val in zip(variable_information[key_edge], return_information[key_edge])
-        #
-        #     if optimizer_convergence[key_edge] == False:
-        #         sample_points[key_edge] = opt.ask()
-        #     else:
-        #         sample_points[key_edge] = sample_points_fixed[key_edge]
-        #
-        # # Modify input csv files with the new sample points
-        # avail_import_data, demand_data = energy_model(sample_points_last_calc, nodes_scenarios)
-        # create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years,
-        #              all_nodes, nodes_scenarios, result, flag_iter, config)
-        #
-        # # Start optimization
-        # agg_ts = agg_ts_list[n_impr]
-        # optimization_setup = main_algor(config, dataset_path, job_index, calculation_flag,
-        #                                 adapted_agg_ts=agg_ts)
 
         return optimization_setup
 
@@ -648,7 +539,7 @@ def timed_operation(operation_name):
     end_time = time.time()
     logging.info(f"{operation_name} took {end_time - start_time} seconds.")
 
-def space_generation_bayesian_adaption(best_vars, old_space, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp):
+def space_generation_bayesian_adaption(old_space, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound):
     """
     This function creates the space/range for the all (input-)variables to vary in the bayesian optimization based on the data
     in the flow_at_nodes dict.
@@ -681,40 +572,32 @@ def space_generation_bayesian_adaption(best_vars, old_space, pushing_lp_imp, pus
         max_val_param_exp = old_space[key_edge][1][1]
         bound_exp = max_val_param_exp - min_val_param_exp
 
-        # How strong should the bound change (from 1 (fastest) to 10 (slowest))
-        learning_rate = 1.3
-
-        # Get the best value for the import variable
-        best_param_imp = best_vars[key_edge][0]
-
-        # Get the best value for the export variable
-        best_param_exp = best_vars[key_edge][1]
 
         # Define new space for the import
-        if pushing_lp_imp[key_edge] == True:
-            min_val_param_imp_new = min_val_param_imp - bound_imp*0.2
+        if pushing_lp_imp[key_edge] == True and adaption_of_bound == True:
+            min_val_param_imp_new = min_val_param_imp - bound_imp*0.3
             if min_val_param_imp_new < 0:
                 min_val_param_imp_new = 0
         else:
-            min_val_param_imp_new = max(min_val_param_imp, min_val_param_imp + (abs(best_param_imp - min_val_param_imp) / bound_imp) * (bound_imp / learning_rate))
+            min_val_param_imp_new = min_val_param_imp #max(min_val_param_imp, min_val_param_imp + (abs(best_param_imp - min_val_param_imp) / bound_imp) * (bound_imp / learning_rate))
 
-        if pushing_up_imp[key_edge] == True:
-            max_val_param_imp_new = max_val_param_imp + bound_imp*0.2
+        if pushing_up_imp[key_edge] == True and adaption_of_bound == True:
+            max_val_param_imp_new = max_val_param_imp + bound_imp*0.3
         else:
-            max_val_param_imp_new = min(max_val_param_imp, max_val_param_imp - (abs(max_val_param_imp - best_param_imp) / bound_imp) * (bound_imp / learning_rate))
+            max_val_param_imp_new = max_val_param_imp #min(max_val_param_imp, max_val_param_imp - (abs(max_val_param_imp - best_param_imp) / bound_imp) * (bound_imp / learning_rate))
 
         # Define new space for the export
-        if pushing_lp_exp[key_edge] == True:
-            min_val_param_exp_new = min_val_param_exp - bound_exp*0.2
+        if pushing_lp_exp[key_edge] == True and adaption_of_bound == True:
+            min_val_param_exp_new = min_val_param_exp - bound_exp*0.3
             if min_val_param_exp_new < 0:
                 min_val_param_exp_new = 0
         else:
-            min_val_param_exp_new = max(min_val_param_exp, min_val_param_exp + (abs(best_param_exp - min_val_param_exp) / bound_exp) * (bound_exp / learning_rate))
+            min_val_param_exp_new = min_val_param_exp #max(min_val_param_exp, min_val_param_exp + (abs(best_param_exp - min_val_param_exp) / bound_exp) * (bound_exp / learning_rate))
 
-        if pushing_up_exp[key_edge] == True:
-            max_val_param_exp_new = max_val_param_exp + bound_exp*0.2
+        if pushing_up_exp[key_edge] == True and adaption_of_bound == True:
+            max_val_param_exp_new = max_val_param_exp + bound_exp*0.3
         else:
-            max_val_param_exp_new = min(max_val_param_exp, max_val_param_exp - (abs(max_val_param_exp - best_param_exp) / bound_exp) * (bound_exp / learning_rate))
+            max_val_param_exp_new = max_val_param_exp #min(max_val_param_exp, max_val_param_exp - (abs(max_val_param_exp - best_param_exp) / bound_exp) * (bound_exp / learning_rate))
 
         name_import = key_edge + '.import'
         name_demand = key_edge + '.demand'
@@ -818,6 +701,73 @@ def energy_model(sample_points, nodes_scenarios):
 
 
     return avail_import_dict, demand_dict
+
+def pre_spaceadaption(optimizer_edge, space_for_adaption):
+    """
+    Function to analyse the iterations for the preparation of the space adaption process. Checking best values and
+    potential problems with bounds
+
+    Parameters:
+        optimizer_edge (dict): Dict with optimizer objects
+        space_for_adaption (dict): Dict with defined variable space for every edge
+
+    Returns:
+        pushing_lp_imp (bool): Check if variable pushes against lower bound (import)
+        pushing_up_imp (bool): Check if variable pushes against upper bound (import)
+        pushing_lp_exp (bool): Check if variable pushes against lower bound (export)
+        pushing_up_exp (bool): Check if variable pushes against upper bound (export)
+        adaption_of_bound (bool): Check if adaption is needed
+    """
+
+    pushing_lp_imp = dict()
+    pushing_up_imp = dict()
+    pushing_lp_exp = dict()
+    pushing_up_exp = dict()
+    adaption_of_bound = False
+    amount_to_check = 15
+    for key_edge in optimizer_edge:
+
+        # Get min and max of bound for import variable and export variable
+        min_imp, max_imp = space_for_adaption[key_edge][0][0], space_for_adaption[key_edge][0][1]
+        min_exp, max_exp = space_for_adaption[key_edge][1][0], space_for_adaption[key_edge][1][1]
+
+        # Get the smallest numbers
+        best_objective = sorted((num, idx) for idx, num in enumerate(optimizer_edge[key_edge].yi))[:amount_to_check]
+
+        smallest_numbers = [num for num, idx in best_objective]
+        smallest_indices = [idx for num, idx in best_objective]
+
+        # Converting the list of optimization variables to a NumPy array for easy calculations
+        optvars_np = np.array(optimizer_edge[key_edge].Xi)
+
+        # Selecting the specific indices
+        selected_optvars = optvars_np[smallest_indices, :]
+
+
+        # Check if objective of 0 is reached, if not, adapt space
+        mean_obj_func = sum(smallest_numbers) / len(smallest_numbers)
+        if mean_obj_func > 10:
+            adaption_of_bound = True
+
+
+        # Import variable
+        threshold = (max_imp - min_imp) * 0.05
+        close_to_lb = [value[0] for value in selected_optvars if value[0] - min_imp < threshold]
+        close_to_up = [value[0] for value in selected_optvars if max_imp - value[0] < threshold]
+
+        pushing_lp_imp[key_edge] = len(close_to_lb) > len(selected_optvars) * 0.5  # More than 50% of the values are close
+        pushing_up_imp[key_edge] = len(close_to_up) > len(selected_optvars) * 0.5  # More than 50% of the values are close
+
+
+        # Export variable
+        threshold = (max_exp - min_exp) * 0.05
+        close_to_lb = [value[1] for value in selected_optvars if value[1] - min_exp < threshold]
+        close_to_up = [value[1] for value in selected_optvars if max_exp - value[1] < threshold]
+
+        pushing_lp_exp[key_edge] = len(close_to_lb) > len(selected_optvars) * 0.5  # More than 50% of the values are close
+        pushing_up_exp[key_edge] = len(close_to_up) > len(selected_optvars) * 0.5  # More than 50% of the values are close
+
+    return pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound
 
 
 def create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios, result, flag_iter, config):
