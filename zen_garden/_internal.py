@@ -10,6 +10,7 @@ Compilation  of the optimization problem.
 import importlib.util
 import logging
 import os
+import numpy as np
 import time
 import pickle
 import shutil
@@ -72,6 +73,7 @@ def main(config, dataset_path=None, job_index=None):
 
         # Do the clustering and define the cluster_nodes variable in the updated config file
         config = clustering_performance(destination_folder, config)
+        # config.system.set_cluster_nodes = [['CH', 'DE', 'FR', 'IT'], ['CZ', 'PL', 'AT']]
 
         # Function to modify all the needed files/configurations, based on results from design
         flow_at_nodes, dummy_edges, nodes_scenarios = modify_configs(config, destination_folder)
@@ -120,8 +122,8 @@ def main(config, dataset_path=None, job_index=None):
         flag_iter = True
 
         # Number of iterations for the optimization loop ¦¦ fixes configuration based on empirical values
-        agg_ts_list = [4]
-        n_iterations = [2]
+        agg_ts_list = [4, 5]
+        n_iterations = [12, 6]
 
         protocol_flow = dict()
         protocol_imp_dem = dict()
@@ -263,24 +265,86 @@ def main(config, dataset_path=None, job_index=None):
                     pickle.dump(optimizer_edge[name], f)
 
             # Get the best value out of the calculated points
-            best_vals = dict()
             best_vars = dict()
+            pushing_lp_imp = dict()
+            pushing_up_imp = dict()
+            pushing_lp_exp = dict()
+            pushing_up_exp = dict()
             for key_edge in optimizer_edge:
 
-                # Add best return value
-                best_vals[key_edge] = min(optimizer_edge[key_edge].yi)
-                index_val = optimizer_edge[key_edge].yi.index(min(optimizer_edge[key_edge].yi))
+                # Check if optimization variable is pushing against a bound
+                # Get min and max of bound for import variable
+                min_imp = space_for_adaption[key_edge][0][0]
+                max_imp = space_for_adaption[key_edge][0][1]
 
-                # Add corresponding variables for best return value
-                best_vars[key_edge] = optimizer_edge[key_edge].Xi[index_val]
+                # Get min and max of bound for export variable
+                min_exp = space_for_adaption[key_edge][1][0]
+                max_exp = space_for_adaption[key_edge][1][1]
+
+                # Get the 20 smallest numbers
+                smallest_20_numbers = sorted((num, idx) for idx, num in enumerate(optimizer_edge[key_edge].yi))[:5]
+
+                smallest_numbers = [num for num, idx in smallest_20_numbers]
+                smallest_indices = [idx for num, idx in smallest_20_numbers]
+
+                # Get mean over the 20 smallest variable values
+                # Converting the list of optimization variables to a NumPy array for easy calculations
+                optvars_np = np.array(optimizer_edge[key_edge].Xi)
+
+                # Selecting the specific indices
+                selected_optvars = optvars_np[smallest_indices, :]
+
+                # Import variable
+                threshold = (max_imp-min_imp)*0.05
+                close_to_lb = [value[0] for value in selected_optvars if value[0] - min_imp < threshold]
+                close_to_up = [value[0] for value in selected_optvars if max_imp - value[0] < threshold]
+
+                # Check if objective of 0 is reached
+                mean_obj_func = sum(smallest_numbers) / len(smallest_numbers)
+
+                if mean_obj_func > 0:
+                    adaption_of_bound = False
+                else:
+                    adaption_of_bound = True
+
+                if len(close_to_lb) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
+                    pushing_lp_imp[key_edge] = True
+                else:
+                    pushing_lp_imp[key_edge] = False
+                if len(close_to_up) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
+                    pushing_up_imp[key_edge] = True
+                else:
+                    pushing_up_imp[key_edge] = False
+
+                # Export variable
+                threshold = (max_exp - min_exp) * 0.05
+                close_to_lb = [value[1] for value in selected_optvars if value[1] - min_exp < threshold]
+                close_to_up = [value[1] for value in selected_optvars if max_exp - value[1] < threshold]
+
+                if len(close_to_lb) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
+                    pushing_lp_exp[key_edge] = True
+                else:
+                    pushing_lp_exp[key_edge] = False
+                if len(close_to_up) > len(selected_optvars) * 0.5:  # More than 50% of the values are close
+                    pushing_up_exp[key_edge] = True
+                else:
+                    pushing_up_exp[key_edge] = False
+
+
+                # Calculating the mean for the first and second optimization variable
+                mean_first_index = np.mean(selected_optvars[:, 0])
+                mean_last_index = np.mean(selected_optvars[:, 1])
+
+                # Add mean value for best return value
+                best_vars[key_edge] = [mean_first_index, mean_last_index]
 
             # Create adapted spaces
             if n_impr == 0:
-                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption)
+                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp)
                 old_spaces_protocol[n_impr] = adapted_space
             else:
                 space_for_adaption = old_spaces_protocol[n_impr-1]
-                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption)
+                space, names, adapted_space = space_generation_bayesian_adaption(best_vars, space_for_adaption, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp)
                 old_spaces_protocol[n_impr] = adapted_space
 
             # Save Optimizer information for actual iteration
@@ -558,7 +622,7 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
                     # Define space for the variation of the availability_import and the demand (export) for the specific edge
                     diff = max_value - min_value
                     min_value = min_value + diff*0.5
-                    max_value = max_value + diff*0.25
+                    max_value = max_value + diff*0.5
 
                     space_to_append = [Real(min_value, max_value, name=name_import), Real(min_value, max_value, name=name_demand)]
                     space.append(space_to_append)
@@ -584,7 +648,7 @@ def timed_operation(operation_name):
     end_time = time.time()
     logging.info(f"{operation_name} took {end_time - start_time} seconds.")
 
-def space_generation_bayesian_adaption(best_vars, old_space):
+def space_generation_bayesian_adaption(best_vars, old_space, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp):
     """
     This function creates the space/range for the all (input-)variables to vary in the bayesian optimization based on the data
     in the flow_at_nodes dict.
@@ -618,7 +682,7 @@ def space_generation_bayesian_adaption(best_vars, old_space):
         bound_exp = max_val_param_exp - min_val_param_exp
 
         # How strong should the bound change (from 1 (fastest) to 10 (slowest))
-        learning_rate = 3
+        learning_rate = 1.3
 
         # Get the best value for the import variable
         best_param_imp = best_vars[key_edge][0]
@@ -626,12 +690,31 @@ def space_generation_bayesian_adaption(best_vars, old_space):
         # Get the best value for the export variable
         best_param_exp = best_vars[key_edge][1]
 
-        # Define new space for the import and the export
-        min_val_param_imp_new = max(min_val_param_imp, min_val_param_imp + (abs(best_param_imp - min_val_param_imp) / bound_imp) * (bound_imp / learning_rate))
-        max_val_param_imp_new = min(max_val_param_imp, max_val_param_imp - (abs(max_val_param_imp - best_param_imp) / bound_imp) * (bound_imp / learning_rate))
+        # Define new space for the import
+        if pushing_lp_imp[key_edge] == True:
+            min_val_param_imp_new = min_val_param_imp - bound_imp*0.2
+            if min_val_param_imp_new < 0:
+                min_val_param_imp_new = 0
+        else:
+            min_val_param_imp_new = max(min_val_param_imp, min_val_param_imp + (abs(best_param_imp - min_val_param_imp) / bound_imp) * (bound_imp / learning_rate))
 
-        min_val_param_exp_new = max(min_val_param_exp, min_val_param_exp + (abs(best_param_exp - min_val_param_exp) / bound_exp) * (bound_exp / learning_rate))
-        max_val_param_exp_new = min(max_val_param_exp, max_val_param_exp - (abs(max_val_param_exp - best_param_exp) / bound_exp) * (bound_exp / learning_rate))
+        if pushing_up_imp[key_edge] == True:
+            max_val_param_imp_new = max_val_param_imp + bound_imp*0.2
+        else:
+            max_val_param_imp_new = min(max_val_param_imp, max_val_param_imp - (abs(max_val_param_imp - best_param_imp) / bound_imp) * (bound_imp / learning_rate))
+
+        # Define new space for the export
+        if pushing_lp_exp[key_edge] == True:
+            min_val_param_exp_new = min_val_param_exp - bound_exp*0.2
+            if min_val_param_exp_new < 0:
+                min_val_param_exp_new = 0
+        else:
+            min_val_param_exp_new = max(min_val_param_exp, min_val_param_exp + (abs(best_param_exp - min_val_param_exp) / bound_exp) * (bound_exp / learning_rate))
+
+        if pushing_up_exp[key_edge] == True:
+            max_val_param_exp_new = max_val_param_exp + bound_exp*0.2
+        else:
+            max_val_param_exp_new = min(max_val_param_exp, max_val_param_exp - (abs(max_val_param_exp - best_param_exp) / bound_exp) * (bound_exp / learning_rate))
 
         name_import = key_edge + '.import'
         name_demand = key_edge + '.demand'
