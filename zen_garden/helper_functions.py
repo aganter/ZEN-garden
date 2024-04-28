@@ -10,7 +10,7 @@ from pathlib import Path
 from zen_garden.postprocess.results import Results
 
 # Control of function to import in _internal.py
-__all__ = ['remove_dummy_nodes_and_edges', 'modify_configs', 'copy_resultsfolder', 'create_new_import_files_bayesian',
+__all__ = ['remove_dummy_nodes_and_edges', 'modify_dataset', 'copy_resultsfolder', 'create_new_import_files_bayesian',
            'create_new_export_files_bayesian', 'create_new_priceimport_file_bayesian', 'create_new_priceexport_file_bayesian',
            'delete_old_files', 'create_logs']
 
@@ -136,7 +136,7 @@ def create_logs(destination_folder, names, nodes_scenarios, years):
 
     return loggers
 
-def modify_configs(config, destination_folder):
+def modify_dataset(config, destination_folder):
     """
     Prepare files for the run by performing a number of functions in a specific order.
 

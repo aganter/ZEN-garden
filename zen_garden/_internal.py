@@ -74,7 +74,7 @@ def main(config, dataset_path=None, job_index=None):
         config = clustering_performance(destination_folder, config)
 
         # Function to modify all the needed files/configurations, based on results from design
-        flow_at_nodes, dummy_edges, nodes_scenarios = modify_configs(config, destination_folder)
+        flow_at_nodes, dummy_edges, nodes_scenarios = modify_dataset(config, destination_folder)
 
         # Get results object from design calculation
         run_path = config.analysis['dataset']
@@ -636,11 +636,9 @@ def energy_model(sample_points, nodes_scenarios):
         edge, transport_type, year = key_sample.split('.')
 
         # Amount of availability_import and demand
-        avail_import = sample_points[key_sample][0]
-        demand = sample_points[key_sample][1]
+        avail_import, demand = sample_points[key_sample][0], sample_points[key_sample][1]
 
-        import_node = edge.split('-')[0] + 'dummy'
-        demand_node = edge.split('-')[1] + 'dummy'
+        import_node, demand_node = edge.split('-')[0] + 'dummy', edge.split('-')[1] + 'dummy'
 
         # List with edges to analyze
         edges_to_analyze = [f"{import_node}-{edge.split('-')[1]}", f"{edge.split('-')[0]}-{demand_node}"]
@@ -810,7 +808,7 @@ def create_files(avail_import_data, demand_data, specific_carrier_path, set_carr
 
 def create_scenario_dict(cluster_nodes):
     """
-    Creates the dict with the scenarios defined.
+    Creates the dict with the scenarios.
 
     Parameters:
         cluster_nodes (list): Nested list with nodes from each individual cluster.
