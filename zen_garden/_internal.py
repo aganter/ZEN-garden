@@ -71,7 +71,7 @@ def main(config, dataset_path=None, job_index=None):
             config.system.set_cluster_nodes = []
 
         # Do the clustering and define the cluster_nodes variable in the updated config file
-        config = clustering_performance(destination_folder, config)
+        config.system.set_cluster_nodes = clustering_performance(destination_folder, config)
 
         # Function to modify all the needed files/configurations, based on results from design
         flow_at_nodes, dummy_edges, nodes_scenarios = modify_dataset(config, destination_folder)
@@ -120,8 +120,8 @@ def main(config, dataset_path=None, job_index=None):
         flag_iter = True
 
         # Number of iterations for the optimization loop ¦¦ fixed configuration based on empirical values
-        agg_ts_list = [4, 5]
-        n_iterations = [12, 6]
+        agg_ts_list = [40, 380]
+        n_iterations = [40, 20]
 
         protocol_flow = dict()
         protocol_imp_dem = dict()
@@ -234,7 +234,7 @@ def main(config, dataset_path=None, job_index=None):
                 attrs_str = ': '.join(map(str, temp_list))
                 loggers['import_demand'].info(attrs_str)
 
-                # Change flag to False, since not first iteraion an
+                # Change flag to False, since not first iteration an
                 flag_iter = False
 
                 # Keep track of iteration
@@ -533,7 +533,9 @@ def space_generation_bayesian(flow_at_nodes, dummy_edges, years):
 
 @contextmanager
 def timed_operation(operation_name):
-    """Context manager for timing operations."""
+    """
+    Measuring time.
+    """
     start_time = time.time()
     yield
     end_time = time.time()
@@ -541,17 +543,20 @@ def timed_operation(operation_name):
 
 def space_generation_bayesian_adaption(old_space, pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound):
     """
-    This function creates the space/range for the all (input-)variables to vary in the bayesian optimization based on the data
-    in the flow_at_nodes dict.
+    The function creates the new adapted space for every optimization variable.
 
     Parameters:
-        flow_at_nodes (dict): Dict containing the data for every edge from the design calculation to define the space
-        dummy_edges (list): List with the edges involved in the bayesian optimization
-        years (list): (Nested) List with the years to be optimized in the run
+        old_space (dict): Dict containing the initial variable space for every variable
+        pushing_lp_imp (bool): Check if variable pushes against lower bound (import)
+        pushing_up_imp (bool): Check if variable pushes against upper bound (import)
+        pushing_lp_exp (bool): Check if variable pushes against lower bound (export)
+        pushing_up_exp (bool): Check if variable pushes against upper bound (export)
+        adaption_of_bound (bool): Check if adaption is needed
 
     Returns:
         space (list): List containing the space for every variable involved in the bayesian optimization
         names (list): List containing the variable names for every variable involved in the bayesian optimization
+        adapted_space (dict): Dict with the new space for variable
     """
 
 
@@ -579,12 +584,12 @@ def space_generation_bayesian_adaption(old_space, pushing_lp_imp, pushing_up_imp
             if min_val_param_imp_new < 0:
                 min_val_param_imp_new = 0
         else:
-            min_val_param_imp_new = min_val_param_imp #max(min_val_param_imp, min_val_param_imp + (abs(best_param_imp - min_val_param_imp) / bound_imp) * (bound_imp / learning_rate))
+            min_val_param_imp_new = min_val_param_imp
 
         if pushing_up_imp[key_edge] == True and adaption_of_bound == True:
             max_val_param_imp_new = max_val_param_imp + bound_imp*0.3
         else:
-            max_val_param_imp_new = max_val_param_imp #min(max_val_param_imp, max_val_param_imp - (abs(max_val_param_imp - best_param_imp) / bound_imp) * (bound_imp / learning_rate))
+            max_val_param_imp_new = max_val_param_imp
 
         # Define new space for the export
         if pushing_lp_exp[key_edge] == True and adaption_of_bound == True:
@@ -592,12 +597,12 @@ def space_generation_bayesian_adaption(old_space, pushing_lp_imp, pushing_up_imp
             if min_val_param_exp_new < 0:
                 min_val_param_exp_new = 0
         else:
-            min_val_param_exp_new = min_val_param_exp #max(min_val_param_exp, min_val_param_exp + (abs(best_param_exp - min_val_param_exp) / bound_exp) * (bound_exp / learning_rate))
+            min_val_param_exp_new = min_val_param_exp
 
         if pushing_up_exp[key_edge] == True and adaption_of_bound == True:
             max_val_param_exp_new = max_val_param_exp + bound_exp*0.3
         else:
-            max_val_param_exp_new = max_val_param_exp #min(max_val_param_exp, max_val_param_exp - (abs(max_val_param_exp - best_param_exp) / bound_exp) * (bound_exp / learning_rate))
+            max_val_param_exp_new = max_val_param_exp
 
         name_import = key_edge + '.import'
         name_demand = key_edge + '.demand'
@@ -637,7 +642,6 @@ def energy_model(sample_points, nodes_scenarios):
 
         # Amount of availability_import and demand
         avail_import, demand = sample_points[key_sample][0], sample_points[key_sample][1]
-
         import_node, demand_node = edge.split('-')[0] + 'dummy', edge.split('-')[1] + 'dummy'
 
         # List with edges to analyze
@@ -722,7 +726,7 @@ def pre_spaceadaption(optimizer_edge, space_for_adaption):
     pushing_lp_exp = dict()
     pushing_up_exp = dict()
     adaption_of_bound = False
-    amount_to_check = 15
+    amount_to_check = 5
     for key_edge in optimizer_edge:
 
         # Get min and max of bound for import variable and export variable
@@ -753,8 +757,8 @@ def pre_spaceadaption(optimizer_edge, space_for_adaption):
         close_to_lb = [value[0] for value in selected_optvars if value[0] - min_imp < threshold]
         close_to_up = [value[0] for value in selected_optvars if max_imp - value[0] < threshold]
 
-        pushing_lp_imp[key_edge] = len(close_to_lb) > len(selected_optvars) * 0.5  # More than 50% of the values are close
-        pushing_up_imp[key_edge] = len(close_to_up) > len(selected_optvars) * 0.5  # More than 50% of the values are close
+        pushing_lp_imp[key_edge] = len(close_to_lb) > len(selected_optvars) * 0.5
+        pushing_up_imp[key_edge] = len(close_to_up) > len(selected_optvars) * 0.5
 
 
         # Export variable
@@ -762,15 +766,15 @@ def pre_spaceadaption(optimizer_edge, space_for_adaption):
         close_to_lb = [value[1] for value in selected_optvars if value[1] - min_exp < threshold]
         close_to_up = [value[1] for value in selected_optvars if max_exp - value[1] < threshold]
 
-        pushing_lp_exp[key_edge] = len(close_to_lb) > len(selected_optvars) * 0.5  # More than 50% of the values are close
-        pushing_up_exp[key_edge] = len(close_to_up) > len(selected_optvars) * 0.5  # More than 50% of the values are close
+        pushing_lp_exp[key_edge] = len(close_to_lb) > len(selected_optvars) * 0.5
+        pushing_up_exp[key_edge] = len(close_to_up) > len(selected_optvars) * 0.5
 
     return pushing_lp_imp, pushing_up_imp, pushing_lp_exp, pushing_up_exp, adaption_of_bound
 
 
 def create_files(avail_import_data, demand_data, specific_carrier_path, set_carrier_folder, years, all_nodes, nodes_scenarios, result, flag_iter, config):
     """
-    Create files for the calculation of the scenarios (availability_import, demand, price_import, price_export)
+    Create files for the calculation of the scenarios (availability_import/export, price_import, price_export)
 
     Parameters:
         avail_import_data (dict): Dict with the information to the availability import for all nodes, all carriers and all years.
