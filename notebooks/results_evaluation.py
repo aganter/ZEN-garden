@@ -31,12 +31,12 @@ from matplotlib.colors import Normalize
 from matplotlib.ticker import FuncFormatter
 
 plt.rcParams.update({'font.size': 22})
-res_scenario = Results("../outputs/hard_to_abate_every_year_060524/")
+res_scenario = Results("../outputs/hard_to_abate_scenarios_070524/")
 
 emissions_limit = res_scenario.get_total("carbon_emissions_annual_limit").xs("scenario_")
-#print(emissions_limit)
+print(emissions_limit)
 emissions = res_scenario.get_total("carbon_emissions_annual").xs("scenario_")
-#print(emissions)
+print(emissions)
 def get_emissions(scenario):
 
     df_emissions = res_scenario.get_df("carbon_emissions_cumulative")
@@ -668,7 +668,7 @@ def plot_outputs(folder_path, scenario, carrier, save_file):
         bottom += grouped_df_values[technology].values
 
     ax2.plot(df_emissions_cumulative['year'], df_emissions_cumulative[scenario], color='black', label='Cumulative Emissions', marker='o')
-    emissions_budget = 1820879  # Put carbon budget [kt] here
+    emissions_budget = 2815967  # Put carbon budget [kt] here
     ax2.axhline(y=emissions_budget, color='red', linestyle='--', label='Emissions Budget')
     # Legends and adjustments
     ax1.legend(title='Technology', bbox_to_anchor=(1.08, 1), loc='upper left', frameon=False)
@@ -1762,19 +1762,19 @@ def plot_biomass_and_carrier(carrier, source_path):
 
 if __name__ == '__main__':
 
-    folder_path = 'every_year_060524'
-    scenarios = ['scenario_',
+    folder_path = 'scenarios_070524'
+    scenarios = [#'scenario_',
                  #'scenario_electrification',
                  #'scenario_hydrogen',
                  #'scenario_biomass',
                  #'scenario_CCS',
                  #'scenario_high_demand',
                  #'scenario_low_demand',
-                 #'scenario_biomass_high_price_2',
-                 #'scenario_biomass_high_price_3',
-                 #'scenario_biomass_high_price_5',
-                 #'scenario_biomass_high_price_7',
-                 #'scenario_biomass_high_price_10',
+                 'scenario_biomass_high_price_2',
+                 'scenario_biomass_high_price_3',
+                 'scenario_biomass_high_price_5',
+                 'scenario_biomass_high_price_7',
+                 'scenario_biomass_high_price_10',
                  #'scenario_no_biomass'
                  ]
     carriers = [#'ammonia',
@@ -1838,17 +1838,17 @@ if __name__ == '__main__':
              6,
              #8,
              #13,
-             #17,
-             #26
+             16,
+             26
              ]
     #for year in years:
      #  for scenario in scenarios:
       #      generate_sankey_diagram(folder_path, scenario, target_technologies, intermediate_technologies, year, title="Process depiction in", save_file=False)
 
     years = [0, #8, 13
-             #7,
-             #17,
-             #26
+             6,
+             16,
+             26
              ]
     for scenario in scenarios:
         for year in years:
@@ -1870,13 +1870,13 @@ if __name__ == '__main__':
         df_input = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
 
         #plot_dataframe_on_map(df, df_input, 'technology', [0, #'1', '2',
-         #                                        #3, #'4', '5', '6',
-          #                                       7,
+                                                 #3, #'4', '5',
+                                                 #6,
                                                  #8, #'9', '10', '11', '12',
-           #                                      #13,
-            #                                     17,
-             #                                    26],
-              #                'nuts_data/NUTS_RG_20M_2021_4326.shp', save_png=True)
+                                                 #13,
+                                                 #16,
+                                                # 26],
+                              #'nuts_data/NUTS_RG_20M_2021_4326.shp', save_png=True)
 
     scenario_1 = "scenario_"
     scenario = "scenario_"
@@ -1895,10 +1895,11 @@ if __name__ == '__main__':
         shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
         output_data = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
         years = [0,
+                 7,
                  #8,
                  #13,
-                 #17,
-                 #26
+                 16,
+                 26
                  ]
         #for year in years:
          #   draw_transport_and_capture(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
@@ -1916,12 +1917,12 @@ if __name__ == '__main__':
 
     #plot_carbon_capture(scenario='scenario_')
     #plot_storage_utilization(scenario = 'scenario_')
-    source_path = "../outputs/hard_to_abate_scenarios_5%_290424/"
+    source_path = "../outputs/hard_to_abate_scenarios_070524/"
     transport_techs = ['carbon_pipeline', 'hydrogen_pipeline', 'biomethane_transport', 'dry_biomass_truck']
-    #for tech in transport_techs:
-     #   plot_biomass_and_transport(tech, source_path)
+    for tech in transport_techs:
+        plot_biomass_and_transport(tech, source_path)
     plot_biomass_and_carbon_storage(source_path)
     carriers = ['electricity',
                 'hydrogen']
-    #for carrier in carriers:
-     #   plot_biomass_and_carrier(carrier, source_path)
+    for carrier in carriers:
+        plot_biomass_and_carrier(carrier, source_path)
