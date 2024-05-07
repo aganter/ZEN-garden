@@ -12,7 +12,7 @@ import copy
 import logging
 
 import numpy as np
-
+from linopy.expressions import LinearExpression
 from zen_garden.model.objects.element import GenericRule,Element
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.preprocess.unit_handling import UnitHandling
@@ -322,6 +322,10 @@ class EnergySystem:
             objective_rule = self.rules.objective_total_cost_rule(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "total_carbon_emissions":
             objective_rule = self.rules.objective_total_carbon_emissions_rule(self.optimization_setup.model)
+        elif self.optimization_setup.analysis["objective"] == "capacity":
+            objective_rule = self.rules.objective_capacity_rule(self.optimization_setup.model)
+        elif self.optimization_setup.analysis["objective"] == "flow_import":
+            objective_rule = self.rules.objective_flow_import_rule(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "risk":
             logging.info("Objective of minimizing risk not yet implemented")
             objective_rule = self.rules.objective_risk_rule(self.optimization_setup.model)
@@ -337,7 +341,10 @@ class EnergySystem:
             raise KeyError(f"Objective sense {self.optimization_setup.analysis['sense']} not known")
 
         # construct objective
-        self.optimization_setup.model.add_objective(objective_rule.to_linexpr())
+        if not isinstance(objective_rule, LinearExpression):
+            objective_rule = objective_rule.to_linexpr()
+        self.optimization_setup.model.add_objective(objective_rule)
+
 
 
 class EnergySystemRules(GenericRule):
@@ -696,6 +703,33 @@ class EnergySystemRules(GenericRule):
         """
         sets = self.sets
         return sum(model.variables["carbon_emissions_annual"][year] for year in sets["set_time_steps_yearly"])
+
+    def objective_capacity_rule(self, model):
+        """objective function to minimize total emissions
+
+        .. math::
+            J = \sum_{y\in\mathcal{Y}} E_y
+
+        :param model: optimization model
+        :return: total carbon emissions objective function
+        """
+        assert "capacity" in self.system, "please specify technologies whose capacities should be minimized"
+        carbon_storage = self.system["capacity"]
+        #sum(sum(sum(sum(model.variables["capacity"].loc[tech,capacity_type,loc, year] for year in self.sets["set_time_steps_yearly"]) for capacity_type in self.system["set_capacity_types"]) for loc in self.sets["set_nodes"]) for tech in carbon_storage)
+        return model.variables["capacity"].loc[carbon_storage].sum()
+
+    def objective_flow_import_rule(self, model):
+        """objective function to minimize total emissions
+
+        .. math::
+            J = \sum_{y\in\mathcal{Y}} E_y
+
+        :param model: optimization model
+        :return: total carbon emissions objective function
+        """
+        assert "flow_import" in self.system, "please specify with flow_import in system which carrier imports should be minimized"
+        biomass_carriers = self.system["flow_import"]
+        return model.variables["flow_import"].loc[biomass_carriers].sum()
 
     def objective_risk_rule(self, model):
         """objective function to minimize total risk
