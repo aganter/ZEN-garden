@@ -1,4 +1,4 @@
-#<<<<<<< Updated upstream
+
 import pandas as pd
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
@@ -14,10 +14,7 @@ from plotly.subplots import make_subplots
 import matplotlib.ticker as ticker
 import plotly.io as pio
 
-pio.orca.config.executable = 'C:\\Users\\PaulaBaumann\\.conda\\envs\\zen-garden-linopy\\orca.cmd'
-
-
-res_scenario = Results("../outputs/hard_to_abate_210424/")
+res_scenario = Results("../outputs/hard_to_abate_2024_060524/")
 
 df_emissions = res_scenario.get_df("carbon_emissions_cumulative")
 print(df_emissions)
@@ -270,7 +267,7 @@ def plot_outputs(folder_path, scenario, carrier, save_file):
 
     grouped_df_values = grouped_df_values.astype(float)
 
-    ax = grouped_df_values.plot(kind='bar', stacked=True, figsize=(10, 6), color=palette)
+    ax = grouped_df_values.plot(kind='bar', stacked=True, figsize=(16, 8), color=palette)
 
     ax.legend(title='Technology', bbox_to_anchor=(1, 0.5), loc='center left', frameon=False)
     plt.subplots_adjust(right=0.8)
@@ -470,7 +467,7 @@ res_scenario = Results("../outputs/hard_to_abate_scenarios_140324/")
 df_new = df.xs('carbon_liquid').sum()
 print(df_new)'''
 
-df = pd.read_csv("coal_for_cement/price_import.csv")
+df = pd.read_csv("coal_for_cement/price_import_high.csv")
 print('mean')
 print(df['price_import'].mean())
 
@@ -2350,14 +2347,14 @@ def plot_demand(scenario):
 if __name__ == '__main__':
 
     # save (grouped) inputs and outputs as csv
-    folder_path = 'scenarios_180424'
+    folder_path = 'scenarios_old_test'
     scenarios = ['scenario_',
                  #'scenario_electrification',
                  #'scenario_hydrogen',
                  #'scenario_biomass',
                  #'scenario_CCS',
                  #'scenario_high_demand',
-                 'scenario_low_demand',
+                 #'scenario_low_demand',
                  #'scenario_biomass_high_price_2',
                  #'scenario_biomass_high_price_3',
                  #'scenario_biomass_high_price_5',
@@ -2461,9 +2458,9 @@ if __name__ == '__main__':
 
     # generate bar charts for industry outputs
 
-    #for scenario in scenarios:
-     #   for carrier in carriers:
-      #      plot_outputs(folder_path, scenario, carrier, save_file=True)
+    for scenario in scenarios:
+        for carrier in carriers:
+            plot_outputs(folder_path, scenario, carrier, save_file=True)
 
     scenario = 'scenario_'
     scenario2 = 'scenario_biomass_high_price_10'
@@ -2509,14 +2506,13 @@ if __name__ == '__main__':
     csv_path_hydrogen = "scenarios_140324/flow_conversion_output_scenario_.csv"
     years = [13]
 
-    for year in years:
+    #for year in years:
         #draw_transport_and_capture(csv_path, csv_path_capture, shapefile_path, year, scenario, figsize=(20, 20))
         #draw_hydrogen_pipelines(csv_path, csv_path_hydrogen, shapefile_path, year, scenario, figsize=(20, 20))
-        draw_transport_arrows_and_biomass_usage(csv_path, shapefile_path, year, scenario, figsize=(20, 20))
+        #draw_transport_arrows_and_biomass_usage(csv_path, shapefile_path, year, scenario, figsize=(20, 20))
 
 
     #calc_lco(scenario = "scenario_", discount_rate = 0.06, carrier="methanol")
 
     #for scenario in scenarios:
         #plot_demand(scenario)
-#>>>>>>> Stashed changes
