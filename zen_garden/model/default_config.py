@@ -72,6 +72,7 @@ class HeaderDataInputs(Subscriptable):
     set_input_carriers: str = "carrier"
     set_output_carriers: str = "carrier"
     set_time_steps_storage: str = "time_storage_level"
+    set_time_steps_balancing_period: str = "time_balancing"
     set_dependent_carriers: str = "carrier"
     set_elements: str = "element"
     set_conversion_technologies: str = "technology"
@@ -134,6 +135,7 @@ class System(Subscriptable):
     enforce_selfish_behavior: bool = False
     reference_year: int = 2023
     unaggregated_time_steps_per_year: int = 8760
+    balancing_period: int = 8760
     aggregated_time_steps_per_year: int = 10
     conduct_time_series_aggregation: bool = True
     optimized_years: int = 3
