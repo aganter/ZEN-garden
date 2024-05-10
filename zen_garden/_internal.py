@@ -7,6 +7,7 @@
 
 Compilation  of the optimization problem.
 """
+
 import importlib.util
 import logging
 import os
@@ -44,13 +45,13 @@ def main(config, dataset_path=None, job_index=None):
         config.analysis["dataset"] = dataset_path
     logging.info(f"Optimizing for dataset {config.analysis['dataset']}")
     # get the abs path to avoid working dir stuff
-    config.analysis["dataset"] = os.path.abspath(config.analysis['dataset'])
-    config.analysis["folder_output"] = os.path.abspath(config.analysis['folder_output'])
+    config.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
+    config.analysis["folder_output"] = os.path.abspath(config.analysis["folder_output"])
 
     ### SYSTEM CONFIGURATION
     input_data_checks = InputDataChecks(config=config, optimization_setup=None)
     input_data_checks.check_dataset()
-    system_path = os.path.join(config.analysis['dataset'], "system.py")
+    system_path = os.path.join(config.analysis["dataset"], "system.py")
     spec = importlib.util.spec_from_file_location("module", system_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -59,41 +60,59 @@ def main(config, dataset_path=None, job_index=None):
     input_data_checks.check_technology_selections()
     input_data_checks.check_year_definitions()
     # overwrite default system and scenario dictionaries
-    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index)
+    scenarios, elements = ScenarioUtils.get_scenarios(config, job_index)
     # get the name of the dataset
-    model_name, out_folder = StringUtils.get_model_name(config.analysis,config.system)
+    model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
     # clean sub-scenarios if necessary
-    ScenarioUtils.clean_scenario_folder(config,out_folder)
+    ScenarioUtils.clean_scenario_folder(config, out_folder)
     ### ITERATE THROUGH SCENARIOS
     for scenario, scenario_dict in zip(scenarios, elements):
         # FORMULATE THE OPTIMIZATION PROBLEM
         # add the scenario_dict and read input data
-        optimization_setup = OptimizationSetup(config, scenario_dict=scenario_dict, input_data_checks=input_data_checks)
-        # get rolling horizon years
-        steps_horizon = optimization_setup.get_optimization_horizon()
-        # iterate through horizon steps
-        for step in steps_horizon:
-            StringUtils.print_optimization_progress(scenario,steps_horizon,step)
-            # overwrite time indices
-            optimization_setup.overwrite_time_indices(step)
-            # create optimization problem
-            optimization_setup.construct_optimization_problem()
-            # SOLVE THE OPTIMIZATION PROBLEM
-            optimization_setup.solve()
-            # break if infeasible
-            if not optimization_setup.optimality:
-                # write IIS
-                optimization_setup.write_IIS()
-                break
-            # save new capacity additions and cumulative carbon emissions for next time step
-            optimization_setup.add_results_of_optimization_step(step)
-            # EVALUATE RESULTS
-            # create scenario name, subfolder and param_map for postprocessing
-            scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
-                config = config,scenario = scenario,scenario_dict=scenario_dict,steps_horizon=steps_horizon,step=step
-            )
-            # write results
-            Postprocess(optimization_setup, scenarios=config.scenarios, subfolder=subfolder,
-                            model_name=model_name, scenario_name=scenario_name, param_map=param_map)
+        optimization_setup = OptimizationSetup(
+            config,
+            model_name=model_name,
+            scenario_name=scenario,
+            scenario_dict=scenario_dict,
+            input_data_checks=input_data_checks,
+        )
+        # fit the optimization problem for every steps defined in the config and save the results
+        optimization_setup.fit_and_save()
+        # # get rolling horizon years
+        # steps_horizon = optimization_setup.get_optimization_horizon()
+        # # iterate through horizon steps
+        # for step in steps_horizon:
+        #     StringUtils.print_optimization_progress(scenario, steps_horizon, step)
+        #     # overwrite time indices
+        #     optimization_setup.overwrite_time_indices(step)
+        #     # create optimization problem
+        #     optimization_setup.construct_optimization_problem()
+        #     # SOLVE THE OPTIMIZATION PROBLEM
+        #     optimization_setup.solve()
+        #     # break if infeasible
+        #     if not optimization_setup.optimality:
+        #         # write IIS
+        #         optimization_setup.write_IIS()
+        #         break
+        #     # save new capacity additions and cumulative carbon emissions for next time step
+        #     optimization_setup.add_results_of_optimization_step(step)
+        #     # EVALUATE RESULTS
+        #     # create scenario name, subfolder and param_map for postprocessing
+        #     scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
+        #         config_system=config.system,
+        #         scenario=scenario,
+        #         scenario_dict=scenario_dict,
+        #         steps_horizon=steps_horizon,
+        #         step=step,
+        #     )
+        #     # write results
+        #     Postprocess(
+        #         optimization_setup,
+        #         scenarios=config.scenarios,
+        #         subfolder=subfolder,
+        #         model_name=model_name,
+        #         scenario_name=scenario_name,
+        #         param_map=param_map,
+        #     )
     logging.info("--- Optimization finished ---")
     return optimization_setup

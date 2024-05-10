@@ -9,12 +9,13 @@ from zen_garden.postprocess.results.solution_loader import (
 )
 from zen_garden.postprocess.results.multi_hdf_loader import MultiHdfLoader
 from functools import cache
-from zen_garden.model.default_config import Config,Analysis,Solver,System
+from zen_garden.model.default_config import Config, Analysis, Solver, System
 import importlib
 import os
 import logging
 import json
 from pathlib import Path
+
 
 class Results:
     def __init__(self, path: str):
@@ -29,7 +30,10 @@ class Results:
         return f"Results of '{first_scenario.analysis.dataset}'"
 
     def get_df(
-        self, component_name: str, scenario_name: Optional[str] = None, data_type: Literal["dataframe","units"] = "dataframe"
+        self,
+        component_name: str,
+        scenario_name: Optional[str] = None,
+        data_type: Literal["dataframe", "units"] = "dataframe",
     ) -> Optional[dict[str, "pd.DataFrame | pd.Series[Any]"]]:
         """
         Transforms a parameter or variable dataframe (compressed) string into an actual pandas dataframe
@@ -78,9 +82,13 @@ class Results:
         :param keep_raw: Keep the raw values of the rolling horizon optimization
         """
         assert component.timestep_type is not None
-        series = self.solution_loader.get_component_data(scenario, component, keep_raw=keep_raw)
+        series = self.solution_loader.get_component_data(
+            scenario, component, keep_raw=keep_raw
+        )
 
-        if element_name is not None and element_name in series.index.get_level_values(0):
+        if element_name is not None and element_name in series.index.get_level_values(
+            0
+        ):
             series = series.loc[element_name]
 
         if year is None:
@@ -235,13 +243,15 @@ class Results:
         for y in years:
             timesteps = self.solution_loader.get_timesteps(scenario, component, int(y))
             try:
-                ans.insert(len(ans.columns), y, total_value[timesteps].sum(axis=1,skipna=False))  # type: ignore
+                ans.insert(len(ans.columns), y, total_value[timesteps].sum(axis=1, skipna=False))  # type: ignore
             except KeyError:
                 timestep_list = [i for i in timesteps if i in total_value]
-                ans.insert(len(ans.columns), year, total_value[timestep_list].sum(axis=1,skipna=False))  # type: ignore # noqa
+                ans.insert(len(ans.columns), year, total_value[timestep_list].sum(axis=1, skipna=False))  # type: ignore # noqa
 
         if "mf" in ans.index.names:
-            ans = ans.reorder_levels([i for i in ans.index.names if i != "mf"] + ["mf"]).sort_index(axis=0)
+            ans = ans.reorder_levels(
+                [i for i in ans.index.names if i != "mf"] + ["mf"]
+            ).sort_index(axis=0)
 
         return ans
 
@@ -405,7 +415,12 @@ class Results:
         )
         return _duals
 
-    def get_unit(self, component_name: str, scenario_name: Optional[str] = None,droplevel:bool=True) -> Optional[dict[str, "pd.DataFrame | pd.Series[Any]"]]:
+    def get_unit(
+        self,
+        component_name: str,
+        scenario_name: Optional[str] = None,
+        droplevel: bool = True,
+    ) -> Optional[dict[str, "pd.DataFrame | pd.Series[Any]"]]:
         """
         Extracts the unit of a given Component. If no scenario is given, a random one is taken.
 
@@ -415,15 +430,21 @@ class Results:
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
-        res = self.get_df(component_name, scenario_name=scenario_name, data_type="units")
+        res = self.get_df(
+            component_name, scenario_name=scenario_name, data_type="units"
+        )
         if res is None:
             return None
         units = res[scenario_name]
         if droplevel:
             # TODO make more flexible
-            loc_idx = ["set_nodes","set_location","set_edges"]
-            time_idx = ["set_time_steps_yearly","set_time_steps_operation","set_time_steps_storage"]
-            drop_idx = pd.Index(loc_idx+time_idx).intersection(units.index.names)
+            loc_idx = ["set_nodes", "set_location", "set_edges"]
+            time_idx = [
+                "set_time_steps_yearly",
+                "set_time_steps_operation",
+                "set_time_steps_storage",
+            ]
+            drop_idx = pd.Index(loc_idx + time_idx).intersection(units.index.names)
             units.index = units.index.droplevel(drop_idx.to_list())
             units = units[~units.index.duplicated()]
         return units
@@ -492,7 +513,9 @@ class Results:
 
 if __name__ == "__main__":
     try:
-        spec = importlib.util.spec_from_file_location("module", "config.py")
+        spec = importlib.util.spec_from_file_location(
+            "module", Path(__file__).parents[3] / "data" / "config.py"
+        )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         config = module.config
