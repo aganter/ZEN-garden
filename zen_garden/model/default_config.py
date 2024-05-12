@@ -143,6 +143,15 @@ class System(Subscriptable):
     use_capacities_existing: bool = True
 
 
+class ModelingToGenerateAlternatives(Subscriptable):
+    """
+    This class is used to model the behavior of the system to generate alternatives.
+    """
+
+    modeling_to_generate_alternatives: bool = False
+    n_objectives: int = 1
+
+
 class SolverOptions(Subscriptable):
     pass
 
@@ -182,3 +191,5 @@ class Config(Subscriptable):
     # system: System = System()
 
     scenarios: dict[str, Any] = {"": {}}
+
+    mga: ModelingToGenerateAlternatives = ModelingToGenerateAlternatives()

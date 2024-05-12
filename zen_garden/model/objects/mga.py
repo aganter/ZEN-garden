@@ -10,12 +10,11 @@ import random
 import numpy as np
 import xarray as xr
 
-from zen_garden.model.objects.element import Element
 from zen_garden.utils import lp_sum
 from zen_garden.model.optimization_setup import OptimizationSetup
 
 
-class ModelingToGenerateAlternatives(Element):
+class ModelingToGenerateAlternatives:
     """
     Class defining Modeling to Generate Alternatives functionalities
     """
@@ -25,8 +24,6 @@ class ModelingToGenerateAlternatives(Element):
 
     def __init__(
         self,
-        mga_iteration: str,
-        optimization_setup,
         n_dimensions: int,
         n_objectives: int,
         optized_setup: OptimizationSetup,
@@ -40,9 +37,13 @@ class ModelingToGenerateAlternatives(Element):
         :param n_objectives: Number of objectives functions N_k to consider for the MGA method
         """
 
-        super().__init__(mga_iteration, optimization_setup)
         self.n_dimensions = n_dimensions
         self.n_objectives = n_objectives
+        self.optimization_setup = optized_setup
+
+        # DocString to access the MGA class
+        self.__doc__ = "--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---"
+        print(self.__doc__)
 
     def generate_random_directions(self, seed: int = 0):
         """

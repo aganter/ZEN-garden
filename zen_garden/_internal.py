@@ -13,6 +13,7 @@ import os
 import importlib
 
 from .model.optimization_setup import OptimizationSetup
+from .model.objects.mga import ModelingToGenerateAlternatives
 from .utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
 
 # We setup the logger here
@@ -75,6 +76,17 @@ def main(config, dataset_path=None, job_index=None):
         )
         # Fit the optimization problem for every steps defined in the config and save the results
         optimization_setup.fit_and_save()
+        if config.mga["modeling_to_generate_alternatives"]:
+            logging.info("--- Original Optimization finished ---")
+            n_dimensions = len(optimization_setup.model.solution.set_nodes) * len(
+                optimization_setup.model.solution.set_technologies
+            )
+            mga_iterations = ModelingToGenerateAlternatives(
+                n_dimensions=n_dimensions,
+                n_objectives=config.mga["n_objectives"],
+                optized_setup=optimization_setup,
+            )
+            mga_iterations.generate_random_directions()
 
     logging.info("--- Optimization finished ---")
     return optimization_setup
