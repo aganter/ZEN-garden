@@ -285,7 +285,6 @@ class Postprocess:
         # dataframe serialization
         data_frames = {}
         for name, arr in self.model.solution.items():
-            print(name)
             if name in self.vars.docs:
                 doc = self.vars.docs[name]
                 units = self.vars.units[name]
