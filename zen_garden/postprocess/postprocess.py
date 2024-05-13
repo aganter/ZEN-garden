@@ -469,7 +469,7 @@ class Postprocess:
         index_list_final = []
         for index in index_list:
             if index in self.analysis["header_data_inputs"].keys():
-                index_list_final.append(self.analysis["header_data_inputs"][index])  # else:  #     pass  #     # index_list_final.append(index)
+                index_list_final.append(self.analysis["header_data_inputs"][index])
         return index_list_final
 
     def get_time_steps_year2operation(self):
