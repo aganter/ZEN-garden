@@ -52,6 +52,7 @@ class Carrier(Element):
         self.carbon_intensity_carrier_import = self.data_input.extract_input_data("carbon_intensity_carrier_import", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"emissions": 1, "energy_quantity": -1})
         self.carbon_intensity_carrier_export = self.data_input.extract_input_data("carbon_intensity_carrier_export", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly",  unit_category={"emissions": 1, "energy_quantity": -1})
         self.price_shed_demand = self.data_input.extract_input_data("price_shed_demand", index_sets=[], unit_category={"money": 1, "energy_quantity": -1})
+        self.import_share = self.data_input.extract_input_data("import_share", index_sets=[], unit_category={})
 
     def overwrite_time_steps(self, base_time_steps):
         """ overwrites set_time_steps_operation
@@ -84,6 +85,8 @@ class Carrier(Element):
         optimization_setup.parameters.add_parameter(name="availability_import_yearly", index_names=["set_carriers", "set_nodes", "set_time_steps_yearly"], doc='Parameter which specifies the maximum energy that can be imported from outside the system boundaries for the entire year', calling_class=cls)
         # availability of carrier
         optimization_setup.parameters.add_parameter(name="availability_export_yearly", index_names=["set_carriers", "set_nodes", "set_time_steps_yearly"], doc='Parameter which specifies the maximum energy that can be exported to outside the system boundaries for the entire year', calling_class=cls)
+        # availability of carrier
+        optimization_setup.parameters.add_parameter(name="import_share", index_names=["set_carriers"],  doc='Parameter which specifies minimum carrier import per year relative to max. availability',  calling_class=cls)
         # import price
         optimization_setup.parameters.add_parameter(name="price_import", index_names=["set_carriers", "set_nodes", "set_time_steps_operation"], doc='Parameter which specifies the import carrier price', calling_class=cls)
         # export price
@@ -146,6 +149,9 @@ class Carrier(Element):
 
         # limit import/export flow by availability for each year
         rules.constraint_availability_import_export_yearly()
+
+        # minimum share of availability import used
+        rules.constraint_import_share_block()
 
         # cost for carrier
         rules.constraint_cost_carrier()
@@ -263,6 +269,33 @@ class CarrierRules(GenericRule):
 
         self.constraints.add_constraint("constraint_availability_import_yearly",constraints_imp)
         self.constraints.add_constraint("constraint_availability_export_yearly",constraints_exp)
+
+    def constraint_import_share_block(self):
+        """node- and year-dependent carrier availability to import from outside the system boundaries
+
+         .. math::
+            a_{c,n,y}^\mathrm{import} \geq \\sum_{t\\in\mathcal{T}}\\tau_t U_{c,n,t}
+
+        :return: #TODO describe parameter/return
+        """
+
+        ### index sets
+        # not needed
+
+        ### masks
+        # The constraints is only bounded if the availability is finite
+        mask = self.parameters.import_share != np.inf
+
+        ### index loop
+        # not necessary
+
+        ### formulate constraint
+        lhs = self.variables["flow_import"].sum("set_time_steps_operation").where(mask)
+        rhs = (self.parameters.availability_import.sum("set_time_steps_operation") * self.parameters.import_share).where(mask)
+        constraints = lhs <= rhs
+
+        self.constraints.add_constraint("constraint_import_share", constraints)
+
 
     def constraint_cost_carrier(self):
         """ cost of importing and exporting carrier

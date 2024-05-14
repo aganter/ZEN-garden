@@ -576,7 +576,6 @@ class EnergySystemRules(GenericRule):
         """
         assert "capacity" in self.system, "please specify technologies whose capacities should be minimized"
         carbon_storage = self.system["capacity"]
-        #sum(sum(sum(sum(model.variables["capacity"].loc[tech,capacity_type,loc, year] for year in self.sets["set_time_steps_yearly"]) for capacity_type in self.system["set_capacity_types"]) for loc in self.sets["set_nodes"]) for tech in carbon_storage)
         return model.variables["capacity"].loc[carbon_storage].sum()
 
     def objective_flow_import(self, model):
