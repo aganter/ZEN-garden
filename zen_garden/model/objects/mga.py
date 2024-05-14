@@ -6,11 +6,12 @@ Class defining Modeling to Generate Alternatives functionalities:
 - Capability to generate a set of alternatives objective function based on the weights generated
 """
 
+import logging
 import random
 import numpy as np
 import xarray as xr
+from scipy.stats import truncnorm
 
-from zen_garden.utils import lp_sum
 from zen_garden.model.optimization_setup import OptimizationSetup
 
 
@@ -26,6 +27,7 @@ class ModelingToGenerateAlternatives:
         self,
         n_dimensions: int,
         n_objectives: int,
+        characteristic_scales_config: dict,
         optized_setup: OptimizationSetup,
     ):
         """
@@ -39,11 +41,12 @@ class ModelingToGenerateAlternatives:
 
         self.n_dimensions = n_dimensions
         self.n_objectives = n_objectives
+        self.characteristic_scales_config = characteristic_scales_config
         self.optimization_setup = optized_setup
+        self.direction_search_vector = {}
+        self.characteristic_scales = None
 
-        # DocString to access the MGA class
-        self.__doc__ = "--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---"
-        print(self.__doc__)
+        logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
 
     def generate_random_directions(self, seed: int = 0):
         """
@@ -52,53 +55,56 @@ class ModelingToGenerateAlternatives:
 
         :param seed: Seed for the random number generator
 
-        :return: Random directions vector direction_search_vector
+        :return: Random directions vector direction_search_vector for each of the capacity technologies variables
         """
 
         random.seed(seed)
-        directions = [random.gauss(0, 1) for _ in range(self.n_dimensions)]
-        direction_search_vector = np.array(directions).reshape(1, self.n_dimensions)
+        for technology in self.optimization_setup.model.solution.capacity.set_technologies.values:
+            random_value = truncnorm.rvs(-1, 1)
+            self.direction_search_vector[technology] = random_value
 
-        return direction_search_vector
+        return self.direction_search_vector
 
-    def aggregate_variables(self, variables: xr.DataArray):
+    def generate_characteristic_scales(self):
         """
-        Aggregate the variables to consider for the MGA objective functions generation.
-
-        :param variables: Variables to aggregate
-
-        :return: Aggregated variables aggregated_variables
-        """
-
-        aggregated_variables = lp_sum(variables)
-
-        return aggregated_variables
-
-    def generate_characteristic_scales(self, aggregated_variables: xr.DataArray):
-        """
-        Generate characteristic scales for the aggregated variables to normalize the aggregate variables by dividing
-        them by the values of the aggregated variables in the optimal solution, when available. When these are zero, the
-        characteristic scales are estimated to roughly match the expected magnitude of the variables in the near-optimal
-        space.
-
-        :param aggregated_variables: Aggregated variables to consider for the MGA objective functions generation
+        Generate characteristic scales L for the new decision variables to be normalized. L is obtained by dividing the
+        variables by their values in the optimal solution, when available. When these are zero, the characteristic
+        scales are estimated to roughly match the expected magnitude of the variables in the near-optimal space.
 
         :return: Characteristic scales vector characteristic_scales
         """
-        # read optimal solution  variables values
-
-        optimal_solution = lp_sum(aggregated_variables)
-        characteristic_scales = np.where(
-            optimal_solution == 0,
-            np.mean(aggregated_variables, axis=0),
-            optimal_solution,
+        capacity_variables = self.optimization_setup.model.solution.capacity
+        self.characteristic_scales = xr.full_like(capacity_variables, fill_value=np.nan)
+        logging.info(
+            "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
+            "estimated to roughly match the expected its magnitude in the near-optimal space.",
         )
 
-        return characteristic_scales
+        for index in np.ndindex(capacity_variables.shape):
+            data_array = capacity_variables.isel(
+                set_technologies=index[0],
+                set_capacity_types=index[1],
+                set_location=index[2],
+                set_time_steps_yearly=index[3],
+            )
+            capacity_value = data_array.item()
+            if np.isnan(capacity_value):
+                characteristic_value = np.nan
+            elif capacity_value > 1e-3:
+                characteristic_value = capacity_value
+            else:
+                estimated_value = self.characteristic_scales_config[
+                    self.optimization_setup.model.solution.capacity.coords["set_technologies"].values[index[0]]
+                ]["default_value"]
+                characteristic_value = estimated_value
 
-    def generate_weights(
-        self, aggregated_variables: xr.DataArray, direction_search_vector: np.array
-    ):
+            self.characteristic_scales.values[index] = characteristic_value
+
+        self.characteristic_scales = self.characteristic_scales.rename("characteristic_scales")
+
+        return self.characteristic_scales
+
+    def generate_weights(self, direction_search_vector: np.array):
         """
         Generate weights for the MGA objective functions based on the aggregated variables and the random directions.
         In order to improve performances in case where the aggregated variables are vastly different in scales, the
@@ -112,15 +118,10 @@ class ModelingToGenerateAlternatives:
 
         :return: Weights vector w
         """
-        standardized_direction_search_vector = (
-            direction_search_vector
-            / self.generate_characteristic_scales(aggregated_variables)
-        )
+        standardized_direction_search_vector = direction_search_vector / self.generate_characteristic_scales()
         return standardized_direction_search_vector
 
-    def generate_alternatives_objective_functions(
-        self, aggregated_variables: xr.DataArray, weights: np.array
-    ):
+    def generate_alternatives_objective_functions(self, aggregated_variables: xr.DataArray, weights: np.array):
         """
         Generate a set of alternatives objective function based on the weights generated.
 

@@ -10,6 +10,7 @@ Compilation  of the optimization problem.
 
 import logging
 import os
+import json
 import importlib
 
 from .model.optimization_setup import OptimizationSetup
@@ -78,15 +79,20 @@ def main(config, dataset_path=None, job_index=None):
         optimization_setup.fit_and_save()
         if config.mga["modeling_to_generate_alternatives"]:
             logging.info("--- Original Optimization finished ---")
-            n_dimensions = len(optimization_setup.model.solution.set_nodes) * len(
-                optimization_setup.model.solution.set_technologies
-            )
+
+            assert os.path.exists(config.mga["characteristic_scales_path"]), "JSON file not found!"
+            with open(config.mga["characteristic_scales_path"], "r", encoding="utf-8") as file:
+                characteristic_scales_config = json.load(file)
+            #  TODO: check the strcuture of the file
+
+            n_dimensions = len(optimization_setup.model.solution.set_technologies)
             mga_iterations = ModelingToGenerateAlternatives(
                 n_dimensions=n_dimensions,
                 n_objectives=config.mga["n_objectives"],
                 optized_setup=optimization_setup,
+                characteristic_scales_config=characteristic_scales_config,
             )
-            mga_iterations.generate_random_directions()
+            mga_iterations.generate_characteristic_scales()
 
     logging.info("--- Optimization finished ---")
     return optimization_setup

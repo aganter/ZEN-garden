@@ -150,6 +150,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
 
     modeling_to_generate_alternatives: bool = False
     n_objectives: int = 1
+    characteristic_scales_path: str = ""
 
 
 class SolverOptions(Subscriptable):
