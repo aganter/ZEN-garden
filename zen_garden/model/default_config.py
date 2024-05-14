@@ -99,6 +99,7 @@ class System(Subscriptable):
     double_capex_transport: bool = False
     set_nodes: list[str] = []
     exclude_parameters_from_TSA: bool = True
+    balancing_carriers: list[str] = []
     conduct_scenario_analysis: bool = False
     run_default_scenario: bool = True
     clean_sub_scenarios: bool = False

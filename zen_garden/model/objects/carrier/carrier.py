@@ -274,7 +274,7 @@ class CarrierRules(GenericRule):
         self.constraints.add_constraint("constraint_availability_import_yearly",constraints_imp)
         self.constraints.add_constraint("constraint_availability_export_yearly",constraints_exp)
 
-    def constraint_flow_export_balancing_block(self):
+    def constraint_flow_export_balancing(self):
         """node- and time-dependent carrier export has to be constant over time
 
         .. math::
