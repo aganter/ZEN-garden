@@ -29,14 +29,17 @@ import pyproj
 from shapely.ops import transform
 from matplotlib.colors import Normalize
 from matplotlib.ticker import FuncFormatter
+import pycountry
+from matplotlib.colors import LogNorm
+
 
 plt.rcParams.update({'font.size': 22})
-res_scenario = Results("../outputs/hard_to_abate_scenarios_070524/")
+res_scenario = Results("../outputs/hard_to_abate_scenarios_090524/")
 
 emissions_limit = res_scenario.get_total("carbon_emissions_annual_limit").xs("scenario_")
-print(emissions_limit)
+#print(emissions_limit)
 emissions = res_scenario.get_total("carbon_emissions_annual").xs("scenario_")
-print(emissions)
+#print(emissions)
 def get_emissions(scenario):
 
     df_emissions = res_scenario.get_df("carbon_emissions_cumulative")
@@ -113,7 +116,6 @@ def energy_carrier(scenario):
     summed_renewables = renewables.groupby(['node', 'carrier']).sum().reset_index()
     summed_renewables.loc[summed_renewables['carrier'] == 'electricity', 'carrier'] = 'renewable_electricity'
 
-    #for i in range(1, 14):
     for i in range(1, 27):
         summed_renewables[i] = summed_renewables[i].round(4)
 
@@ -136,16 +138,11 @@ def energy_carrier(scenario):
                 carrier = row['carrier']
                 node = row['node']
 
-                #inputs_grouped_new.loc[(inputs_grouped_new['carrier'] == carrier) & (inputs_grouped_new['node'] == node), 0:13] -= row[0:13]
                 inputs_grouped_new.loc[(inputs_grouped_new['carrier'] == carrier) & (inputs_grouped_new['node'] == node), 0:26] -= row[0:26]
-
-    #inputs_grouped_new[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]] = inputs_grouped_new[
-     #   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]].apply(pd.to_numeric, errors='coerce')
 
     inputs_grouped_new[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]] = inputs_grouped_new[
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]].apply(pd.to_numeric, errors='coerce')
 
-    #for i in range(1, 14):
     for i in range(1, 27):
         inputs_grouped_new[i] = inputs_grouped_new[i].round(4)
 
@@ -153,7 +150,6 @@ def energy_carrier(scenario):
 
     energy_carrier = energy_carrier_country.groupby(['carrier']).sum().reset_index()
     energy_carrier = energy_carrier.drop(['node'], axis=1)
-    #energy_carrier.loc[energy_carrier['carrier'] == 'coal', 0:13] /= (27.35/3.6)
     energy_carrier.loc[energy_carrier['carrier'] == 'coal', 0:26] /= (27.35 / 3.6)
     energy_carrier_country = energy_carrier_country.fillna(0)
 
@@ -202,14 +198,13 @@ def draw_wedges_on_map(folder_path, shapefile_path, year, scenario, radius_facto
         if total_production <= 0:
             continue
 
-
         radius = np.sqrt(total_production) * radius_factor * 100000
 
         if node == 'FR':
             centroid = france_centroid
         else:
             if node not in gdf['NUTS_ID'].values:
-                print(f"Keine geografischen Daten für {node} gefunden.")
+                print(f"No geographic data for {node} found.")
                 continue
             country_geom = gdf.loc[gdf['NUTS_ID'] == node, 'geometry'].iloc[0]
             centroid = (country_geom.centroid.x, country_geom.centroid.y)
@@ -252,7 +247,6 @@ def update_multiple_combinations(df_inputs, df_outputs, combinations):
         if not output_indices.empty and not input_indices.empty:
             for output_idx in output_indices:
                 for input_idx in input_indices:
-                    #df_outputs_updated.loc[output_idx, range(14)] -= df_inputs_updated.loc[input_idx, range(14)].values
                     df_outputs_updated.loc[output_idx, range(27)] -= df_inputs_updated.loc[input_idx, range(27)].values
 
         output_indices = df_outputs_updated[
@@ -262,11 +256,9 @@ def update_multiple_combinations(df_inputs, df_outputs, combinations):
             (df_inputs_updated['technology'] == tech_output) & (df_inputs_updated['carrier'] == carrier_output)].index
 
         if not output_indices.empty and not input_indices.empty:
-            #output_row = df_outputs_updated.loc[output_indices[0], range(14)]
             output_row = df_outputs_updated.loc[output_indices[0], range(27)]
 
             for idx in input_indices:
-                #df_inputs_updated.loc[idx, range(14)] -= output_row.values
                 df_inputs_updated.loc[idx, range(27)] -= output_row.values
 
     return df_outputs_updated, df_inputs_updated
@@ -276,7 +268,6 @@ def subtract_technology_pairs(df, tech_base, carrier_base, tech_compare, carrier
     idx_compare = df[(df['technology'] == tech_compare) & (df['carrier'] == carrier_compare)].index
 
     if not idx_base.empty and not idx_compare.empty:
-        #df.loc[idx_base, range(1, 14)] -= df.loc[idx_compare, range(1, 14)].values
         df.loc[idx_base, range(1, 27)] -= df.loc[idx_compare, range(1, 27)].values
 
     return df
@@ -346,8 +337,6 @@ def generate_sankey_diagram(folder_path, scenario, target_technologies, intermed
                               'hydrogen_for_cement_conversion', 'biomass_to_coal_conversion', 'carbon_conversion']
     updated_outputs_df = updated_outputs_df[~updated_outputs_df['technology'].isin(technologies_to_remove)]
     updated_inputs_df['technology'] = updated_inputs_df['technology'].str.replace('biomethane_', '')
-
-    print(updated_inputs_df)
 
     input_techs_target = updated_inputs_df[updated_inputs_df['technology'].isin(target_technologies)]
 
@@ -511,17 +500,14 @@ def generate_sankey_diagram(folder_path, scenario, target_technologies, intermed
     colors = [color_mapping.get(category_mapping.get(tech, 'other_techs')) for tech in unique_source_target]
 
     fig = make_subplots(rows=1, cols=1, specs=[[{"type": "sankey"}]])
-    #print([src for src in links['source']])
     fig.add_trace(go.Sankey(
         node=dict(
             pad=15,
             thickness=20,
-            #line=dict(color='black', width=0.5),
             label=unique_source_target,
             color=colors
         ),
         link=dict(
-            #color=["rgba"+str(matplotlib.colors.to_rgba(color_mapping.get(category_mapping.get(inv_mapping_dict[link], 'other_techs')), alpha=0.6)) for link in links['source']],
             color=[
                 "rgba" + str(matplotlib.colors.to_rgba(
                     color_mapping.get(category_mapping.get(inv_mapping_dict[link], 'other_techs'), 'default_color'),
@@ -529,12 +515,9 @@ def generate_sankey_diagram(folder_path, scenario, target_technologies, intermed
                     alpha=0.6
                 )) for link in links['source']
             ],
-            #[str(matplotlib.colors.to_rgba(color_mapping[links_dict['source'][str(src)]])).replace("0.6", "1.0") for src in links_dict['source']],
             source=links_dict['source'],
             target=links_dict['target'],
             value=links_dict['value'],
-            #text=[f"Value: {link}" for link in links_dict['value']],
-            #hoverinfo='all'
             label=[f"{source} to {target}" for source, target in zip(links_dict['source'], links_dict['target'])],
             hovertemplate='%{value}'
         )
@@ -542,7 +525,6 @@ def generate_sankey_diagram(folder_path, scenario, target_technologies, intermed
 
     if isinstance(year, str):
         year = int(year)
-    #displayed_year = year * 2 + 2024
     displayed_year = year + 2024
     fig.update_layout(title_text=f"{title} {displayed_year} ({scenario_name})", font_size=18)
 
@@ -572,7 +554,6 @@ def plot_outputs(folder_path, scenario, carrier, save_file):
     filtered_rows = df_input[(df_input['technology'] == 'biomethane_SMR') & (df_input['carrier'] == 'biomethane')]
     filtered_rows_1 = df_input[(df_input['technology'] == 'biomethane_SMR_CCS') & (df_input['carrier'] == 'biomethane')]
 
-    #columns_to_multiply = [year for year in range(0, 14)]
     columns_to_multiply = [year for year in range(0, 27)]
     filtered_rows[columns_to_multiply] = filtered_rows[columns_to_multiply].apply(lambda x: x / 1.2987)
     filtered_rows_1[columns_to_multiply] = filtered_rows_1[columns_to_multiply].apply(lambda x: x / 1.2987)
@@ -597,29 +578,24 @@ def plot_outputs(folder_path, scenario, carrier, save_file):
         (df_output['technology'] == 'SMR') & (df_output['carrier'] == 'hydrogen')]
     smr_biomethane_hydrogen_index = smr_biomethane_hydrogen_row.index[0]
 
-    #for i in range(14):
     for i in range(27):
         df_output.at[smr_biomethane_hydrogen_index, i] -= smr_values[i]
 
     smr_hydrogen_row = df_output[(df_output['technology'] == 'SMR_CCS_biomethane') & (df_output['carrier'] == 'hydrogen')]
-    #smr_values = smr_hydrogen_row.iloc[0][[i for i in range(14)]].values
     smr_values = smr_hydrogen_row.iloc[0][[i for i in range(27)]].values
 
     smr_biomethane_hydrogen_row = df_output[
         (df_output['technology'] == 'SMR_CCS') & (df_output['carrier'] == 'hydrogen')]
     smr_biomethane_hydrogen_index = smr_biomethane_hydrogen_row.index[0]
 
-    #for i in range(14):
     for i in range(27):
         df_output.at[smr_biomethane_hydrogen_index, i] -= smr_values[i]
 
     df_emissions_cumulative = res_scenario.get_total("carbon_emissions_cumulative").xs(scenario).reset_index()
-    #df_emissions_cumulative['year'] = df_emissions_cumulative['year'].apply(lambda x: 2024 + 2 * x)
     df_emissions_cumulative['year'] = df_emissions_cumulative['year'].apply(lambda x: 2024 + x)
 
     grouped_df = df_output[df_output['carrier'] == carrier]
 
-    #year_mapping = {i : (2024 + 2 * i) for i in range(14)}
     year_mapping = {i: (2024 + i) for i in range(27)}
     grouped_df.rename(columns=year_mapping, inplace=True)
     grouped_df.set_index('technology', inplace=True)
@@ -668,7 +644,7 @@ def plot_outputs(folder_path, scenario, carrier, save_file):
         bottom += grouped_df_values[technology].values
 
     ax2.plot(df_emissions_cumulative['year'], df_emissions_cumulative[scenario], color='black', label='Cumulative Emissions', marker='o')
-    emissions_budget = 2815967  # Put carbon budget [kt] here
+    emissions_budget = 2768528  # Put carbon budget [kt] here
     ax2.axhline(y=emissions_budget, color='red', linestyle='--', label='Emissions Budget')
     # Legends and adjustments
     ax1.legend(title='Technology', bbox_to_anchor=(1.08, 1), loc='upper left', frameon=False)
@@ -703,49 +679,11 @@ def plot_outputs(folder_path, scenario, carrier, save_file):
 
     plt.show()
 
-def plot_outputs_carbon(scenario1, scenario2):
-
-    df1 = res_scenario.get_total("flow_conversion_input", scenario=scenario1).xs('carbon_storage')
-    grouped_df1 = df1.xs('carbon_liquid').sum()
-
-    df2 = res_scenario.get_total("flow_conversion_input", scenario=scenario2).xs('carbon_storage')
-    grouped_df2 = df2.xs('carbon_liquid').sum()
-
-    years = list(range(2024, 2051, 2))
-
-    bar_width = 0.45
-    years1 = [x - bar_width / 2 for x in range(len(years))]
-    years2 = [x + bar_width / 2 for x in range(len(years))]
-
-    plt.figure(figsize=(12, 7))
-
-    plt.bar(years1, grouped_df1.values, width=bar_width, color='cadetblue', label='Baseline')
-    plt.bar(years2, grouped_df2.values, width=bar_width, color='lightskyblue', label='Biomass_high_price_10')
-
-    plt.xlabel('Year')
-    plt.ylabel('Stored carbon [Mt]')
-
-    ax = plt.gca()
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-
-    formatter = FuncFormatter(lambda y, _: '{:,.0f}'.format(y / 1000))
-    ax.yaxis.set_major_formatter(formatter)
-
-    plt.xticks(range(len(years)), years)
-    plt.legend()
-
-    plt.axhline(y=82817, color='r', linestyle='--', linewidth=2)
-
-    plt.show()
-
 def plot_dataframe_on_map(df, df_input, technology_column, output_columns, shapefile_path=None, save_png=True):
 
-    #columns = ['node', 'technology', 'carrier'] + [year for year in range(0, 14)]
     columns = ['node', 'technology', 'carrier'] + [year for year in range(0, 27)]
     df_output = df[df['carrier'] == 'hydrogen']
 
-    #columns_to_operate = [year for year in range(0, 14)]
     columns_to_operate = [year for year in range(0, 27)]
 
     for node in df_input['node'].unique():
@@ -768,12 +706,10 @@ def plot_dataframe_on_map(df, df_input, technology_column, output_columns, shape
                          **adjusted_values_1}
             df_output = pd.concat([df_output, pd.DataFrame([new_row_1])], ignore_index=True)
 
-    #columns_to_check = [i for i in range(14)]
     columns_to_check = [i for i in range(27)]
 
     df_output = df_output.loc[df_output[columns_to_check].sum(axis=1) > 0]
 
-    #columns_to_operate = [i for i in range(14)]
     columns_to_operate = [i for i in range(27)]
 
     df_smr = df_output[df_output['technology'] == 'SMR'].set_index('node')
@@ -784,7 +720,6 @@ def plot_dataframe_on_map(df, df_input, technology_column, output_columns, shape
             df_output.loc[(df_output['node'] == node) & (df_output['technology'] == 'SMR'), columns_to_operate] -= df_smr_biomethane.loc[
                 node, columns_to_operate]
 
-    #columns_to_operate = [i for i in range(14)]
     columns_to_operate = [i for i in range(27)]
 
     df_smr_ccs = df_output[df_output['technology'] == 'SMR_CCS'].set_index('node')
@@ -797,11 +732,8 @@ def plot_dataframe_on_map(df, df_input, technology_column, output_columns, shape
             df_smr_ccs_biomethane.loc[
                 node, columns_to_operate]
 
-    #columns_to_operate = [i for i in range(14)]
     columns_to_operate = [i for i in range(27)]
     df_output[columns_to_operate] = df_output[columns_to_operate].clip(lower=0)
-
-    #df_output.to_csv('output_3.csv', index=False)
 
     gdf = gpd.read_file(shapefile_path).to_crs(epsg=3035)
 
@@ -838,80 +770,90 @@ def plot_dataframe_on_map(df, df_input, technology_column, output_columns, shape
             point = gdf.loc[gdf['NUTS_ID'] == node].to_crs(epsg=3035).geometry.centroid.iloc[0]
             ax.scatter(point.x, point.y, s=radius, color=color, label=technology, alpha=0.7)
 
-        #ax.set_title(f"Hydrogen Production in Europe {year}")
-
         plt.axis('off')
         ax.set_xlim([2.5e6, 5.9e6])
         ax.set_ylim([1.5e6, 5.5e6])
         plt.tight_layout()
-        plt.savefig(f"{folder_path}/hyrogen_production_map_{scenario}_{year}.png", dpi=300, bbox_inches='tight', pad_inches=0)
+        plt.savefig(f"{folder_path}/hydrogen_production_map_{scenario}_{year}.png", dpi=300, bbox_inches='tight', pad_inches=0)
 
         plt.show()
 
 def get_industry_capex_data(scenario):
-    industries = ['ammonia', 'steel', 'cement', 'methanol', 'refining']
+    industries = ['ammonia_070524', 'steel_300424', 'cement_300424', 'methanol_300424', #'refining'
+                  ]
     df_industries = pd.DataFrame()
 
     for industry in industries:
-        res_scenario = Results(f"../outputs/hard_to_abate_{industry}_130324/")
-        df_industry = res_scenario.get_total("cost_capex_total", scenario)
-        df_industry = df_industry.loc[scenario]
-        df_industries[industry] = df_industry.squeeze()
-
+        res_scenario = Results(f"../outputs/hard_to_abate_{industry}/")
+        df_industry = res_scenario.get_total("cost_capex_total").xs(scenario)
+        #df_industry = df_industry.loc[scenario]
+        #df_industries[industry] = df_industry.squeeze()
     return df_industries
 
 def get_total_industry_capex_data(scenario):
-    res_scenario = Results("../outputs/hard_to_abate_scenarios_140324/")
-    df_all_industries_total = res_scenario.get_total("cost_capex_total", scenario)
-    df_all_industries_total = df_all_industries_total.loc[scenario]
+    res_scenario = Results("../outputs/hard_to_abate_scenarios_090524/")
+    df_all_industries_total = res_scenario.get_total("cost_capex_total").xs(scenario)
+    #df_all_industries_total = df_all_industries_total.loc[scenario]
 
+    print(df_all_industries_total)
     return df_all_industries_total
 
 def get_industry_opex_data(scenario):
-    industries = ['ammonia', 'steel', 'cement', 'methanol', 'refining']
+    industries = ['ammonia_070524', 'steel_300424', 'cement_300424', 'methanol_300424', #'refining'
+                  ]
     df_industries = pd.DataFrame()
 
     for industry in industries:
-        res_scenario = Results(f"../outputs/hard_to_abate_{industry}_130324/")
-        df_industry = res_scenario.get_total("cost_opex_total", scenario)
-        df_industry = df_industry.loc["scenario_"]
-        df_industries[industry] = df_industry.squeeze()
+        res_scenario = Results(f"../outputs/hard_to_abate_{industry}/")
+        df_industry = res_scenario.get_total("cost_opex_total").xs(scenario)
+        #df_industry = df_industry.loc["scenario_"]
+        #df_industries[industry] = df_industry.squeeze()
 
+    print(df_industry)
     return df_industries
 
 def get_total_industry_opex_data(scenario):
-    res_scenario = Results("../outputs/hard_to_abate_scenarios_140324/")
-    df_all_industries_total = res_scenario.get_total("cost_opex_total", scenario)
-    df_all_industries_total = df_all_industries_total.loc[scenario]
+    res_scenario = Results("../outputs/hard_to_abate_scenarios_090524/")
+    df_all_industries_total = res_scenario.get_total("cost_opex_total").xs(scenario)
+    #df_all_industries_total = df_all_industries_total.loc[scenario]
 
+    print(df_all_industries_total)
     return df_all_industries_total
 
 def get_industry_carrier_costs_data(scenario):
-    industries = ['ammonia', 'steel', 'cement', 'methanol', 'refining']
+    industries = ['ammonia_070524', 'steel_300424', 'cement_300424', 'methanol_300424', #'refining'
+                  ]
     df_all_industries = pd.DataFrame()
 
     for industry in industries:
-        res_scenario = Results(f"../outputs/hard_to_abate_{industry}_130324/")
+        res_scenario = Results(f"../outputs/hard_to_abate_{industry}/")
         df_industry = res_scenario.get_total("cost_carrier")
-        df_industry = df_industry.loc[scenario]
+        #df_industry = df_industry.loc[scenario]
         df_industry_sum = df_industry.sum()
         df_all_industries[industry] = df_industry_sum
 
+    print(df_all_industries)
     return df_all_industries
 
 def get_total_industry_cost_carrier_data(scenario):
-    res_scenario = Results("../outputs/hard_to_abate_scenarios_140324/")
+    res_scenario = Results("../outputs/hard_to_abate_scenarios_090524/")
     df_all_industries_total = res_scenario.get_total("cost_carrier")
     df_all_industries_total = df_all_industries_total.loc[scenario]
     total_carrier_costs_by_year = df_all_industries_total.sum()
     print(total_carrier_costs_by_year)
 
+    print(df_all_industries_total)
     return total_carrier_costs_by_year
 
 def plot_costs_with_unique_colors(scenario):
     df_capex = get_industry_capex_data(scenario)
+    df_capex = df_capex.rename(columns={"ammonia_070524": "ammonia", "steel_300424": "steel", "cement_300424": "cement", "methanol_300424": "methanol"})
     df_opex = get_industry_opex_data(scenario)
+    df_opex = df_opex.rename(columns={"ammonia_070524": "ammonia", "steel_300424": "steel", "cement_300424": "cement", "methanol_300424": "methanol"})
+
     df_carrier_costs = get_industry_carrier_costs_data(scenario)
+    df_carrier_costs = df_carrier_costs.rename(columns={"ammonia_070524": "ammonia", "steel_300424": "steel", "cement_300424": "cement", "methanol_300424": "methanol"})
+
     total_all = get_total_industry_capex_data(scenario) + get_total_industry_opex_data(
         scenario) + get_total_industry_cost_carrier_data(scenario)
 
@@ -1030,60 +972,6 @@ def plot_npc(scenario, scenario_1):
     plt.tight_layout()
     plt.show()
 
-def plot_cost_comp_npc(scenario, scenario_1, scenario_2, scenario_3):
-
-    total_capex_total = get_total_industry_capex_data(scenario).sum()
-    total_opex_total = get_total_industry_opex_data(scenario).sum()
-    total_carrier_costs_total = get_total_industry_cost_carrier_data(scenario).sum().sum()
-
-    total_capex_total_1 = get_total_industry_capex_data(scenario_1).sum()
-    total_opex_total_1 = get_total_industry_opex_data(scenario_1).sum()
-    total_carrier_costs_total_1 = get_total_industry_cost_carrier_data(scenario_1).sum().sum()
-
-    total_capex_total_2 = get_total_industry_capex_data(scenario_2).sum()
-    total_opex_total_2 = get_total_industry_opex_data(scenario_2).sum()
-    total_carrier_costs_total_2 = get_total_industry_cost_carrier_data(scenario_2).sum().sum()
-
-    total_capex_total_3 = get_total_industry_capex_data(scenario_3).sum()
-    total_opex_total_3 = get_total_industry_opex_data(scenario_3).sum()
-    total_carrier_costs_total_3 = get_total_industry_cost_carrier_data(scenario_3).sum().sum()
-
-    categories = ['CAPEX', 'OPEX', 'Carrier Costs']
-    colors = ['dimgray', 'slategray', 'lightsteelblue']
-    scenario_data = [
-        [get_total_industry_capex_data(scenario).sum(), get_total_industry_opex_data(scenario).sum(),
-         get_total_industry_cost_carrier_data(scenario).sum().sum()],
-        [get_total_industry_capex_data(scenario_1).sum(), get_total_industry_opex_data(scenario_1).sum(),
-         get_total_industry_cost_carrier_data(scenario_1).sum().sum()],
-        [get_total_industry_capex_data(scenario_2).sum(), get_total_industry_opex_data(scenario_2).sum(),
-         get_total_industry_cost_carrier_data(scenario_2).sum().sum()],
-        [get_total_industry_capex_data(scenario_3).sum(), get_total_industry_opex_data(scenario_3).sum(),
-         get_total_industry_cost_carrier_data(scenario_3).sum().sum()]
-    ]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bar_width = 0.2
-    n_scenarios = len(scenario_data)
-    indices = np.arange(n_scenarios)
-
-    for scenario_index, scenario_costs in enumerate(scenario_data):
-        for category_index, cost in enumerate(scenario_costs):
-            bar = ax.bar(scenario_index + bar_width * category_index, cost, bar_width, color=colors[category_index],
-                         label=categories[category_index] if scenario_index == 0 else "")
-            ax.text(scenario_index + bar_width * category_index, cost, f'{cost:.2f}', ha='center', va='bottom')
-
-    ax.set_xlabel('Szenarien')
-    ax.set_ylabel('Kosten')
-    ax.set_title('Kostenvergleich der Szenarien')
-    ax.set_xticks(indices + bar_width / 2 * (len(categories) - 1))
-    ax.set_xticklabels(['Szenario 1', 'Szenario 2', 'Szenario 3', 'Szenario 4'])
-
-    if n_scenarios == 1:
-        ax.legend(categories, loc='upper right')
-
-    plt.tight_layout()
-    plt.grid(True)
-    plt.show()
 def draw_transport_arrows_carbon(csv_path, shapefile_path, year, scenario, figsize=(20, 20)):
     df = pd.read_csv(csv_path)
     df = df[df['Unnamed: 0'] == scenario]
@@ -1218,7 +1106,6 @@ def draw_transport_and_capture(transport_data, capture_data, shapefile_path, yea
     ax.set_xlim(2.5e6, 5.9e6)
     ax.set_ylim(1.5e6, 5.5e6)
     plt.axis('off')
-    #plt.tight_layout
     plt.savefig(f"{folder_path}/carbon_transport_map_{scenario}_{year}.png", dpi=300, bbox_inches='tight', pad_inches=0)
     plt.show()
 
@@ -1288,7 +1175,7 @@ def draw_hydrogen_pipelines(transport_data, capture_data, shapefile_path, year, 
     cbar.ax.tick_params(labelsize=18)
 
     cbar.set_label('Yearly hydrogen production [TWh]', fontsize=22)
-    # Draw transport arrows
+
     for _, row in df_transport.iterrows():
         source = row['source']
         target = row['target']
@@ -1311,7 +1198,6 @@ def draw_hydrogen_pipelines(transport_data, capture_data, shapefile_path, year, 
     ax.set_ylim(1.5e6, 5.5e6)
 
     plt.axis('off')
-    #plt.tight_layout
     plt.savefig(f"{folder_path}/hydrogen_transport_map_{scenario}_{year}.png", dpi=300, bbox_inches='tight', pad_inches=0)
     plt.show()
 
@@ -1354,9 +1240,6 @@ def draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year
                                                    combined_wet_biomass[f'{year}_y'] / combined_wet_biomass[
                                                        f'{year}_x'], 0)
 
-
-
-
     combined_biomass = pd.merge(combined_dry_biomass, combined_wet_biomass, left_on='node', right_on='node', how='outer')
     combined_biomass = combined_biomass.fillna(0)
 
@@ -1364,13 +1247,11 @@ def draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year
 
     nuts2_gdf = nuts2_gdf.merge(combined_biomass, left_on='NUTS_ID', right_on='node', how='left').fillna(0)
 
-
     fig, ax = plt.subplots(figsize=figsize)
     vmin = nuts2_gdf['utilization'].min()
     vmax = 1.4
     norm = Normalize(vmin=vmin, vmax=vmax)
     nuts2_gdf.plot(column='utilization', ax=ax, cmap='Purples', edgecolor='lightgray', vmax=vmax, norm=norm)
-
 
     sm = plt.cm.ScalarMappable(cmap='Purples', norm=norm)
     sm._A = []
@@ -1379,7 +1260,6 @@ def draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year
     level = [0]
     nuts_gdf = nuts_gdf[nuts_gdf['LEVL_CODE'].isin(level)]
     border_color = 'dimgray'
-    country_color = 'darkgrey'
 
     nuts_gdf.plot(ax=ax, color="None", edgecolor=border_color)
 
@@ -1399,11 +1279,12 @@ def draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year
         target = row['target']
 
         filtered_df = df[(df['source'] == source) & (df['target'] == target)]
+        #print(filtered_df)
 
         amount = filtered_df[year].sum()
         tech = row['technology']
 
-        color = 'coral' if tech == 'biomethane_transport' else 'crimson' if tech == 'dry_biomass_truck' else 'purple'
+        color = 'coral' if tech == 'dry_biomass_truck' else 'crimson' if tech == 'biomethane_transport' else 'purple'
 
         if pd.notnull(amount) and amount > 0:
             linewidth = np.sqrt(amount) * 0.05
@@ -1427,10 +1308,9 @@ def calc_lco(scenario, discount_rate, carrier):
     opex_df = res_scenario.get_total("cost_opex_total").xs(scenario).reset_index()
     carrier_cost_df = res_scenario.get_total("cost_carrier").xs(scenario).reset_index()
 
-    # Filter and aggregate costs for the specific carrier
     carrier_cost_df = carrier_cost_df[carrier_cost_df['carrier'] == carrier]
     carrier_cost_df.drop(['node', 'carrier'], axis=1, inplace=True)
-    carrier_cost_df = carrier_cost_df.sum()  # Sum up all costs per year for the selected carrier
+    carrier_cost_df = carrier_cost_df.sum()
 
     production_df = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
     production_df = production_df[production_df['carrier'] == carrier]
@@ -1439,11 +1319,10 @@ def calc_lco(scenario, discount_rate, carrier):
     total_discounted_costs = 0
     total_discounted_production = 0
 
-    #for year in range(14):
-    for year in range(27):  # Assuming the year columns are labeled as integers from 0 to 13
+    for year in range(27):
         discount_factor = (1 + discount_rate) ** year
-        discounted_costs = (capex_df.loc[year, 'scenario_'] +
-                            opex_df.loc[year, 'scenario_'] +
+        discounted_costs = (capex_df.loc[year, scenario] +
+                            opex_df.loc[year, scenario] +
                             carrier_cost_df[year]) / discount_factor
 
         discounted_production = production_df[year] / discount_factor
@@ -1452,6 +1331,7 @@ def calc_lco(scenario, discount_rate, carrier):
         total_discounted_production += discounted_production
 
     lcoa = total_discounted_costs / total_discounted_production if total_discounted_production else float('inf')
+    lcoa = lcoa * 1000
     print("LCOA:", lcoa)
     return lcoa
 
@@ -1509,272 +1389,756 @@ def plot_existing_capacity(folder_path, scenario, technology, save_file):
 
     plt.show()
 
+
 def plot_carbon_capture(scenario):
+
     carbon_techs = ['BF_BOF_CCS', 'SMR_CCS', 'cement_plant_oxy_combustion', 'gasification_CCS', 'DAC']
+    methanol_techs = ['carbon_conversion']
     outputs = ['carbon', 'carbon_liquid']
+    methanol_outputs = ['carbon_methanol']
 
     def prepare_df(source_path):
-        # Assume Results and other necessary imports are available
-        # and properly defined here
         results = Results(source_path)
         df = results.get_total('flow_conversion_output').xs(scenario).reset_index()
-        df = df[df['technology'].isin(carbon_techs)]
-        df = df[df['carrier'].isin(outputs)]
-        df = df.drop('node', axis=1)
-        df = df.groupby(['technology', 'carrier']).sum()
-        return df
+        df_methanol = df[df['technology'].isin(methanol_techs) & df['carrier'].isin(methanol_outputs)]
+        df_carbon = df[df['technology'].isin(carbon_techs) & df['carrier'].isin(outputs)]
+        df_carbon = df_carbon.drop('node', axis=1)
+        df_methanol = df_methanol.drop('node', axis=1)
+        df_carbon = df_carbon.groupby(['technology', 'carrier']).sum().reset_index()
+        df_methanol = df_methanol.groupby(['technology', 'carrier']).sum().reset_index()
+        return df_carbon, df_methanol
 
-    carbon_integrated = prepare_df("../outputs/hard_to_abate_scenarios_5%_290424/")
-    carbon_ammonia = prepare_df("../outputs/hard_to_abate_ammonia_290424/")
-    carbon_steel = prepare_df("../outputs/hard_to_abate_steel_300424/")
-    carbon_cement = prepare_df("../outputs/hard_to_abate_cement_300424/")
-    carbon_methanol = prepare_df("../outputs/hard_to_abate_methanol_300424")
+    carbon_integrated, methanol_integrated = prepare_df("../outputs/hard_to_abate_scenarios_090524/")
+    carbon_ammonia, methanol_ammonia = prepare_df("../outputs/hard_to_abate_ammonia_130524/")
+    carbon_steel, methanol_steel = prepare_df("../outputs/hard_to_abate_steel_130524/")
+    carbon_cement, methanol_cement = prepare_df("../outputs/hard_to_abate_cement_130524/")
+    carbon_methanol, methanol_methanol = prepare_df("../outputs/hard_to_abate_methanol_130524/")
+    carbon_refining, methanol_refining = prepare_df("../outputs/hard_to_abate_refining_130524/")
 
     def melt_and_label(df, label):
         df_long = pd.melt(df.reset_index(), id_vars=['technology', 'carrier'], var_name='Year', value_name='Value')
-        df_long['Source'] = label
+        if label == 'Integrated':
+            industry_mapping = {
+                'BF_BOF_CCS': 'Steel_integrated',
+                'SMR_CCS': 'Hydrogen_integrated',
+                'cement_plant_oxy_combustion': 'Cement_integrated',
+                'gasification_CCS': 'Hydrogen_integrated',
+                'DAC': 'DAC_integrated'
+            }
+            df_long['Source'] = df_long['technology'].map(industry_mapping)
+        else:
+            df_long['Source'] = label
         return df_long
 
-    df_long_integrated = melt_and_label(carbon_integrated, 'Integrated')
-    df_long_ammonia = melt_and_label(carbon_ammonia, 'Ammonia')
-    df_long_steel = melt_and_label(carbon_steel, 'Steel')
-    df_long_cement = melt_and_label(carbon_cement, 'Cement')
-    df_long_methanol = melt_and_label(carbon_methanol, 'Methanol')
+    combined = pd.concat([
+        melt_and_label(carbon_integrated, 'Integrated'),
+        melt_and_label(carbon_ammonia, 'Ammonia'),
+        melt_and_label(carbon_steel, 'Steel'),
+        melt_and_label(carbon_cement, 'Cement'),
+        melt_and_label(carbon_methanol, 'Methanol'),
+        melt_and_label(carbon_refining, 'Refining')
+    ])
 
-    combined = pd.concat([df_long_ammonia, df_long_steel, df_long_cement, df_long_methanol, df_long_integrated])
+    pivot_df = combined.pivot_table(index='Year', columns=['Source'], values='Value', aggfunc='sum')
+    color_map = {
+        'Steel_integrated': 'tab:blue',
+        'Steel': 'tab:blue',
+        'Cement_integrated': 'tab:green',
+        'Cement': 'tab:green',
+        'Hydrogen_integrated': 'tab:cyan',
+        'Ammonia': 'tab:pink',
+        'Methanol': 'tab:olive',
+        'DAC_integrated': 'tab:orange',
+        'Refining_integrated': 'tab:red',
+        'Refining': 'tab:red'
+    }
 
-    combined['Group'] = combined['Source'].replace(
-        {'Integrated': 'Integrated', 'Ammonia': 'Grouped', 'Steel': 'Grouped', 'Cement': 'Grouped',
-         'Methanol': 'Grouped'})
+    results = Results("../outputs/hard_to_abate_scenarios_090524/")
+    ratios_df = results.get_total("flow_conversion_input").xs(scenario).reset_index()
+    ratios_df = ratios_df.drop('node', axis=1)
+    ratios_df = ratios_df.groupby(['technology', 'carrier']).sum().reset_index()
+    ratios_df = ratios_df[(ratios_df['carrier'] == 'hydrogen')]
+    ratios_df = ratios_df.loc[ratios_df['technology'] != 'hydrogen_compressor_low']
+    total_hydrogen_per_year = ratios_df.iloc[:, 2:].sum()
 
-    pivot_df = combined.pivot_table(index=['Year', 'Group'], columns=['technology', 'carrier'], values='Value',
-                                    aggfunc='sum')
+    industry_mapping = {
+        'e_haber_bosch': 'Ammonia',
+        'haber_bosch': 'Ammonia',
+        'h2_to_ng': 'Steel',
+        'hydrogen_for_cement_conversion': 'Cement',
+        'methanol_synthesis': 'Methanol',
+        'refinery': 'Refining'
+    }
 
-    print(pivot_df)
-    fig, ax = plt.subplots(figsize=(20, 8))
-    pivot_df.plot(kind='bar', stacked=True, ax=ax)
-    plt.title('Comparison of Carbon Capture Technologies Over Years')
-    plt.ylabel('Value')
+    ratios_df['industry'] = ratios_df['technology'].map(industry_mapping)
+    industry_totals = ratios_df.groupby('industry').sum()
 
-    for patch in ax.patches:
-        if patch.get_label() == 'Integrated':
-            patch.set_hatch('//')
+    ratios_df = industry_totals.div(total_hydrogen_per_year).transpose()
+    ratios_df.reset_index(drop=True, inplace=True)
+    ratios_df.columns.name = None
+    ratios_df = ratios_df.dropna(how='all')
 
-    years = range(2024, 2051, 2)
-    x_positions = np.arange(len(years)) * 2 + 0.5
+    ratios_df.reset_index(drop=True, inplace=True)
+
+    years = range(2024, 2024 + len(ratios_df))
+
+    fig, ax = plt.subplots(figsize=(20, 10))
+    width = 0.35
+    x = np.arange(len(years))
+
+    industries = ['Hydrogen_integrated', 'Steel_integrated', 'Cement_integrated', 'DAC_integrated']
+    bottoms = np.zeros(len(years))
+
+    #colors_hydrogen = ['tab:pink', 'tab:green', 'tab:blue', 'tab:olive', 'tab:red']
+
+    hydrogen_color_map = {
+        'Ammonia': 'tab:pink',
+        'Cement': 'tab:green',
+        'Steel': 'tab:blue',
+        'Methanol': 'tab:olive',
+        'Refining': 'tab:red'
+    }
+
+    hydrogen_values = pivot_df['Hydrogen_integrated'].fillna(0)
+    bottoms_hydrogen = np.zeros(len(years))
+
+    if 'index' in pivot_df.index:
+        pivot_df = pivot_df.drop('index')
+
+    methanol_data = {
+            'Methanol': methanol_methanol,
+            'Ammonia': methanol_ammonia,
+            'Steel': methanol_steel,
+            'Cement': methanol_cement,
+            'DAC_integrated': methanol_integrated,
+            'Refining': methanol_refining
+        }
+    for industry in industries:
+        values = pivot_df[industry].fillna(0)
+        ax.bar(x - width / 2, values, width, label=industry, color=color_map[industry], bottom=bottoms)
+
+        if industry in methanol_data:
+            methanol_df = methanol_data[industry]
+            methanol_df_filtered = methanol_df[methanol_df['carrier'] == 'carbon_methanol']
+            methanol_melted = methanol_df_filtered.melt(id_vars=['technology', 'carrier'],
+                                                        value_vars=[year for year in range(27)], var_name='Year',
+                                                        value_name='Value')
+            methanol_melted['Year'] = methanol_melted['Year'].astype(int)
+            methanol_values = methanol_melted.set_index('Year')['Value'].reindex(pivot_df.index, fill_value=0)
+
+            ax.bar(x - width / 2, methanol_values, width, label=f'Methanol in {industry}', hatch='//', color='none',
+                   edgecolor='black', bottom=bottoms)
+
+        bottoms += values
+
+    for idx, year in enumerate(years):
+        for industry in ratios_df.columns[:-1]:  # Ignoriert die letzte Spalte, falls es 'Year' ist
+            ratio = ratios_df.loc[idx, industry]
+            industry_values = hydrogen_values[idx] * ratio
+            # Nutzen Sie die Farbzuordnung für die spezifischen Industrien
+            color = hydrogen_color_map.get(industry, 'gray')  # 'gray' als Fallback-Farbe
+            ax.bar(x[idx] - width / 2, industry_values, width, label=f'Hydrogen for {industry} {year}',
+                   color=color, bottom=bottoms_hydrogen[idx])
+            bottoms_hydrogen[idx] += industry_values
+
+    ax.bar(x + width / 2, pivot_df['Ammonia'].fillna(0), width, label='Ammonia', color=color_map['Ammonia'], bottom=0)
+    bottom_ammonia = pivot_df['Ammonia'].fillna(0)
+
+    ax.bar(x + width / 2, pivot_df['Steel'].fillna(0), width, label='Steel', color=color_map['Steel'],
+           bottom=bottom_ammonia)
+    bottom_steel = bottom_ammonia + pivot_df['Steel'].fillna(0)
+
+    ax.bar(x + width / 2, pivot_df['Methanol'].fillna(0), width, label='Methanol', color=color_map['Methanol'],
+           bottom=bottom_steel)
+    bottom_methanol = bottom_steel + pivot_df['Methanol'].fillna(0)
+
+    ax.bar(x + width / 2, pivot_df['Cement'].fillna(0), width, label='Cement', color=color_map['Cement'],
+           bottom=bottom_methanol)
+    bottom_cement = bottom_methanol + + pivot_df['Cement'].fillna(0)
+
+    ax.bar(x + width / 2, pivot_df['Refining'].fillna(0), width, label='Refining', color=color_map['Refining'],
+           bottom=bottom_cement)
+
+    ax.axhline(y=82817.04, color='r', linestyle='--', linewidth=2, label='Capacity limit carbon storage')
+
+    years = range(2024, 2051)
+    x_positions = np.arange(len(years))
     plt.xticks(x_positions, years, rotation=0, fontsize=12)
 
     plt.xlabel('Year')
+    ax.set_ylabel('Captured Carbon [kt]')
+    ax.set_title('Captured carbon by industry per year')
+    ax.legend()
 
-    ax.axhline(y=82817, color='r', linestyle='--', linewidth=2, label='Target Value')
-
-    handles, labels = ax.get_legend_handles_labels()
-    ax.legend(reversed(handles), reversed(labels), title='Technology, Carrier', bbox_to_anchor=(1.05, 1),
-              loc='upper left')
-
-    plt.tight_layout()
     plt.show()
 
-def plot_storage_utilization(scenario):
-    #df_integrated = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
-    storage = ['carbon_storage']
-    output = ['carbon_liquid']
+    fig.savefig('captured_carbon_by_industry.svg', format='svg')
+
+def plot_biomass_per_industry(scenario):
+    biomass = ['gasification', 'gasification_CCS', 'biomethane_DRI', 'biomethane_SMR',
+               'biomethane_methanol_synthesis', 'biomethane_SMR_CCS', 'biomethane_haber_bosch', 'biomethane_conversion']
+    inputs = ['biomethane', 'dry_biomass']
+
     def prepare_df(source_path):
         results = Results(source_path)
         df = results.get_total('flow_conversion_input').xs(scenario).reset_index()
-        df = df[df['technology'].isin(storage)]
-        df = df[df['carrier'].isin(output)]
+        df = df[df['technology'].isin(biomass)]
+        df = df[df['carrier'].isin(inputs)]
         df = df.drop('node', axis=1)
         df = df.groupby(['technology', 'carrier']).sum()
         return df
 
-    df_integrated = prepare_df("../outputs/hard_to_abate_scenarios_5%_290424/")
-    df_ammonia = prepare_df("../outputs/hard_to_abate_ammonia_290424/")
-    df_steel = prepare_df("../outputs/hard_to_abate_steel_300424/")
-    df_cement = prepare_df("../outputs/hard_to_abate_cement_300424/")
-    df_methanol = prepare_df("../outputs/hard_to_abate_methanol_300424")
+    carbon_integrated = prepare_df("../outputs/hard_to_abate_scenarios_090524/")
+    carbon_ammonia = prepare_df("../outputs/hard_to_abate_ammonia_130524/")
+    carbon_steel = prepare_df("../outputs/hard_to_abate_steel_130524/")
+    carbon_cement = prepare_df("../outputs/hard_to_abate_cement_130524/")
+    carbon_methanol = prepare_df("../outputs/hard_to_abate_methanol_130524/")
+    carbon_refining = prepare_df("../outputs/hard_to_abate_refining_130524/")
 
-    values = df_integrated.iloc[0, 2:14:2].values
+    def melt_and_label(df, label):
+        df_long = pd.melt(df.reset_index(), id_vars=['technology', 'carrier'], var_name='Year', value_name='Value')
+        if label == 'Integrated':
+            industry_mapping = {
+                'gasification': 'Hydrogen_integrated',
+                'biomethane_DRI': 'Steel_integrated',
+                'biomethane_haber_bosch': 'Ammonia_integrated',
+                #'biomethane_methanol_synthesis': 'Methanol_integrated',
+                'biomethane_SMR': 'Hydrogen_integrated',
+                'biomethane_SMR_CCS': 'Hydrogen_integrated',
+                'gasification_CCS': 'Hydrogen_integrated',
+            }
+            df_long['Source'] = df_long['technology'].map(industry_mapping)
+        else:
+            df_long['Source'] = label
+        return df_long
 
-    years = range(2024, 2051, 2)
+    combined = pd.concat([
+        melt_and_label(carbon_integrated, 'Integrated'),
+        melt_and_label(carbon_ammonia, 'Ammonia'),
+        melt_and_label(carbon_steel, 'Steel'),
+        melt_and_label(carbon_cement, 'Cement'),
+        melt_and_label(carbon_methanol, 'Methanol'),
+        melt_and_label(carbon_refining, 'Refining')
+    ])
 
-    plt.plot(years, values, marker='o')
-    plt.xlabel('Jahr')
-    plt.ylabel('Wert')
-    plt.title('Wertentwicklung von 2024 bis 2050')
+    pivot_df = combined.pivot_table(index='Year', columns=['Source'], values='Value', aggfunc='sum')
+    color_map = {
+        'Steel_integrated': 'tab:blue',
+        'Steel': 'tab:blue',
+        'Cement_integrated': 'tab:green',
+        'Cement': 'tab:green',
+        'Hydrogen_integrated': 'tab:cyan',
+        'Ammonia_integrated': 'tab:pink',
+        'Ammonia': 'tab:pink',
+        'Methanol': 'tab:olive',
+        'DAC_integrated': 'tab:orange',
+        'Refining': 'tab:red'
+    }
 
-    years = range(2024, 2051, 2)
-    x_positions = np.arange(len(years)) * 2 + 0.5
+    fig, ax = plt.subplots(figsize=(20, 10))
+    width = 0.35
+    years = pivot_df.index
+    x = np.arange(len(years))
+
+    industries = ['Hydrogen_integrated', 'Ammonia_integrated', 'Steel_integrated']
+    bottoms = np.zeros(len(years))
+
+    for industry in industries:
+        values = pivot_df[industry].fillna(0)
+        ax.bar(x - width / 2, values, width, label=industry, color=color_map[industry], bottom=bottoms)
+
+    ax.bar(x + width/2, pivot_df['Ammonia'], width, label='Ammonia', color=color_map['Ammonia'], bottom=0)
+    bottom_ammonia = pivot_df['Ammonia'].fillna(0)
+    ax.bar(x + width/2, pivot_df['Steel'], width, label='Steel', color=color_map['Steel'], bottom=bottom_ammonia)
+    bottom_steel = bottom_ammonia + pivot_df['Steel'].fillna(0)
+    ax.bar(x + width/2, pivot_df['Cement'], width, label='Cement', color=color_map['Cement'], bottom=bottom_steel)
+    bottom_cement = bottom_steel + pivot_df['Cement'].fillna(0)
+    ax.bar(x + width/2, pivot_df['Methanol'], width, label='Methanol', color=color_map['Methanol'], bottom=bottom_cement)
+    bottom_methanol = bottom_cement + pivot_df['Methanol'].fillna(0)
+    ax.bar(x + width/2, pivot_df['Refining'], width, label='Refining', color=color_map['Refining'], bottom=bottom_methanol)
+
+
+    years = range(2024, 2051)
+    x_positions = np.arange(len(years))
     plt.xticks(x_positions, years, rotation=0, fontsize=12)
 
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=10)
+    availability_dry_biomass_scenario = res_scenario.get_total("availability_import").xs(scenario)
+    availability_dry_biomass = availability_dry_biomass_scenario.xs("dry_biomass", level='carrier').sum()
+    availability_wet_biomass_scenario = res_scenario.get_total("availability_import").xs(scenario)
+    availability_wet_biomass = availability_wet_biomass_scenario.xs("wet_biomass", level='carrier').sum()
+    print(availability_dry_biomass)
 
-    plt.tight_layout()
+    results = Results("../outputs/hard_to_abate_scenarios_090524/")
+    availability_limit_dry_biomass = results.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier').sum()
+    availability_limit_wet_biomass = results.get_total("availability_import").xs(scenario).xs('wet_biomass', level='carrier').sum() / 0.43478
+    capacity_limit = availability_limit_dry_biomass + availability_limit_wet_biomass
+    print(capacity_limit)
+
+    capacity_limit.index = x_positions
+    ax.plot(capacity_limit.index, capacity_limit.values, 'r--', linewidth=2, label='Capacity Limit for Biomass')
+
+    plt.xlabel('Year')
+    ax.set_ylabel('Biomass Usage [GWh p. a.]')
+    ax.set_title('Biomass usage by industry per year')
+    ax.set_xticks(x)
+    ax.set_xticklabels(years)
+    ax.legend(frameon=False)
+
     plt.show()
+    fig.savefig('biomass_usage_by_industry.svg', format='svg')
 
-
-def plot_biomass_and_transport(tech, source_path):
+def plot_biomass_and_transport(tech, source_path, years):
     df = Results(source_path)
-    scenarios = ['scenario_', 'scenario_biomass_high_price_2', 'scenario_biomass_high_price_3',
-                 'scenario_biomass_high_price_5',
-                 'scenario_biomass_high_price_7', 'scenario_biomass_high_price_10']
+    scenarios = [
+        'scenario_', 'scenario_biomass_high_price_2', 'scenario_biomass_high_price_3',
+        'scenario_biomass_high_price_5', 'scenario_biomass_high_price_7', 'scenario_biomass_high_price_10',
+        'scenario_no_biomass'
+    ]
+    scenario_labels = {
+        'scenario_': 'Baseline',
+        'scenario_biomass_high_price_2': 'High Price Scenario 2',
+        'scenario_biomass_high_price_3': 'High Price Scenario 3',
+        'scenario_biomass_high_price_5': 'High Price Scenario 5',
+        'scenario_biomass_high_price_7': 'High Price Scenario 7',
+        'scenario_biomass_high_price_10': 'High Price Scenario 10',
+        'scenario_no_biomass': 'No Biomass Scenario'
+    }
 
-    colors = plt.cm.jet_r([i / 13 for i in range(14)])
+    colors = plt.cm.jet_r(np.linspace(0, 1, len(scenarios)))
+    special_years = [6, 16, 26]
+    year_labels = {6: '2030', 16: '2040', 26: '2050'}
+    marker_sizes = {6: 25, 16: 25, 26: 25}
 
-    marker = 'o'
+    year_data = {year: {'x': [], 'y': [], 'scenario': []} for year in special_years}
 
-    for year in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]:
-        x_points = []
-        y_points = []
-        for i, scenario in enumerate(scenarios):
+    for scenario in scenarios:
+        for year in years:
             y_point = df.get_total("flow_transport").xs(scenario).reset_index()
-            y_point = y_point[y_point['technology'].isin([tech])]
-            y_point = y_point.drop('edge', axis=1)
+            y_point = y_point[y_point['technology'] == tech]
             y_point = y_point.groupby('technology').sum()
 
-            x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
-                       df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
-                       df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
+            availability_sum = (
+                df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
+                df.get_total("availability_import").xs(scenario).xs('wet_biomass', level='carrier') +
+                df.get_total("availability_import").xs(scenario).xs('biomass_cement', level='carrier')
+            )
+            total_availability = availability_sum.sum()
+            if total_availability.sum() == 0:
+                x_point[year] = 0
+            else:
+                x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
                                   df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
                                   df.get_total("availability_import").xs(scenario).xs('wet_biomass',
                                                                                       level='carrier') + df.get_total(
                               "availability_import").xs(scenario).xs('biomass_cement', level='carrier'))
 
-            x_points.append(x_point.mean()[year] * 100)
-            y_points.append(y_point.iloc[0][year])
+            if year in special_years:
+                year_data[year]['x'].append(x_point.mean()[year] * 100)
+                year_data[year]['y'].append(y_point.sum()[year])
+                year_data[year]['scenario'].append(scenario)
 
-        for j in range(len(scenarios)):
-            if j < len(scenarios) - 1:
-                plt.plot([x_points[j], x_points[j + 1]], [y_points[j], y_points[j + 1]], color=colors[year],
-                         marker=marker, linestyle='-')
+    fig, ax = plt.subplots()
+    # Rahmenlinien entfernen
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
 
-    plt.xlabel('Usage of biomass potential (%)', fontsize=10)
-    plt.ylabel(f'Ausbau von {tech}', fontsize=10)
-    plt.title(f'Ausbau {tech} vs. Ausnutzung des Biomassepotentials', fontsize=10)
-    #plt.legend(fontsize=10)
-    #plt.grid(True)
+    # Plotten der Daten und Verbinden der Punkte
+    for year, data in year_data.items():
+        # Zuerst Linien zeichnen
+        if len(data['x']) > 1:
+            ax.plot(data['x'], data['y'], 'k-', label=f'{year_labels[year]}', zorder=1)
+            # Jahreslabel am linken Ende der Linie platzieren
+            ax.annotate(year_labels[year], (data['x'][0], data['y'][0]),
+                        textcoords="offset points", xytext=(25, -10), ha='right', fontsize=9, color='black')
 
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=10)
+        # Dann Marker zeichnen
+        ax.scatter(data['x'], data['y'], s=marker_sizes[year], c=[colors[scenarios.index(s)] for s in data['scenario']], zorder=2)
 
+    ax.set_xlabel('Usage of biomass potential (%)', fontsize=10)
+    ax.set_ylabel(f'Transported amounts via {tech} per year', fontsize=10)
+    ax.set_title(f'Comparison of {tech} transport by scenario and year', fontsize=10)
+
+    # Legende für Szenarien erstellen
+    custom_lines = [plt.Line2D([0], [0], color=colors[i], lw=4) for i in range(len(scenarios))]
+    ax.legend(custom_lines, [scenario_labels[s] for s in scenarios], fontsize=8, loc='best', frameon=False)
+
+    #ax.grid(True)
     plt.tight_layout()
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
     plt.show()
 
-def plot_biomass_and_carbon_storage(source_path):
+def plot_biomass_and_carbon_storage(source_path, years):
     df = Results(source_path)
-    transport_tech = ['carbon_storage']
+    tech = 'carbon_storage'
     output = ['carbon_liquid']
     scenarios = ['scenario_', 'scenario_biomass_high_price_2', 'scenario_biomass_high_price_3',
                  'scenario_biomass_high_price_5',
                  'scenario_biomass_high_price_7',
-                 'scenario_biomass_high_price_10']
+                 'scenario_biomass_high_price_10', 'scenario_no_biomass']
 
-    colors = plt.cm.jet_r([i / 13 for i in range(14)])
+    scenario_labels = {
+        'scenario_': 'Baseline',
+        'scenario_biomass_high_price_2': 'High Price Scenario 2',
+        'scenario_biomass_high_price_3': 'High Price Scenario 3',
+        'scenario_biomass_high_price_5': 'High Price Scenario 5',
+        'scenario_biomass_high_price_7': 'High Price Scenario 7',
+        'scenario_biomass_high_price_10': 'High Price Scenario 10',
+        'scenario_no_biomass': 'No Biomass Scenario'
+    }
 
-    marker = 'o'
+    colors = plt.cm.jet_r(np.linspace(0, 1, len(scenarios)))
+    special_years = [6, 16, 26]
+    year_labels = {6: '2030', 16: '2040', 26: '2050'}
+    marker_sizes = {6: 25, 16: 25, 26: 25}
 
-    for year in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-                ]:
-        x_points = []
-        y_points = []
-        for i, scenario in enumerate(scenarios):
+    year_data = {year: {'x': [], 'y': [], 'scenario': []} for year in special_years}
+
+    for scenario in scenarios:
+        for year in years:
             y_point = df.get_total("flow_conversion_input").xs(scenario).reset_index()
-            y_point = y_point[y_point['technology'].isin(transport_tech)]
+            y_point = y_point[y_point['technology'].isin([tech])]
             y_point = y_point[y_point['carrier'].isin(output)]
             y_point = y_point.groupby(['technology', 'carrier']).sum()
 
-            x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
-                       df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
-                       df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
+            availability_sum = (
+                    df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
+                    df.get_total("availability_import").xs(scenario).xs('wet_biomass', level='carrier') +
+                    df.get_total("availability_import").xs(scenario).xs('biomass_cement', level='carrier')
+            )
+            total_availability = availability_sum.sum()
+            if total_availability.sum() == 0:
+                x_point[year] = 0
+            else:
+                x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
                                   df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
                                   df.get_total("availability_import").xs(scenario).xs('wet_biomass',
                                                                                       level='carrier') + df.get_total(
                               "availability_import").xs(scenario).xs('biomass_cement', level='carrier'))
 
-            x_points.append(x_point.mean()[year] * 100)
-            y_points.append(y_point.iloc[0][year])
+            if year in special_years:
+                year_data[year]['x'].append(x_point.mean()[year] * 100)
+                year_data[year]['y'].append(y_point.sum()[year] / 1000)
+                year_data[year]['scenario'].append(scenario)
 
-        for j in range(len(scenarios)):
-            if j < len(scenarios) - 1:
-                plt.plot([x_points[j], x_points[j + 1]], [y_points[j], y_points[j + 1]], color=colors[year],
-                         marker=marker, linestyle='-', label=f'Jahr {year}')
+    fig, ax = plt.subplots()
+    # Rahmenlinien entfernen
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
 
-    plt.xlabel('Usage of biomass potential (%)', fontsize=10)
-    plt.ylabel(f'{transport_tech}', fontsize=10)
-    plt.title(f'{transport_tech} and biomass potential', fontsize=10)
-    #plt.legend(fontsize=8)
-    #plt.grid(True)
+    for year, data in year_data.items():
+        if len(data['x']) > 1:
+            ax.plot(data['x'], data['y'], 'k-', label=f'{year_labels[year]}', zorder=1)
+            mid_point = len(data['x']) // 2
+            ax.annotate(year_labels[year], (data['x'][0], data['y'][0]),
+                         textcoords="offset points", xytext=(30, -10), ha='right', fontsize=9, color='black',
+                         zorder=2)
 
+        ax.scatter(data['x'], data['y'], s=marker_sizes[year],
+                    c=[colors[scenarios.index(s)] for s in data['scenario']])
+
+    ax.set_xlabel('Usage of biomass potential (%)', fontsize=10)
+    ax.set_ylabel(f'Usage of {tech} capacity [Mt p. a.]', fontsize=10)
+    ax.set_title(f'Usage of {tech} capacity and biomass potential from 2024 to 2050', fontsize=10)
+    plt.legend(fontsize=10)
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=10)
+
+    custom_lines = [plt.Line2D([0], [0], color=colors[i], lw=4) for i in range(len(scenarios))]
+    plt.legend(custom_lines, [scenario_labels[s] for s in scenarios], fontsize=9, loc='best', frameon=False)
 
     plt.tight_layout()
     plt.show()
 
-def plot_biomass_and_carrier(carrier, source_path):
+def plot_biomass_and_captured_carbon(source_path, years):
+    df = Results(source_path)
+    tech = ['DAC', 'SMR_CCS', 'gasification_CCS', 'BF_BOF_CCS', 'cement_plant_oxy_combustion'
+            ]
+    output = ['carbon_liquid', 'carbon']
+    scenarios = ['scenario_',
+                 'scenario_biomass_high_price_2',
+                 'scenario_biomass_high_price_3',
+                 'scenario_biomass_high_price_5',
+                 'scenario_biomass_high_price_7',
+                 'scenario_biomass_high_price_10',
+                 'scenario_no_biomass']
+    scenario_labels = {
+        'scenario_': 'Baseline',
+        'scenario_biomass_high_price_2': 'High Price Scenario 2',
+        'scenario_biomass_high_price_3': 'High Price Scenario 3',
+        'scenario_biomass_high_price_5': 'High Price Scenario 5',
+        'scenario_biomass_high_price_7': 'High Price Scenario 7',
+        'scenario_biomass_high_price_10': 'High Price Scenario 10',
+        'scenario_no_biomass': 'No Biomass Scenario'
+    }
+
+    colors = plt.cm.jet_r(np.linspace(0, 1, len(scenarios)))
+    special_years = [6, 16, 26]
+    year_labels = {6: '2030', 16: '2040', 26: '2050'}
+    marker_sizes = {6: 25, 16: 25, 26: 25}
+
+    year_data = {year: {'x': [], 'y': [], 'scenario': []} for year in special_years}
+
+    for scenario in scenarios:
+        for year in years:
+            y_point = df.get_total("flow_conversion_output").xs(scenario).reset_index()
+            y_point = y_point[y_point['technology'].isin(tech)]
+            y_point = y_point[y_point['carrier'].isin(output)]
+            y_point = y_point.groupby(['technology', 'carrier']).sum()
+
+            availability_sum = (
+                    df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
+                    df.get_total("availability_import").xs(scenario).xs('wet_biomass', level='carrier') +
+                    df.get_total("availability_import").xs(scenario).xs('biomass_cement', level='carrier')
+            )
+            total_availability = availability_sum.sum()
+            if total_availability.sum() == 0:
+                x_point[year] = 0
+            else:
+                x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
+                                  df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
+                                  df.get_total("availability_import").xs(scenario).xs('wet_biomass',
+                                                                                      level='carrier') + df.get_total(
+                              "availability_import").xs(scenario).xs('biomass_cement', level='carrier'))
+
+            if year in special_years:
+                year_data[year]['x'].append(x_point.mean()[year] * 100)
+                year_data[year]['y'].append(y_point.sum()[year] / 1000)
+                year_data[year]['scenario'].append(scenario)
+
+    fig, ax = plt.subplots()
+    # Rahmenlinien entfernen
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    for year, data in year_data.items():
+        if len(data['x']) > 1:
+            ax.plot(data['x'], data['y'], 'k-', label=f'{year_labels[year]}', zorder=1)
+            mid_point = len(data['x']) // 2
+            ax.annotate(year_labels[year], (data['x'][0], data['y'][0]),
+                         textcoords="offset points", xytext=(30, -10), ha='right', fontsize=9, color='black',
+                         zorder=2)
+
+        ax.scatter(data['x'], data['y'], s=marker_sizes[year],
+                    c=[colors[scenarios.index(s)] for s in data['scenario']])
+
+    ax.set_xlabel('Usage of biomass potential (%)', fontsize=12)
+    ax.set_ylabel(f'Captured carbon [Mt p. a.]', fontsize=12)
+    ax.set_title('Captured carbon and biomass potential from 2024 to 2050', fontsize=12)
+    plt.legend(fontsize=8)
+    plt.xticks(fontsize=10)
+    plt.yticks(fontsize=10)
+
+    custom_lines = [plt.Line2D([0], [0], color=colors[i], lw=4) for i in range(len(scenarios))]
+    plt.legend(custom_lines, [scenario_labels[s] for s in scenarios], fontsize=9, loc='best', frameon=False)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_biomass_and_carrier(carrier, source_path, years):
     df = Results(source_path)
     scenarios = ['scenario_', 'scenario_biomass_high_price_2', 'scenario_biomass_high_price_3',
                  'scenario_biomass_high_price_5',
-                 'scenario_biomass_high_price_7', 'scenario_biomass_high_price_10'
+                 'scenario_biomass_high_price_7', 'scenario_biomass_high_price_10', 'scenario_no_biomass'
                  ]
+    scenario_labels = {
+        'scenario_': 'Baseline',
+        'scenario_biomass_high_price_2': 'High Price Scenario 2',
+        'scenario_biomass_high_price_3': 'High Price Scenario 3',
+        'scenario_biomass_high_price_5': 'High Price Scenario 5',
+        'scenario_biomass_high_price_7': 'High Price Scenario 7',
+        'scenario_biomass_high_price_10': 'High Price Scenario 10',
+        'scenario_no_biomass': 'No Biomass Scenario'
+    }
 
-    colors = plt.cm.jet_r([i / 13 for i in range(14)])
+    colors = plt.cm.jet_r(np.linspace(0, 1, len(scenarios)))
+    special_years = [6, 16, 26]
+    year_labels = {6: '2030', 16: '2040', 26: '2050'}
+    marker_sizes = {6: 25, 16: 25, 26: 25}
 
-    marker = 'o'
+    year_data = {year: {'x': [], 'y': [], 'scenario': []} for year in special_years}
 
-    for year in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]:
-        x_points = []
-        y_points = []
-        for i, scenario in enumerate(scenarios):
+    for scenario in scenarios:
+        for year in years:
             y_point = df.get_total("flow_conversion_input").xs(scenario).reset_index()
             y_point = y_point[y_point['carrier'].isin([carrier])]
             y_point = y_point.drop(['node', 'technology'], axis=1)
             y_point = y_point.groupby('carrier').sum()
 
-            x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
-                       df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
-                       df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
+            availability_sum = (
+                    df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
+                    df.get_total("availability_import").xs(scenario).xs('wet_biomass', level='carrier') +
+                    df.get_total("availability_import").xs(scenario).xs('biomass_cement', level='carrier')
+            )
+            total_availability = availability_sum.sum()
+            if total_availability.sum() == 0:
+                x_point[year] = 0
+            else:
+                x_point = (df.get_total("flow_import").xs(scenario).xs("wet_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("dry_biomass", level='carrier') +
+                           df.get_total("flow_import").xs(scenario).xs("biomass_cement", level='carrier')) / (
                                   df.get_total("availability_import").xs(scenario).xs('dry_biomass', level='carrier') +
                                   df.get_total("availability_import").xs(scenario).xs('wet_biomass',
                                                                                       level='carrier') + df.get_total(
                               "availability_import").xs(scenario).xs('biomass_cement', level='carrier'))
 
-            x_points.append(x_point.mean()[year] * 100)
-            y_points.append(y_point.iloc[0][year])
+            if year in special_years:
+                year_data[year]['x'].append(x_point.mean()[year] * 100)
+                year_data[year]['y'].append(y_point.sum()[year] / 1000)
+                year_data[year]['scenario'].append(scenario)
 
-        for j in range(len(scenarios)):
-            if j < len(scenarios) - 1:
-                plt.plot([x_points[j], x_points[j + 1]], [y_points[j], y_points[j + 1]], color=colors[year],
-                         marker=marker, linestyle='-')
+    fig, ax = plt.subplots()
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
 
+    for year, data in year_data.items():
+        if len(data['x']) > 1:
+            ax.plot(data['x'], data['y'], 'k-', label=f'{year_labels[year]}', zorder=1)
+            mid_point = len(data['x']) // 2
+            ax.annotate(year_labels[year], (data['x'][0], data['y'][0]),
+                         textcoords="offset points", xytext=(30, -10), ha='right', fontsize=9, color='black',
+                         zorder=2)
+
+        plt.scatter(data['x'], data['y'], s=marker_sizes[year],
+                    c=[colors[scenarios.index(s)] for s in data['scenario']])
+
+    ax.set_xlabel('Usage of biomass potential (%)', fontsize=10)
+    ax.set_ylabel(f'Usage of {carrier} [TWh p. a.]', fontsize=10)
+    ax.set_title(f'Usage of {carrier} vs. usage of biomass potential from 2024 to 2050', fontsize=10)
+
+    plt.legend(fontsize=8)
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=10)
 
-    plt.xlabel('Usage of biomass potential (%)', fontsize=10)
-    plt.ylabel(f'Usage of {carrier}', fontsize=10)
-    plt.title(f'Usage of {carrier} vs. usage of biomass potential', fontsize=10)
-    #plt.legend(fontsize=10)
-    #plt.grid(True)
+    custom_lines = [plt.Line2D([0], [0], color=colors[i], lw=4) for i in range(len(scenarios))]
+    plt.legend(custom_lines, [scenario_labels[s] for s in scenarios], fontsize=9, loc='best', frameon=False)
+
     plt.tight_layout()
+    plt.show()
+
+def prepare_el_data(file_path):
+    el_data = pd.read_excel(file_path, sheet_name='Sheet 1', skiprows=13)
+    el_data = el_data.drop('Unnamed: 2', axis=1)
+    el_data.columns = ['Country', 'Electricity']
+
+    el_data = el_data.dropna(subset=['Country', 'Electricity'])
+    el_data = el_data[~el_data['Country'].isin(['Special value', ':'])]
+
+    def get_country_code(country_name):
+        try:
+            return pycountry.countries.lookup(country_name).alpha_2
+        except LookupError:
+            return None  # Falls kein Code gefunden wird
+
+    el_data['Country Code'] = el_data['Country'].apply(get_country_code)
+    el_data = el_data.drop('Country', axis=1)
+    el_data = el_data.rename(columns={'Electricity': 'Electricity_demand_2024'})
+
+    return el_data
+def draw_electricity_generation(electricity_data, shapefile_path, file_path, year, scenario, figsize=(20, 20)):
+    nuts_gdf = gpd.read_file(shapefile_path)
+    nuts_gdf = nuts_gdf.to_crs('EPSG:3035')
+    countries_to_exclude = ['IS', 'TR']
+
+    nuts2_gdf = nuts_gdf[(nuts_gdf['LEVL_CODE'] == 2) & (~nuts_gdf['CNTR_CODE'].isin(countries_to_exclude))]
+
+    df_electricity = electricity_data[electricity_data['carrier'].isin(["electricity"])]
+    df_capture_sum = df_electricity.groupby('node')[year].sum().reset_index(name='Electricity_demand')
+    el_demand = df_electricity.groupby('node')[0].sum().reset_index(name='Electricity_2024')
+    nuts2_with_capture = nuts2_gdf.merge(df_capture_sum, left_on='NUTS_ID', right_on='node', how='left')
+    nuts2_with_capture = nuts2_with_capture.merge(el_demand, left_on='NUTS_ID', right_on='node', how='left')
+
+    nuts2_with_capture[['Electricity_demand', 'Electricity_2024']].fillna(0, inplace=True)
+
+    country_demand = nuts2_with_capture.groupby('CNTR_CODE')[['Electricity_demand', 'Electricity_2024']].sum().reset_index()
+    el_demand_2024 = prepare_el_data(file_path)
+    country_demand = country_demand.merge(el_demand_2024, left_on='CNTR_CODE', right_on='Country Code',
+                                                  how='left')
+    print(country_demand.head())
+    #country_demand_2024 = nuts2_with_capture.groupby('CNTR_CODE')['Electricity_demand_2024'].sum().reset_index()
+
+    nuts0_gdf = nuts_gdf[nuts_gdf['LEVL_CODE'] == 0]
+    nuts0_gdf = nuts0_gdf[~nuts0_gdf['CNTR_CODE'].isin(countries_to_exclude)]
+    country_map = nuts0_gdf.merge(country_demand, left_on='CNTR_CODE', right_on='CNTR_CODE', how='left')
+    country_map['Electricity_demand'].fillna(0, inplace=True)
+    country_map['Electricity_demand_2024'].fillna(0, inplace=True)
+    country_map['Electricity_2024'].fillna(0, inplace=True)
+    country_map['percentage'] = ((country_map['Electricity_demand'] - country_map['Electricity_2024']) / country_map['Electricity_demand_2024'])+1
+    country_map = country_map.dropna(subset=['percentage'])
+    country_map = country_map.loc[country_map['NUTS_ID'] != 'NO']
+    country_map['centroid'] = country_map.geometry.centroid
+    print(country_map)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    vmin, vmax = 0.98, 1.2
+    sm = plt.cm.ScalarMappable(cmap='GnBu', norm=Normalize(vmin=vmin, vmax=vmax))
+    sm._A = []
+
+    country_map.plot(column='percentage', ax=ax, cmap='GnBu', norm=sm.norm,
+                 linewidth=0.8)
+
+    level = [0]
+    nuts_gdf = nuts_gdf[nuts_gdf['LEVL_CODE'].isin(level)]
+
+    nuts0_gdf.plot(ax=ax, color="None", edgecolor="None")
+
+    plt.rcParams['hatch.color'] = 'grey'
+    plt.rcParams['hatch.linewidth'] = 0.4
+    countries_to_exclude = ['NO', 'UK', 'CH', 'AL', 'RS', 'MK', 'ME']
+
+    for country_code in countries_to_exclude:
+        specific_gdf = nuts_gdf[nuts_gdf['CNTR_CODE'] == country_code]
+        specific_gdf.plot(ax=ax, facecolor='lightgrey', hatch="\\", linewidth=0.8)
+
+    for index, row in country_map.iterrows():
+        if row['CNTR_CODE'] not in countries_to_exclude and row['Electricity_demand_2024'] > 0:
+            if row['CNTR_CODE'] == 'FR':
+                x, y = 3713381.55, 2686876.92
+            else:
+                x, y = row['centroid'].x, row['centroid'].y
+
+            demand_ratio = ((row['Electricity_demand'] - row['Electricity_2024']) / row['Electricity_demand_2024']) +1
+            #demand_ratio = round(demand_ratio)
+            label_text = f"{demand_ratio:.2f}"
+
+            plt.text(x=x, y=y, s=label_text,
+                     horizontalalignment='center', fontsize=14, color='black', style='italic',
+                     bbox=dict(facecolor='lightgray', alpha=0.5, edgecolor='none'))
+
+    cbar = fig.colorbar(sm, ax=ax, orientation='vertical', shrink=0.75, aspect=30)
+    cbar.ax.yaxis.set_major_formatter(FuncFormatter(lambda x, pos: f'{x:.2f}'))
+    cbar.ax.tick_params(labelsize=18)
+    cbar.set_label('Change in electricity demand compared to net production in 2022', fontsize=22)
+
+    ax.set_xlim(2.5e6, 5.9e6)
+    ax.set_ylim(1.5e6, 5.5e6)
+    plt.axis('off')
+    plt.savefig(f"{folder_path}/electricity_demand_map_{scenario}_{year}.png", dpi=300, bbox_inches='tight',
+               pad_inches=0)
     plt.show()
 
 
 if __name__ == '__main__':
 
-    folder_path = 'scenarios_070524'
-    scenarios = [#'scenario_',
+    folder_path = 'scenarios_090524'
+    scenarios = ['scenario_',
                  #'scenario_electrification',
                  #'scenario_hydrogen',
                  #'scenario_biomass',
                  #'scenario_CCS',
                  #'scenario_high_demand',
                  #'scenario_low_demand',
-                 'scenario_biomass_high_price_2',
-                 'scenario_biomass_high_price_3',
-                 'scenario_biomass_high_price_5',
-                 'scenario_biomass_high_price_7',
-                 'scenario_biomass_high_price_10',
+                 #'scenario_biomass_high_price_2',
+                 #'scenario_biomass_high_price_3',
+                 #'scenario_biomass_high_price_5',
+                 #'scenario_biomass_high_price_7',
+                 #'scenario_biomass_high_price_10',
                  #'scenario_no_biomass'
                  ]
     carriers = [#'ammonia',
@@ -1829,13 +2193,13 @@ if __name__ == '__main__':
         'carbon_conversion', 'carbon_methanol_conversion',
         #'SMR_methanol', 'gasification_methanol_h2'
         #'photovoltaics', 'pv_ground', 'pv_rooftop', 'wind_offshore', 'wind_onshore',
-        #'carbon_liquefication', 'carbon_removal',
-        #'carbon_storage',
-        #'carbon_evaporation'
+        'carbon_liquefication', 'carbon_removal',
+        'carbon_storage',
+        'carbon_evaporation'
     ]
     years = [0,
              #3,
-             6,
+             #6,
              #8,
              #13,
              16,
@@ -1846,14 +2210,14 @@ if __name__ == '__main__':
       #      generate_sankey_diagram(folder_path, scenario, target_technologies, intermediate_technologies, year, title="Process depiction in", save_file=False)
 
     years = [0, #8, 13
-             6,
+             #6,
              16,
              26
              ]
-    for scenario in scenarios:
-        for year in years:
-            shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
-            #draw_wedges_on_map(folder_path, shapefile_path, year, radius_factor=0.004, scenario=scenario)
+    #for scenario in scenarios:
+     #   for year in years:
+      #      shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
+       #     draw_wedges_on_map(folder_path, shapefile_path, year, radius_factor=0.004, scenario=scenario)
 
     # generate bar charts for industry outputs
 
@@ -1861,29 +2225,21 @@ if __name__ == '__main__':
      #   for carrier in carriers:
       #      plot_outputs(folder_path, scenario, carrier, save_file=True)
 
-    scenario = 'scenario_'
-    scenario2 = 'scenario_low_demand'
-    #plot_outputs_carbon(scenario, scenario2)
-
     for scenario in scenarios:
         df = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
         df_input = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
 
-        #plot_dataframe_on_map(df, df_input, 'technology', [0, #'1', '2',
-                                                 #3, #'4', '5',
-                                                 #6,
-                                                 #8, #'9', '10', '11', '12',
-                                                 #13,
-                                                 #16,
-                                                # 26],
-                              #'nuts_data/NUTS_RG_20M_2021_4326.shp', save_png=True)
+        #plot_dataframe_on_map(df, df_input, 'technology', [0,
+         #                                                   6,
+          #                                                 16,
+            #                                              26],
+           #                   'nuts_data/NUTS_RG_20M_2021_4326.shp', save_png=True)
 
     scenario_1 = "scenario_"
     scenario = "scenario_"
     #for scenario in scenarios:
     #plot_npc(scenario, scenario_1)
     #plot_costs_with_unique_colors(scenario)
-
 
     scenario_1 = "scenario_CCS"
     scenario_2 = "scenario_hydrogen"
@@ -1894,20 +2250,21 @@ if __name__ == '__main__':
         transport_data = res_scenario.get_total("flow_transport").xs(scenario).reset_index()
         shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
         output_data = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
-        years = [0,
-                 7,
-                 #8,
-                 #13,
-                 16,
+        electricity_data = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
+        file_path = "el_generation_2022.xlsx"
+        years = [#0,
+                 #6,
+                 #16,
                  26
                  ]
         #for year in years:
          #   draw_transport_and_capture(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
           #  draw_hydrogen_pipelines(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
            # draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year, scenario, figsize=(20, 20))
+         #   draw_electricity_generation(electricity_data, shapefile_path, file_path, year, scenario, figsize=(20, 20))
 
 
-    #calc_lco(scenario = "scenario_", discount_rate = 0.06, carrier="cement")
+    #calc_lco(scenario = "scenario_", discount_rate = 0.06, carrier="ammonia")
 
     technologies = ['ASU', 'haber_bosch', 'e_haber_bosch', 'EAF', 'BF_BOF', 'DRI', 'SMR', 'methanol_synthesis', 'refinery',
                     'cement_plant', 'DAC']
@@ -1915,14 +2272,24 @@ if __name__ == '__main__':
      #   plot_capacity_addition(folder_path, scenario, technology, save_file=False)
       #  plot_existing_capacity(folder_path, scenario, technology, save_file=False)
 
-    #plot_carbon_capture(scenario='scenario_')
-    #plot_storage_utilization(scenario = 'scenario_')
-    source_path = "../outputs/hard_to_abate_scenarios_070524/"
-    transport_techs = ['carbon_pipeline', 'hydrogen_pipeline', 'biomethane_transport', 'dry_biomass_truck']
-    for tech in transport_techs:
-        plot_biomass_and_transport(tech, source_path)
-    plot_biomass_and_carbon_storage(source_path)
-    carriers = ['electricity',
-                'hydrogen']
-    for carrier in carriers:
-        plot_biomass_and_carrier(carrier, source_path)
+    #
+    for scenario in scenarios:
+        plot_carbon_capture(scenario)
+     #   plot_biomass_per_industry(scenario)
+
+    source_path = "../outputs/hard_to_abate_scenarios_090524/"
+    transport_techs = ['carbon_pipeline', 'hydrogen_pipeline']
+    years = [0, 1, 2, 3, 4, 5,
+             6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+             16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+             26]
+    #for tech in transport_techs:
+     #   plot_biomass_and_transport(tech, source_path, years)
+
+    #plot_biomass_and_carbon_storage(source_path, years)
+
+    #plot_biomass_and_captured_carbon(source_path, years)
+
+    #carriers = ['electricity','hydrogen']
+    #for carrier in carriers:
+     #   plot_biomass_and_carrier(carrier, source_path, years)
