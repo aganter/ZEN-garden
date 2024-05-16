@@ -111,18 +111,18 @@ class RetrofittingTechnologyRules(GenericRule):
         """
         flow_conversion_input = self.variables["flow_conversion_input"]
         flow_conversion_output = self.variables["flow_conversion_output"]
-        rc_in = pd.Series(
+        rc_in_series = pd.Series(
             {(t, c): True if c in self.sets["set_reference_carriers"][t] else False for t, c in
              itertools.product(self.sets["set_conversion_technologies"],
                                self.sets["set_input_carriers"].superset)})
-        rc_out = pd.Series(
+        rc_out_series = pd.Series(
             {(t, c): True if c in self.sets["set_reference_carriers"][t] else False for t, c in
              itertools.product(self.sets["set_conversion_technologies"],
                                self.sets["set_output_carriers"].superset)})
-        rc_in.index.names = ["set_conversion_technologies", "set_input_carriers"]
-        rc_out.index.names = ["set_conversion_technologies", "set_output_carriers"]
-        rc_in = align_like(rc_in.to_xarray(), flow_conversion_input)
-        rc_out = align_like(rc_out.to_xarray(), flow_conversion_output)
+        rc_in_series.index.names = ["set_conversion_technologies", "set_input_carriers"]
+        rc_out_series.index.names = ["set_conversion_technologies", "set_output_carriers"]
+        rc_in = align_like(rc_in_series.to_xarray(), flow_conversion_input)
+        rc_out = align_like(rc_out_series.to_xarray(), flow_conversion_output)
         term_flow_reference = (
                 flow_conversion_input.where(rc_in).sum("set_input_carriers")
                 + flow_conversion_output.where(rc_out).sum("set_output_carriers"))
@@ -138,4 +138,22 @@ class RetrofittingTechnologyRules(GenericRule):
         rhs = 0
         constraints = lhs <= rhs
 
-        self.constraints.add_constraint("name",constraints)
+        self.constraints.add_constraint("constraint_retrofit_flow_coupling",constraints)
+
+        retrofit_tech = "carbon_conversion"
+        if retrofit_tech in retrofit_base_technologies.index:
+            base_tech = retrofit_base_technologies.loc["carbon_conversion"]
+            #rc = pd.concat([rc_in_series,rc_out_series]).loc[base_tech]
+            #rc = rc[rc].index
+            rc = "carbon_methanol"
+            base_tech_in = self.variables["flow_conversion_input"].loc[base_tech,rc]
+            techs = [tech for tech in self.sets["set_conversion_technologies"] if not tech==retrofit_tech]
+            carbon_methanol_out = self.variables["flow_conversion_output"].loc[techs,rc].sum("set_conversion_technologies")
+            carbon_methanol_out_retrofit = self.variables["flow_conversion_output"].loc[retrofit_tech,rc]
+            lhs = base_tech_in - (carbon_methanol_out + carbon_methanol_out_retrofit)
+            rhs = 0
+            constraints = lhs >= rhs
+            self.constraints.add_constraint("constraint_retrofit_flow_coupling_methanol", constraints)
+
+
+
