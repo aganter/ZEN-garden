@@ -151,6 +151,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
     modeling_to_generate_alternatives: bool = False
     n_objectives: int = 1
     characteristic_scales_path: str = ""
+    cost_slack_variables: float = 0.0
 
 
 class SolverOptions(Subscriptable):

@@ -85,15 +85,15 @@ def main(config, dataset_path=None, job_index=None):
             ), f"Characteristic scales config JSON file not found at path {config.mga['characteristic_scales_path']}!"
             with open(config.mga["characteristic_scales_path"], "r", encoding="utf-8") as file:
                 characteristic_scales_config = json.load(file)
-            #  TODO: check the structure of the file
+            # TODO: check the structure of the file
 
             mga_iterations = ModelingToGenerateAlternatives(
+                config_mga=config.mga,
                 n_dimensions=len(optimization_setup.model.solution.set_technologies),
-                n_objectives=config.mga["n_objectives"],
                 optized_setup=optimization_setup,
                 characteristic_scales_config=characteristic_scales_config,
             )
-            mga_iterations.generate_weights()
+            mga_iterations.add_cost_constraint()
             for iteration in range(config.mga["n_objectives"]):
                 logging.info("--- MGA Iteration %s ---", iteration + 1)
 

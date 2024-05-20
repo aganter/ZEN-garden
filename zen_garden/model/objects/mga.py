@@ -13,6 +13,7 @@ import xarray as xr
 from scipy.stats import truncnorm
 
 from zen_garden.model.optimization_setup import OptimizationSetup
+from zen_garden.model.objects.component import Constraint
 
 
 class ModelingToGenerateAlternatives:
@@ -25,26 +26,32 @@ class ModelingToGenerateAlternatives:
 
     def __init__(
         self,
+        config_mga: dict,
         n_dimensions: int,
-        n_objectives: int,
-        characteristic_scales_config: dict,
         optized_setup: OptimizationSetup,
+        characteristic_scales_config: dict,
     ):
         """
         Init generic element for the MGA
 
-        :param mga_iteration: The iteration of the MGA
-        :param optimization_setup: The OptimizationSetup the element is part of
+        :param config_mga: Configuration dictionary for the MGA method
         :param n_dimensions: Number of dimensions N_d of the aggregated decision variables to consider for the MGA
-        :param n_objectives: Number of objectives functions N_k to consider for the MGA method
+        :param optized_setup: OptimizationSetup object of the optimized original problem
+        :param characteristic_scales_config: Configuration dictionary for the characteristic scales
         """
-
+        self.config_mga = config_mga
         self.n_dimensions = n_dimensions
-        self.n_objectives = n_objectives
-        self.characteristic_scales_config = characteristic_scales_config
+        self.n_objectives = self.config_mga["n_objectives"]
+        self.cost_slack_variables = self.config_mga["cost_slack_variables"]
+
         self.optimization_setup = optized_setup
+        self.mga_solution: OptimizationSetup = None
+
+        self.characteristic_scales_config = characteristic_scales_config
         self.direction_search_vector = {}
         self.characteristic_scales = None
+
+        self.cost_constraint = Constraint(self.optimization_setup.sets)
 
         logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
 
@@ -59,7 +66,8 @@ class ModelingToGenerateAlternatives:
             (type: dict)
         """
 
-        random.seed(seed)
+        random.seed(seed)  # Just for debugging purposes
+        # It will be elimitated in the final version to have different random values for each run
         for technology in self.optimization_setup.model.solution.capacity.set_technologies.values:
             random_value = truncnorm.rvs(-1, 1)
             self.direction_search_vector[technology] = random_value
@@ -127,14 +135,38 @@ class ModelingToGenerateAlternatives:
 
         return weights
 
-    def generate_alternatives_objective_functions(self, aggregated_variables: xr.DataArray, weights: np.array):
+    def add_cost_constraint(self):
         """
-        Generate a set of alternatives objective function based on the weights generated.
+        Add a cost constraint to the optimization problem
+        """
+        self.mga_solution = self.optimization_setup
+        constraints = self.mga_solution.constraints
+        original_model = self.optimization_setup.model
+        original_sets = self.optimization_setup.sets
 
-        :param aggregated_variables: Aggregated variables to consider for the MGA objective functions generation
-        :param weights: Weights vector w
+        constraints.add_constraint_rule(
+            original_model,
+            name="constraint_optimal_cost_total_deviation",
+            index_sets=original_sets["set_time_steps_yearly"],
+            rule=self.constraint_cost_total_deviation,
+            doc="Limit on total cost of the energy system",
+        )
 
-        :return: Alternatives objective functions vector f_k
+    def constraint_cost_total_deviation(self, year):
+        """
+        Limit on total cost of the energy system based on the optimized total cost of the energy system and a chosen
+        deviation indicated by the cost_slack_variables.
+
+        :param year: Year of the optimization problem (type: int)
+
+        :return: Constraint for the total cost of the energy system (type: Constraint)
         """
 
-        return np.dot(aggregated_variables, weights.T)
+        lhs = sum(
+            self.mga_solution.model.variables["net_present_cost"][year]
+            for year in self.mga_solution.sets["set_time_steps_yearly"]
+        )
+        rhs = (1 + self.cost_slack_variables) * self.optimization_setup.model.objective_value
+        cost_constraint = lhs <= rhs
+
+        return self.cost_constraint.return_contraints(cost_constraint)
