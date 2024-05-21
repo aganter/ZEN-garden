@@ -14,7 +14,7 @@ from plotly.subplots import make_subplots
 import matplotlib.ticker as ticker
 import plotly.io as pio
 
-res_scenario = Results("../outputs/hard_to_abate_oil_products_2024_130524/")
+res_scenario = Results("../outputs/hard_to_abate_2024_new_constraint/")
 
 df_emissions = res_scenario.get_df("carbon_emissions_cumulative")
 print(df_emissions)
