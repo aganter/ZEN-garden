@@ -326,8 +326,10 @@ class EnergySystem:
             objective = self.rules.objective_total_carbon_emissions(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "capacity":
             objective = self.rules.objective_capacity(self.optimization_setup.model)
-        elif self.optimization_setup.analysis["objective"] == "flow_import":
-            objective = self.rules.objective_flow_import(self.optimization_setup.model)
+        elif self.optimization_setup.analysis["objective"] == "min_flow_import":
+            objective = self.rules.objective_min_flow_import(self.optimization_setup.model)
+        elif self.optimization_setup.analysis["objective"] == "max_flow_import":
+            objective = self.rules.objective_max_flow_import(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "risk":
             logging.info("Objective of minimizing risk not yet implemented")
             objective = self.rules.objective_risk(self.optimization_setup.model)
@@ -578,7 +580,7 @@ class EnergySystemRules(GenericRule):
         carbon_storage = self.system["capacity"]
         return model.variables["capacity"].loc[carbon_storage].sum()
 
-    def objective_flow_import(self, model):
+    def objective_min_flow_import(self, model):
         """objective function to minimize total emissions
 
         .. math::
@@ -587,9 +589,22 @@ class EnergySystemRules(GenericRule):
         :param model: optimization model
         :return: total carbon emissions objective function
         """
-        assert "flow_import" in self.system, "please specify with flow_import in system which carrier imports should be minimized"
-        biomass_carriers = self.system["flow_import"]
+        assert "min_flow_import" in self.system, "please specify with flow_import in system which carrier imports should be minimized"
+        biomass_carriers = self.system["min_flow_import"]
         return model.variables["flow_import"].loc[biomass_carriers].sum()
+
+    def objective_max_flow_import(self, model):
+        """objective function to minimize total emissions
+
+        .. math::
+            J = \sum_{y\in\mathcal{Y}} E_y
+
+        :param model: optimization model
+        :return: total carbon emissions objective function
+        """
+        assert "max_flow_import" in self.system, "please specify with flow_import in system which carrier imports should be minimized"
+        biomass_carriers = self.system["max_flow_import"]
+        return -model.variables["flow_import"].loc[biomass_carriers].sum()
 
     def objective_risk(self, model):
         """objective function to minimize total risk
