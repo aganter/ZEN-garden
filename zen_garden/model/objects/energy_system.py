@@ -590,8 +590,8 @@ class EnergySystemRules(GenericRule):
         :return: total carbon emissions objective function
         """
         assert "min_flow_import" in self.system, "please specify with flow_import in system which carrier imports should be minimized"
-        biomass_carriers = self.system["min_flow_import"]
-        return model.variables["flow_import"].loc[biomass_carriers].sum()
+        carriers = self.system["min_flow_import"]
+        return model.variables["flow_import"].loc[carriers].sum()
 
     def objective_max_flow_import(self, model):
         """objective function to minimize total emissions
@@ -602,9 +602,9 @@ class EnergySystemRules(GenericRule):
         :param model: optimization model
         :return: total carbon emissions objective function
         """
-        assert "max_flow_import" in self.system, "please specify with flow_import in system which carrier imports should be minimized"
-        biomass_carriers = self.system["max_flow_import"]
-        return -model.variables["flow_import"].loc[biomass_carriers].sum()
+        assert "max_flow_import" in self.system, "please specify with flow_import in system which carrier imports should be maximized"
+        carriers = self.system["max_flow_import"]
+        return -model.variables["flow_import"].loc[carriers].sum()
 
     def objective_risk(self, model):
         """objective function to minimize total risk
