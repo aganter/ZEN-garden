@@ -10,7 +10,6 @@ Compilation  of the optimization problem.
 
 import logging
 import os
-import json
 import importlib
 
 from .model.optimization_setup import OptimizationSetup
@@ -59,7 +58,9 @@ def main(config, dataset_path=None, job_index=None):
     input_data_checks.check_technology_selections()
     input_data_checks.check_year_definitions()
     # Overwrite default system and scenario dictionaries
-    scenarios, elements = ScenarioUtils.get_scenarios(config, job_index)
+    scenarios, elements = ScenarioUtils.get_scenarios(
+        config=config, scenario_script_name="scenarios.py", job_index=job_index
+    )
     # Get the name of the dataset
     model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
     # Clean sub-scenarios if necessary
@@ -76,26 +77,30 @@ def main(config, dataset_path=None, job_index=None):
         )
         # Fit the optimization problem for every steps defined in the config and save the results
         optimization_setup.fit_and_save()
+        logging.info("--- Original Optimization finished ---")
 
+        # MODELING TO GENERATE ALTERNATIVES
         if config.mga["modeling_to_generate_alternatives"]:
-            logging.info("--- Original Optimization finished ---")
+            logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
+            config.mga.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
+            config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
+            mga_output_folder = StringUtils.get_output_folder(analysis=config.mga.analysis, system=config.mga["system"])
+            config.mga.system.update(system)
 
-            assert os.path.exists(
-                config.mga["characteristic_scales_path"]
-            ), f"Characteristic scales config JSON file not found at path {config.mga['characteristic_scales_path']}!"
-            with open(config.mga["characteristic_scales_path"], "r", encoding="utf-8") as file:
-                characteristic_scales_config = json.load(file)
-            # TODO: check the structure of the file
-
-            mga_iterations = ModelingToGenerateAlternatives(
-                config_mga=config.mga,
-                n_dimensions=len(optimization_setup.model.solution.set_technologies),
-                optized_setup=optimization_setup,
-                characteristic_scales_config=characteristic_scales_config,
+            scenarios, elements = ScenarioUtils.get_scenarios(
+                config=config.mga, scenario_script_name="mga_iterations.py", job_index=job_index
             )
-            mga_iterations.add_cost_constraint()
-            for iteration in range(config.mga["n_objectives"]):
-                logging.info("--- MGA Iteration %s ---", iteration + 1)
+            ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
+
+            for scenario, scenario_dict in zip(scenarios, elements):
+                mga_iterations = ModelingToGenerateAlternatives(
+                    config_mga=config.mga,
+                    n_dimensions=len(optimization_setup.model.solution.set_technologies),
+                    optized_setup=optimization_setup,
+                    scenario_name=scenario,
+                    scenario_dict=scenario_dict,
+                )
+                mga_iterations.run()
 
     logging.info("--- Optimization finished ---")
     return optimization_setup

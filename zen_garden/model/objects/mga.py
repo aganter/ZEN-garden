@@ -6,6 +6,9 @@ Class defining Modeling to Generate Alternatives functionalities:
 - Capability to generate a set of alternatives objective function based on the weights generated
 """
 
+import os
+import json
+import importlib.util
 import logging
 import random
 import numpy as np
@@ -14,6 +17,7 @@ from scipy.stats import truncnorm
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.component import Constraint
+from zen_garden.utils import InputDataChecks
 
 
 class ModelingToGenerateAlternatives:
@@ -29,7 +33,8 @@ class ModelingToGenerateAlternatives:
         config_mga: dict,
         n_dimensions: int,
         optized_setup: OptimizationSetup,
-        characteristic_scales_config: dict,
+        scenario_name: str,
+        scenario_dict: dict,
     ):
         """
         Init generic element for the MGA
@@ -37,23 +42,34 @@ class ModelingToGenerateAlternatives:
         :param config_mga: Configuration dictionary for the MGA method
         :param n_dimensions: Number of dimensions N_d of the aggregated decision variables to consider for the MGA
         :param optized_setup: OptimizationSetup object of the optimized original problem
-        :param characteristic_scales_config: Configuration dictionary for the characteristic scales
+        :param scenario_name: Name of the scenario
+        :param scenario_dict: Dictionary of the scenario
         """
+
         self.config_mga = config_mga
         self.n_dimensions = n_dimensions
-        self.n_objectives = self.config_mga["n_objectives"]
-        self.cost_slack_variables = self.config_mga["cost_slack_variables"]
+        self.optimizated_setup = optized_setup
+        self.scenario_name = scenario_name
+        self.scenario_dict = scenario_dict
 
-        self.optimization_setup = optized_setup
-        self.mga_solution: OptimizationSetup = None
-
-        self.characteristic_scales_config = characteristic_scales_config
+        input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
+        input_data_checks.check_dataset()
+        self.mga_solution: OptimizationSetup = OptimizationSetup(
+            config=self.config_mga,
+            model_name=self.optimizated_setup.model_name,
+            scenario_name=self.scenario_name,
+            scenario_dict=self.scenario_dict,
+            input_data_checks=input_data_checks,
+        )
+        # It must be initialize with the scenario config to be
+        # the iterations of the MGA process and then add the cost constraint at every iterations
+        # This is not equal to the optimized set up but it is equal to the initialization of the optimized
+        # set up but with scenarios to be the MGA iterations
         self.direction_search_vector = {}
         self.characteristic_scales = None
 
-        self.cost_constraint = Constraint(self.optimization_setup.sets)
-
-        logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
+        self.cost_constraint = Constraint(self.optimizated_setup.sets)
+        self.cost_slack_variables = self.config_mga["cost_slack_variables"]
 
     def generate_random_directions(self, seed: int = 0) -> dict:
         """
@@ -68,7 +84,7 @@ class ModelingToGenerateAlternatives:
 
         random.seed(seed)  # Just for debugging purposes
         # It will be elimitated in the final version to have different random values for each run
-        for technology in self.optimization_setup.model.solution.capacity.set_technologies.values:
+        for technology in self.optimizated_setup.model.solution.capacity.set_technologies.values:
             random_value = truncnorm.rvs(-1, 1)
             self.direction_search_vector[technology] = random_value
 
@@ -82,7 +98,14 @@ class ModelingToGenerateAlternatives:
 
         :return: Characteristic scales DataArray characteristic_scales (type: xr.DataArray)
         """
-        capacity_variables = self.optimization_setup.model.solution.capacity
+        assert os.path.exists(
+            self.config_mga["characteristic_scales_path"]
+        ), f"Characteristic scales config JSON file not found at path {self.config_mga['characteristic_scales_path']}!"
+        with open(self.config_mga["characteristic_scales_path"], "r", encoding="utf-8") as file:
+            characteristic_scales_config = json.load(file)
+        # TODO: check the structure of the file
+
+        capacity_variables = self.optimizated_setup.model.solution.capacity
         self.characteristic_scales = xr.full_like(capacity_variables, fill_value=np.nan)
         logging.info(
             "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
@@ -101,7 +124,7 @@ class ModelingToGenerateAlternatives:
             elif capacity_value > 1e-3:
                 characteristic_value = capacity_value
             else:
-                estimated_value = self.characteristic_scales_config[coords["set_technologies"]]["default_value"]
+                estimated_value = characteristic_scales_config[coords["set_technologies"]]["default_value"]
                 characteristic_value = estimated_value
 
             self.characteristic_scales.values[index] = characteristic_value
@@ -139,10 +162,10 @@ class ModelingToGenerateAlternatives:
         """
         Add a cost constraint to the optimization problem
         """
-        self.mga_solution = self.optimization_setup
+        self.mga_solution = self.optimizated_setup
         constraints = self.mga_solution.constraints
-        original_model = self.optimization_setup.model
-        original_sets = self.optimization_setup.sets
+        original_model = self.optimizated_setup.model
+        original_sets = self.optimizated_setup.sets
 
         constraints.add_constraint_rule(
             original_model,
@@ -154,10 +177,8 @@ class ModelingToGenerateAlternatives:
 
     def constraint_cost_total_deviation(self, year):
         """
-        Limit on total cost of the energy system based on the optimized total cost of the energy system and a chosen
-        deviation indicated by the cost_slack_variables.
-
-        :param year: Year of the optimization problem (type: int)
+        Limit on the total cost objective of the energy system based on the optimized total cost of the energy system
+        and a chosen deviation indicated by the cost_slack_variables.
 
         :return: Constraint for the total cost of the energy system (type: Constraint)
         """
@@ -166,7 +187,17 @@ class ModelingToGenerateAlternatives:
             self.mga_solution.model.variables["net_present_cost"][year]
             for year in self.mga_solution.sets["set_time_steps_yearly"]
         )
-        rhs = (1 + self.cost_slack_variables) * self.optimization_setup.model.objective_value
+        rhs = (1 + self.cost_slack_variables) * self.optimizated_setup.model.objective_value
         cost_constraint = lhs <= rhs
 
         return self.cost_constraint.return_contraints(cost_constraint)
+
+    def run(self):
+        """
+        Solve the optimization problem
+        """
+
+        for iteration in range(self.config_mga["n_objectives"]):
+            logging.info("--- MGA Iteration %s ---", iteration + 1)
+            self.generate_characteristic_scales()
+            self.add_cost_constraint()

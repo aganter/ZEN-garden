@@ -143,17 +143,6 @@ class System(Subscriptable):
     use_capacities_existing: bool = True
 
 
-class ModelingToGenerateAlternatives(Subscriptable):
-    """
-    This class is used to model the behavior of the system to generate alternatives.
-    """
-
-    modeling_to_generate_alternatives: bool = False
-    n_objectives: int = 1
-    characteristic_scales_path: str = ""
-    cost_slack_variables: float = 0.0
-
-
 class SolverOptions(Subscriptable):
     pass
 
@@ -182,6 +171,25 @@ class Solver(Subscriptable):
     use_symbolic_labels: bool = False
 
 
+class ModelingToGenerateAlternatives(Subscriptable):
+    """
+    This class is used to model the behavior of the system to generate alternatives.
+    """
+
+    modeling_to_generate_alternatives: bool = False
+
+    analysis: Analysis = Analysis()
+    solver: Solver = Solver()
+    system: System = System()
+
+    n_objectives: int = 1
+    characteristic_scales_path: str = ""
+    cost_slack_variables: float = 0.0
+
+    # Keep the same name for code consistency and usability: this are the MGA iterations
+    scenarios: dict[str, Any] = {"": {}}
+
+
 class Config(Subscriptable):
     # analysis: dict = Analysis().model_dump()
     analysis: Analysis = Analysis()
@@ -194,4 +202,5 @@ class Config(Subscriptable):
 
     scenarios: dict[str, Any] = {"": {}}
 
+    # Modeling to Generate Alternatives
     mga: ModelingToGenerateAlternatives = ModelingToGenerateAlternatives()
