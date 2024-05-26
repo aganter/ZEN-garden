@@ -8,16 +8,18 @@ Class defining Modeling to Generate Alternatives functionalities:
 
 import os
 import json
-import importlib.util
 import logging
 import random
 import numpy as np
 import xarray as xr
 from scipy.stats import truncnorm
+from pathlib import Path
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.component import Constraint
 from zen_garden.utils import InputDataChecks
+from zen_garden.utils import StringUtils
+from zen_garden.postprocess.postprocess import Postprocess
 
 
 class ModelingToGenerateAlternatives:
@@ -61,10 +63,6 @@ class ModelingToGenerateAlternatives:
             scenario_dict=self.scenario_dict,
             input_data_checks=input_data_checks,
         )
-        # It must be initialize with the scenario config to be
-        # the iterations of the MGA process and then add the cost constraint at every iterations
-        # This is not equal to the optimized set up but it is equal to the initialization of the optimized
-        # set up but with scenarios to be the MGA iterations
         self.direction_search_vector = {}
         self.characteristic_scales = None
 
@@ -154,23 +152,17 @@ class ModelingToGenerateAlternatives:
 
             weights.values[index] = direction_search / characteristic_scale
 
-        weights = weights.rename("weights")
-
-        return weights
+        self.mga_solution.mga_weights = weights.rename("weights")
 
     def add_cost_constraint(self):
         """
         Add a cost constraint to the optimization problem
         """
-        self.mga_solution = self.optimizated_setup
         constraints = self.mga_solution.constraints
-        original_model = self.optimizated_setup.model
-        original_sets = self.optimizated_setup.sets
-
         constraints.add_constraint_rule(
-            original_model,
+            self.mga_solution.model,
             name="constraint_optimal_cost_total_deviation",
-            index_sets=original_sets["set_time_steps_yearly"],
+            index_sets=self.mga_solution.sets["set_time_steps_yearly"],
             rule=self.constraint_cost_total_deviation,
             doc="Limit on total cost of the energy system",
         )
@@ -196,8 +188,34 @@ class ModelingToGenerateAlternatives:
         """
         Solve the optimization problem
         """
-
+        self.generate_weights()
         for iteration in range(self.config_mga["n_objectives"]):
             logging.info("--- MGA Iteration %s ---", iteration + 1)
-            self.generate_characteristic_scales()
-            self.add_cost_constraint()
+
+            steps_horizon = self.mga_solution.get_optimization_horizon()
+            # weights = self.generate_weights()
+
+            for step in steps_horizon:
+                StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step)
+                self.mga_solution.overwrite_time_indices(step)
+                self.mga_solution.construct_optimization_problem()
+                self.add_cost_constraint()
+                self.mga_solution.solve()
+
+                if not self.mga_solution.optimality:
+                    self.mga_solution.write_IIS()
+                    break
+
+                self.mga_solution.add_results_of_optimization_step(step)
+                scenario_name, subfolder, param_map = self.mga_solution.generate_output_paths(
+                    config_system=self.config_mga.system, step=step, steps_horizon=steps_horizon
+                )
+                subfolder = (subfolder, Path(f"iteration_{iteration + 1}"))
+                Postprocess(
+                    model=self.mga_solution,
+                    scenarios=self.config_mga.scenarios,
+                    model_name=self.mga_solution.model_name,
+                    subfolder=subfolder,
+                    scenario_name=scenario_name,
+                    param_map=param_map,
+                )

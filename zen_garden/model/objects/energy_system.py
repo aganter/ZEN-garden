@@ -945,7 +945,7 @@ class EnergySystemRules(GenericRule):
         # TODO implement objective functions for risk
         return None
 
-    def objective_minimize_mga_objective_rule(self, model, weights=None):
+    def objective_minimize_mga_objective_rule(self, model):
         """
         Objective function for minimizing the MGA objective
 
@@ -954,9 +954,22 @@ class EnergySystemRules(GenericRule):
             J = \sum_{y\in\mathcal{Y}} w_y \cdot \text{mga_objective}_y
 
         :param model: optimization model
-        :param weights: weights for each year
 
         :return: MGA objective function
         """
-        sets = self.sets
-        return sum(model.variables["mga_objective"][year] * weights for year in sets["set_time_steps_yearly"])
+        total = 0
+        for index in np.ndindex(self.optimization_setup.mga_weights.shape):
+            coords = {
+                dim: self.optimization_setup.mga_weights.coords[dim].values[index[dim_idx]]
+                for dim_idx, dim in enumerate(self.optimization_setup.mga_weights.dims)
+            }
+            weight = self.optimization_setup.mga_weights.sel(coords).values
+            if not np.isnan(weight):
+                capacity_variable = model.variables["capacity"][
+                    coords["set_technologies"],
+                    coords["set_capacity_types"],
+                    coords["set_location"],
+                    coords["set_time_steps_yearly"],
+                ]
+                total += weight * capacity_variable
+        return total
