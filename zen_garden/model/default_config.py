@@ -7,8 +7,10 @@
 Default configuration. Changes from the default values are specified in config.py (folders data/tests) and system.py (individual datasets)
 """
 
+from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 from typing import Any, Optional
+import xarray as xr
 
 
 class Subscriptable(BaseModel, extra="allow"):
@@ -185,7 +187,10 @@ class ModelingToGenerateAlternatives(Subscriptable):
     n_objectives: int = 1
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
-
+    folder_path: Path = Path(
+        "/Users/maddalena_cenedese/Desktop/MASTER_THESIS/Zen_Garden_Project/ZEN-garden/data/2_add_photovoltaics/"
+        "modeling_to_generate_alternatives"
+    )
     # Keep the same name for code consistency and usability: this are the MGA iterations
     scenarios: dict[str, Any] = {"": {}}
 

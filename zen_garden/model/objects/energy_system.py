@@ -947,16 +947,19 @@ class EnergySystemRules(GenericRule):
 
     def objective_minimize_mga_objective_rule(self, model):
         """
-        Objective function for minimizing the MGA objective
+        Objective function for minimizing the MGA objective.
 
-        Latex formula to be the sum of the objective values of all years, weighted by the respective weights so:
+        The objective is to minimize the sum of the weighted objective values of all years.
+
         .. math::
-            J = \sum_{y\in\mathcal{Y}} w_y \cdot \text{mga_objective}_y
+            J = \sum_{y \in \mathcal{Y}} \frac{d}{L} \cdot x_{\text{aggregated}, y}
 
-        :param model: optimization model
+        :param model: Optimization model.
 
-        :return: MGA objective function
+        :return: MGA objective function.
         """
+        assert self.optimization_setup.mga_objective_type, "No MGA objective type specified"
+
         total = 0
         for index in np.ndindex(self.optimization_setup.mga_weights.shape):
             coords = {
@@ -965,7 +968,16 @@ class EnergySystemRules(GenericRule):
             }
             weight = self.optimization_setup.mga_weights.sel(coords).values
             if not np.isnan(weight):
-                capacity_variable = model.variables["capacity"][
+                if self.optimization_setup.mga_objective_type == "technologies":
+                    variables = "capacity"
+                elif self.optimization_setup.mga_objective_type == "carriers":
+                    variables = "flow_import"
+                else:
+                    raise KeyError(
+                        f"Objective type {self.optimization_setup.mga_objective_type} not known."
+                        "Choose 'technologies' or 'carriers'"
+                    )
+                capacity_variable = model.variables[variables][
                     coords["set_technologies"],
                     coords["set_capacity_types"],
                     coords["set_location"],

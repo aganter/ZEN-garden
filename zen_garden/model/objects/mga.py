@@ -6,15 +6,15 @@ Class defining Modeling to Generate Alternatives functionalities:
 - Capability to generate a set of alternatives objective function based on the weights generated
 """
 
+from pathlib import Path
 import os
 import json
 import logging
-import random
 import numpy as np
 import xarray as xr
 from scipy.stats import truncnorm
-from pathlib import Path
 
+from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.component import Constraint
 from zen_garden.utils import InputDataChecks
@@ -69,22 +69,51 @@ class ModelingToGenerateAlternatives:
         self.cost_constraint = Constraint(self.optimizated_setup.sets)
         self.cost_slack_variables = self.config_mga["cost_slack_variables"]
 
-    def generate_random_directions(self, seed: int = 0) -> dict:
+        self.input_path = self.config_mga["folder_path"]
+        self.objective_type = None
+        self.agregated_variables = None
+        self.data_input = DataInput(
+            element=self,
+            system=self.config_mga.system,
+            analysis=self.config_mga.analysis,
+            solver=self.config_mga.solver,
+            energy_system=self.mga_solution.energy_system,
+            unit_handling=None,
+        )
+        self.store_input_data()
+
+    def store_input_data(self):
+        """
+        Read and store the input data for the MGA scenarios. The attributes file is composed of nested dictionaries,
+        each of them having as a key the scenario name and containing the type of decision variables and the aggreagted
+        variables with the corresponding nodes. Lastly, the objective type is stored in the attribute dictionary of the
+        OptimizationSetup object to have access to it when building the optimization objective functions.
+        """
+        self.data_input.scenario_dict = self.scenario_dict
+        element = "ModelingToGenerateAlternatives"
+        if element in self.scenario_dict.keys():
+            objective_key = self.scenario_dict[element]["objective_type"]["aggregated_variables"]
+            assert objective_key in self.data_input.attribute_dict.keys(), f"No attributes found for {objective_key}"
+            objective_dict = self.data_input.attribute_dict[objective_key]
+            self.objective_type = objective_dict["objective_type"]
+            self.aggregated_variables = [
+                [key, node]
+                for key in objective_dict["aggregated_variables"]
+                for node in objective_dict["aggregated_variables"][key]["set_location"]
+            ]
+        self.mga_solution.mga_objective_type = self.objective_type
+
+    def generate_random_directions(self) -> dict:
         """
         Generate random directions samples from a normal distribution with mean 0 and standard deviation 1 for the MGA
         objective functions generation.
 
-        :param seed: Seed for the random number generator (type: int, default: 0)
-
-        :return: Random directions dictionary direction_search_vector for each of the capacity technologies variables
+        :return: Random directions dictionary direction_search_vector for each of the decision variables
             (type: dict)
         """
-
-        random.seed(seed)  # Just for debugging purposes
-        # It will be elimitated in the final version to have different random values for each run
-        for technology in self.optimizated_setup.model.solution.capacity.set_technologies.values:
-            random_value = truncnorm.rvs(-1, 1)
-            self.direction_search_vector[technology] = random_value
+        self.direction_search_vector = {
+            tuple(component): truncnorm.rvs(-1, 1) for component in self.aggregated_variables
+        }
 
         return self.direction_search_vector
 
@@ -103,26 +132,32 @@ class ModelingToGenerateAlternatives:
             characteristic_scales_config = json.load(file)
         # TODO: check the structure of the file
 
-        capacity_variables = self.optimizated_setup.model.solution.capacity
-        self.characteristic_scales = xr.full_like(capacity_variables, fill_value=np.nan)
+        if self.objective_type == "technologies":
+            decision_variables = self.optimizated_setup.model.solution.capacity
+            self.characteristic_scales = xr.full_like(decision_variables, fill_value=np.nan)
+        elif self.objective_type == "carriers":
+            decision_variables = self.optimizated_setup.model.solution.flow_import
+            self.characteristic_scales = xr.full_like(decision_variables, fill_value=np.nan)
+        else:
+            raise ValueError(f"Objective type {self.objective_type} not recognized")
         logging.info(
             "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
             "estimated to roughly match the expected its magnitude in the near-optimal space.",
         )
 
-        for index in np.ndindex(capacity_variables.shape):
+        for index in np.ndindex(decision_variables.shape):
             coords = {
-                dim: capacity_variables.coords[dim].values[index[dim_idx]]
-                for dim_idx, dim in enumerate(capacity_variables.dims)
+                dim: decision_variables.coords[dim].values[index[dim_idx]]
+                for dim_idx, dim in enumerate(decision_variables.dims)
             }
-            capacity_value = capacity_variables.sel(coords)
+            value = decision_variables.sel(coords)
 
-            if np.isnan(capacity_value):
+            if np.isnan(value):
                 characteristic_value = np.nan
-            elif capacity_value > 1e-3:
-                characteristic_value = capacity_value
+            elif value > 1e-3:
+                characteristic_value = value
             else:
-                estimated_value = characteristic_scales_config[coords["set_technologies"]]["default_value"]
+                estimated_value = characteristic_scales_config[coords[f"set_{self.objective_type}"]]["default_value"]
                 characteristic_value = estimated_value
 
             self.characteristic_scales.values[index] = characteristic_value
@@ -147,10 +182,15 @@ class ModelingToGenerateAlternatives:
                 dim: self.characteristic_scales.coords[dim].values[index[dim_idx]]
                 for dim_idx, dim in enumerate(self.characteristic_scales.dims)
             }
-            characteristic_scale = self.characteristic_scales.sel(coords)
-            direction_search = self.direction_search_vector[coords["set_technologies"]]
+            coords_subset_tuple = tuple(
+                {key: coords[key] for key in ["set_technologies", "set_location"] if key in coords}.values()
+            )
 
-            weights.values[index] = direction_search / characteristic_scale
+            characteristic_scale = self.characteristic_scales.sel(coords)
+            if coords_subset_tuple in self.direction_search_vector:
+                direction_search = self.direction_search_vector[coords_subset_tuple]
+
+                weights.values[index] = direction_search / characteristic_scale
 
         self.mga_solution.mga_weights = weights.rename("weights")
 
@@ -188,12 +228,11 @@ class ModelingToGenerateAlternatives:
         """
         Solve the optimization problem
         """
-        self.generate_weights()
         for iteration in range(self.config_mga["n_objectives"]):
             logging.info("--- MGA Iteration %s ---", iteration + 1)
 
             steps_horizon = self.mga_solution.get_optimization_horizon()
-            # weights = self.generate_weights()
+            self.generate_weights()
 
             for step in steps_horizon:
                 StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step)
