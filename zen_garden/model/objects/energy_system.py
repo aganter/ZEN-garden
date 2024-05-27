@@ -958,8 +958,8 @@ class EnergySystemRules(GenericRule):
 
         :return: MGA objective function.
         """
-        assert self.optimization_setup.mga_objective_type, "No MGA objective type specified"
-
+        assert self.optimization_setup.mga_objective_type, "No MGA objective type specified."
+        logging.info("Decision variables to optimize: %s", self.optimization_setup.mga_objective_type)
         total = 0
         for index in np.ndindex(self.optimization_setup.mga_weights.shape):
             coords = {
@@ -970,18 +970,23 @@ class EnergySystemRules(GenericRule):
             if not np.isnan(weight):
                 if self.optimization_setup.mga_objective_type == "technologies":
                     variables = "capacity"
+                    objective_variable = model.variables[variables][
+                        coords[f"set_{self.optimization_setup.mga_objective_type}"],
+                        coords["set_capacity_types"],
+                        coords["set_location"],
+                        coords["set_time_steps_yearly"],
+                    ]
                 elif self.optimization_setup.mga_objective_type == "carriers":
                     variables = "flow_import"
+                    objective_variable = model.variables[variables][
+                        coords[f"set_{self.optimization_setup.mga_objective_type}"],
+                        coords["set_nodes"],
+                        coords["set_time_steps_operation"],
+                    ]
                 else:
                     raise KeyError(
                         f"Objective type {self.optimization_setup.mga_objective_type} not known."
                         "Choose 'technologies' or 'carriers'"
                     )
-                capacity_variable = model.variables[variables][
-                    coords["set_technologies"],
-                    coords["set_capacity_types"],
-                    coords["set_location"],
-                    coords["set_time_steps_yearly"],
-                ]
-                total += weight * capacity_variable
+                total += weight * objective_variable
         return total

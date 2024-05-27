@@ -12,6 +12,8 @@ import json
 import logging
 import numpy as np
 import xarray as xr
+import psutil
+import time
 from scipy.stats import truncnorm
 
 from zen_garden.preprocess.extract_input_data import DataInput
@@ -93,15 +95,23 @@ class ModelingToGenerateAlternatives:
         element = "ModelingToGenerateAlternatives"
         if element in self.scenario_dict.keys():
             objective_key = self.scenario_dict[element]["objective_type"]["aggregated_variables"]
-            assert objective_key in self.data_input.attribute_dict.keys(), f"No attributes found for {objective_key}"
+            assert objective_key in self.data_input.attribute_dict, f"No attributes found for {objective_key}"
             objective_dict = self.data_input.attribute_dict[objective_key]
+
             self.objective_type = objective_dict["objective_type"]
+            self.mga_solution.mga_objective_type = self.objective_type
+            assert self.objective_type in [
+                "technologies",
+                "carriers",
+            ], f"Objective type {self.objective_type} not recognized, only 'technologies' and 'carriers' are allowed."
+            key_map = {"technologies": "location", "carriers": "nodes"}
+            self.geography_key_to_use = key_map[self.objective_type]
+
             self.aggregated_variables = [
                 [key, node]
                 for key in objective_dict["aggregated_variables"]
-                for node in objective_dict["aggregated_variables"][key]["set_location"]
+                for node in objective_dict["aggregated_variables"][key][f"set_{self.geography_key_to_use }"]
             ]
-        self.mga_solution.mga_objective_type = self.objective_type
 
     def generate_random_directions(self) -> dict:
         """
@@ -183,7 +193,11 @@ class ModelingToGenerateAlternatives:
                 for dim_idx, dim in enumerate(self.characteristic_scales.dims)
             }
             coords_subset_tuple = tuple(
-                {key: coords[key] for key in ["set_technologies", "set_location"] if key in coords}.values()
+                {
+                    key: coords[key]
+                    for key in [f"set_{self.objective_type}", f"set_{self.geography_key_to_use}"]
+                    if key in coords
+                }.values()
             )
 
             characteristic_scale = self.characteristic_scales.sel(coords)
@@ -198,6 +212,9 @@ class ModelingToGenerateAlternatives:
         """
         Add a cost constraint to the optimization problem
         """
+        logging.info("Construct pe.Constraint for the Total Cost Deviation allowed")
+        pid = os.getpid()
+        t_start = time.perf_counter()
         constraints = self.mga_solution.constraints
         constraints.add_constraint_rule(
             self.mga_solution.model,
@@ -206,6 +223,9 @@ class ModelingToGenerateAlternatives:
             rule=self.constraint_cost_total_deviation,
             doc="Limit on total cost of the energy system",
         )
+        t_end = time.perf_counter()
+        logging.info("Time to construct pe.Sets: %.4f seconds", t_end - t_start)
+        logging.info("Memory usage: %s MB", psutil.Process(pid).memory_info().rss / 1024**2)
 
     def constraint_cost_total_deviation(self, year):
         """
