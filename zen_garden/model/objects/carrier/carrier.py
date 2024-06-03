@@ -291,7 +291,7 @@ class CarrierRules(GenericRule):
         # not necessary
 
         ### formulate constraint
-        lhs = self.variables["flow_import"].sum("set_time_steps_operation").where(mask)
+        lhs = self.variables["flow_import"].where(mask)
         rhs = (self.parameters.availability_import * self.parameters.import_share).where(mask)
         constraints = lhs <= rhs
 
