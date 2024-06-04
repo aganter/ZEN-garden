@@ -25,7 +25,7 @@ class DataInput:
     Class to extract input data
     """
 
-    def __init__(self, element, system, analysis, solver, energy_system, unit_handling):
+    def __init__(self, element, system, analysis, solver, energy_system, unit_handling, filename="attributes"):
         """data input object to extract input data
 
         :param element: element for which data is extracted
@@ -46,7 +46,7 @@ class DataInput:
         # get names of indices
         self.index_names = self.analysis["header_data_inputs"]
         # load attributes file
-        self.attribute_dict = self.load_attribute_file()
+        self.attribute_dict = self.load_attribute_file(filename=filename)
 
     def extract_input_data(self, file_name, index_sets, unit_category, time_steps=None, subelement=None):
         """reads input data and restructures the dataframe to return (multi)indexed dict
@@ -235,7 +235,13 @@ class DataInput:
                 f"The .csv format for attributes is deprecated ({filename} of {self.element.name}). Use .json instead."
             )
         else:
-            raise FileNotFoundError(f"Attributes file does not exist for {self.element.name}")
+            if self.element.config.mga["modeling_to_generate_alternatives"]:
+                logging.warning(
+                    "WARNING: Attributes file does not exist, because this is not expected for MGA iterations."
+                )
+                attribute_dict = None
+            else:
+                raise FileNotFoundError(f"Attributes file does not exist for {self.element.name}")
         return attribute_dict
 
     def _load_attribute_file_json(self, filename):
@@ -1044,3 +1050,57 @@ class DataInput:
                         raise ValueError(f"Values in {column} are not integers, but should be")
                 df_output.loc[location, index] = values
         return df_output
+
+
+class DataInputMGA(DataInput):
+    """Class for handling input data for MGA analysis"""
+
+    def __init__(
+        self,
+        element,
+        system,
+        analysis,
+        solver,
+        energy_system,
+        unit_handling,
+        scenario_name,
+        filename="characteristics_scales",
+    ):
+        super().__init__(element, system, analysis, solver, energy_system, unit_handling, filename)
+        self.scenario_name = scenario_name
+        self.characteristics_scales_dict = self.load_characteristics_scales_dict()
+        self.decision_variables_dict = self.load_scenario_decision_variables()
+
+    def load_json_file(self, filename):
+        """Loads json file"""
+        with open(self.folder_path / (filename + ".json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+
+    def load_characteristics_scales_dict(self, filename="characteristic_scales"):
+        """Loads and store characteristics of technology"""
+        self.characteristics_scales_dict = self.load_attribute_file(filename)
+
+        return self.characteristics_scales_dict
+
+    def load_scenario_decision_variables(self):
+        """Loads and store scenario decision variables"""
+        data = self.load_json_file(self.scenario_name)
+        self.decision_variables_dict = {}
+        for key, value in data.items():
+            if isinstance(value, list):
+                self.decision_variables_dict[key] = set(value)
+            else:
+                self.decision_variables_dict[key] = value
+        return self.decision_variables_dict
+
+    def extract_attribute_value(self, attribute_name, attribute_dict):
+        """
+        Make the private method public to allow for overwriting
+
+        :param attribute_name: name of selected attribute
+        :param attribute_dict: dictionary containing the attribute
+
+        :return: attribute value, attribute unit
+        """
+        return self._extract_attribute_value(attribute_name, attribute_dict)

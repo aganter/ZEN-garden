@@ -254,7 +254,7 @@ class ScenarioDict(dict):
     This is a dictionary for the scenario analysis that has some convenience functions
     """
 
-    _param_dict_keys = {"file", "file_op", "default", "default_op", "aggregated_variables"}
+    _param_dict_keys = {"file", "file_op", "default", "default_op"}
     _special_elements = [
         "system",
         "analysis",

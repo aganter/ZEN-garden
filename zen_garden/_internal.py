@@ -86,6 +86,7 @@ def main(config, dataset_path=None, job_index=None):
             config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
             mga_output_folder = StringUtils.get_output_folder(analysis=config.mga.analysis, system=config.mga["system"])
             config.mga.system.update(system)
+            config.mga.system.update(config.mga.immutable_system_elements)
 
             scenarios, elements = ScenarioUtils.get_scenarios(
                 config=config.mga, scenario_script_name="mga_iterations.py", job_index=job_index
@@ -94,8 +95,7 @@ def main(config, dataset_path=None, job_index=None):
 
             for scenario, scenario_dict in zip(scenarios, elements):
                 mga_iterations = ModelingToGenerateAlternatives(
-                    config_mga=config.mga,
-                    n_dimensions=len(optimization_setup.model.solution.set_technologies),
+                    config_mga=config,
                     optized_setup=optimization_setup,
                     scenario_name=scenario,
                     scenario_dict=scenario_dict,

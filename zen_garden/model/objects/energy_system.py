@@ -531,8 +531,8 @@ class EnergySystem:
         elif self.optimization_setup.analysis["objective"] == "risk":
             logging.info("Objective of minimizing risk not yet implemented")
             objective_rule = self.rules.objective_risk_rule(self.optimization_setup.model)
-        elif self.optimization_setup.analysis["objective"] == "minimize_mga_objective":
-            objective_rule = self.rules.objective_minimize_mga_objective_rule(self.optimization_setup.model)
+        elif self.optimization_setup.analysis["objective"] == "mga":
+            objective_rule = self.rules.objective_mga(self.optimization_setup.model)
         else:
             raise KeyError(f"Objective type {self.optimization_setup.analysis['objective']} not known")
 
@@ -945,7 +945,7 @@ class EnergySystemRules(GenericRule):
         # TODO implement objective functions for risk
         return None
 
-    def objective_minimize_mga_objective_rule(self, model):
+    def objective_mga(self, model):
         """
         Objective function for minimizing the MGA objective.
 
@@ -958,8 +958,9 @@ class EnergySystemRules(GenericRule):
 
         :return: MGA objective function.
         """
-        assert self.optimization_setup.mga_objective_type, "No MGA objective type specified."
-        logging.info("Decision variables to optimize: %s", self.optimization_setup.mga_objective_type)
+        objective_type = self.optimization_setup.config["objective_type"]
+        assert objective_type, "No MGA objective type specified."
+        logging.info("Decision variables to optimize: %s", objective_type)
         total = 0
         for index in np.ndindex(self.optimization_setup.mga_weights.shape):
             coords = {
@@ -968,25 +969,22 @@ class EnergySystemRules(GenericRule):
             }
             weight = self.optimization_setup.mga_weights.sel(coords).values
             if not np.isnan(weight):
-                if self.optimization_setup.mga_objective_type == "technologies":
+                if objective_type == "technologies":
                     variables = "capacity"
                     objective_variable = model.variables[variables][
-                        coords[f"set_{self.optimization_setup.mga_objective_type}"],
+                        coords[f"set_{objective_type}"],
                         coords["set_capacity_types"],
                         coords["set_location"],
                         coords["set_time_steps_yearly"],
                     ]
-                elif self.optimization_setup.mga_objective_type == "carriers":
+                elif objective_type == "carriers":
                     variables = "flow_import"
                     objective_variable = model.variables[variables][
-                        coords[f"set_{self.optimization_setup.mga_objective_type}"],
+                        coords[f"set_{objective_type}"],
                         coords["set_nodes"],
                         coords["set_time_steps_operation"],
                     ]
                 else:
-                    raise KeyError(
-                        f"Objective type {self.optimization_setup.mga_objective_type} not known."
-                        "Choose 'technologies' or 'carriers'"
-                    )
+                    raise KeyError(f"Objective type {objective_type} not known." "Choose 'technologies' or 'carriers'")
                 total += weight * objective_variable
         return total

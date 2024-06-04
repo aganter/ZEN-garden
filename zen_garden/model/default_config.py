@@ -4,13 +4,13 @@
 :Authors:      Alissa Ganter (aganter@ethz.ch)
 :Organization: Laboratory of Reliability and Risk Engineering, ETH Zurich
 
-Default configuration. Changes from the default values are specified in config.py (folders data/tests) and system.py (individual datasets)
+Default configuration. Changes from the default values are specified in config.py (folders data/tests) and system.py
+(individual datasets)
 """
 
 from pathlib import Path
-from pydantic import BaseModel, ConfigDict
 from typing import Any, Optional
-import xarray as xr
+from pydantic import BaseModel, ConfigDict
 
 
 class Subscriptable(BaseModel, extra="allow"):
@@ -179,7 +179,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
     """
 
     modeling_to_generate_alternatives: bool = False
-
+    objective_type: str = "technologies"
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()
@@ -187,12 +187,13 @@ class ModelingToGenerateAlternatives(Subscriptable):
     n_objectives: int = 1
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
-    folder_path: Path = Path(
-        "/Users/maddalena_cenedese/Desktop/MASTER_THESIS/Zen_Garden_Project/ZEN-garden/data/2_add_photovoltaics/"
-        "modeling_to_generate_alternatives"
-    )
+    folder_path: Path = Path("data/")
     # Keep the same name for code consistency and usability: this are the MGA iterations
     scenarios: dict[str, Any] = {"": {}}
+    immutable_system_elements: dict = {
+        "conduct_scenario_analysis": True,
+        "run_default_scenario": False,
+    }
 
 
 class Config(Subscriptable):

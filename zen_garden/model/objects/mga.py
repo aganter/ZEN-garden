@@ -8,15 +8,14 @@ Class defining Modeling to Generate Alternatives functionalities:
 
 from pathlib import Path
 import os
-import json
 import logging
+import time
 import numpy as np
 import xarray as xr
 import psutil
-import time
 from scipy.stats import truncnorm
 
-from zen_garden.preprocess.extract_input_data import DataInput
+from zen_garden.preprocess.extract_input_data import DataInputMGA
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.component import Constraint
 from zen_garden.utils import InputDataChecks
@@ -30,12 +29,10 @@ class ModelingToGenerateAlternatives:
     """
 
     label = "Modeling_To_Generate_Alternatives"
-    location_type = None
 
     def __init__(
         self,
         config_mga: dict,
-        n_dimensions: int,
         optized_setup: OptimizationSetup,
         scenario_name: str,
         scenario_dict: dict,
@@ -49,9 +46,9 @@ class ModelingToGenerateAlternatives:
         :param scenario_name: Name of the scenario
         :param scenario_dict: Dictionary of the scenario
         """
-
-        self.config_mga = config_mga
-        self.n_dimensions = n_dimensions
+        self.name = "Modeling_To_Generate_Alternatives"
+        self.config = config_mga
+        self.config_mga = config_mga.mga
         self.optimizated_setup = optized_setup
         self.scenario_name = scenario_name
         self.scenario_dict = scenario_dict
@@ -71,47 +68,44 @@ class ModelingToGenerateAlternatives:
         self.cost_constraint = Constraint(self.optimizated_setup.sets)
         self.cost_slack_variables = self.config_mga["cost_slack_variables"]
 
+        self.decision_variables = []
+
         self.input_path = self.config_mga["folder_path"]
-        self.objective_type = None
-        self.agregated_variables = None
-        self.data_input = DataInput(
+        self.mga_data_input = DataInputMGA(
             element=self,
             system=self.config_mga.system,
             analysis=self.config_mga.analysis,
             solver=self.config_mga.solver,
             energy_system=self.mga_solution.energy_system,
             unit_handling=None,
+            scenario_name=self.scenario_name,
         )
         self.store_input_data()
 
     def store_input_data(self):
         """
-        Read and store the input data for the MGA scenarios. The attributes file is composed of nested dictionaries,
-        each of them having as a key the scenario name and containing the type of decision variables and the aggreagted
-        variables with the corresponding nodes. Lastly, the objective type is stored in the attribute dictionary of the
-        OptimizationSetup object to have access to it when building the optimization objective functions.
+        Read and store the input data for the MGA scenario in the correct way. The data input has two attributes, one
+        of them is the decision_variable dict. This function contains a sanity check for the structure of the dictionary
+        and stores as follow:
+        - The "objective_type" attrbute contains the type of the objective function to be generated
+        - The "aggregated_variables" attribute is a list of list [[key, node], [key, node], ...] with the aggregated
+            variables and the corresponding nodes
+        Other attributed defined in the function are functional for the MGA iteration
         """
-        self.data_input.scenario_dict = self.scenario_dict
+        self.mga_data_input.scenario_dict = self.scenario_dict
         element = "ModelingToGenerateAlternatives"
-        if element in self.scenario_dict.keys():
-            objective_key = self.scenario_dict[element]["objective_type"]["aggregated_variables"]
-            assert objective_key in self.data_input.attribute_dict, f"No attributes found for {objective_key}"
-            objective_dict = self.data_input.attribute_dict[objective_key]
-
-            self.objective_type = objective_dict["objective_type"]
-            self.mga_solution.mga_objective_type = self.objective_type
-            assert self.objective_type in [
+        if element in self.mga_data_input.scenario_dict.keys():
+            self.mga_solution.config["objective_type"] = self.mga_data_input.decision_variables_dict["objective_type"]
+            assert self.mga_solution.config["objective_type"] in [
                 "technologies",
                 "carriers",
-            ], f"Objective type {self.objective_type} not recognized, only 'technologies' and 'carriers' are allowed."
-            key_map = {"technologies": "location", "carriers": "nodes"}
-            self.geography_key_to_use = key_map[self.objective_type]
-
-            self.aggregated_variables = [
-                [key, node]
-                for key in objective_dict["aggregated_variables"]
-                for node in objective_dict["aggregated_variables"][key][f"set_{self.geography_key_to_use }"]
-            ]
+            ], (
+                f"Objective {self.mga_solution.config['objective_type']} not recognized."
+                "Only 'technologies' and 'carriers' are allowed."
+            )
+            for tech in self.mga_data_input.decision_variables_dict["decision_variables"]:
+                for country in self.mga_data_input.decision_variables_dict["countries"]:
+                    self.decision_variables.append([tech, country])
 
     def generate_random_directions(self) -> dict:
         """
@@ -121,9 +115,7 @@ class ModelingToGenerateAlternatives:
         :return: Random directions dictionary direction_search_vector for each of the decision variables
             (type: dict)
         """
-        self.direction_search_vector = {
-            tuple(component): truncnorm.rvs(-1, 1) for component in self.aggregated_variables
-        }
+        self.direction_search_vector = {tuple(component): truncnorm.rvs(-1, 1) for component in self.decision_variables}
 
         return self.direction_search_vector
 
@@ -135,39 +127,34 @@ class ModelingToGenerateAlternatives:
 
         :return: Characteristic scales DataArray characteristic_scales (type: xr.DataArray)
         """
-        assert os.path.exists(
-            self.config_mga["characteristic_scales_path"]
-        ), f"Characteristic scales config JSON file not found at path {self.config_mga['characteristic_scales_path']}!"
-        with open(self.config_mga["characteristic_scales_path"], "r", encoding="utf-8") as file:
-            characteristic_scales_config = json.load(file)
-        # TODO: check the structure of the file
-
-        if self.objective_type == "technologies":
-            decision_variables = self.optimizated_setup.model.solution.capacity
-            self.characteristic_scales = xr.full_like(decision_variables, fill_value=np.nan)
-        elif self.objective_type == "carriers":
-            decision_variables = self.optimizated_setup.model.solution.flow_import
-            self.characteristic_scales = xr.full_like(decision_variables, fill_value=np.nan)
+        if self.mga_solution.config["objective_type"] == "technologies":
+            xr_variables = self.optimizated_setup.model.solution.capacity
+            self.characteristic_scales = xr.full_like(xr_variables, fill_value=np.nan)
+        elif self.mga_solution.config["objective_type"] == "carriers":
+            xr_variables = self.optimizated_setup.model.solution.flow_import
+            self.characteristic_scales = xr.full_like(xr_variables, fill_value=np.nan)
         else:
-            raise ValueError(f"Objective type {self.objective_type} not recognized")
+            raise ValueError(f"Objective type {self.mga_solution.config['objective_type']} not recognized")
         logging.info(
             "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
             "estimated to roughly match the expected its magnitude in the near-optimal space.",
         )
 
-        for index in np.ndindex(decision_variables.shape):
+        for index in np.ndindex(xr_variables.shape):
             coords = {
-                dim: decision_variables.coords[dim].values[index[dim_idx]]
-                for dim_idx, dim in enumerate(decision_variables.dims)
+                dim: xr_variables.coords[dim].values[index[dim_idx]] for dim_idx, dim in enumerate(xr_variables.dims)
             }
-            value = decision_variables.sel(coords)
+            value = xr_variables.sel(coords)
 
             if np.isnan(value):
                 characteristic_value = np.nan
             elif value > 1e-3:
                 characteristic_value = value
             else:
-                estimated_value = characteristic_scales_config[coords[f"set_{self.objective_type}"]]["default_value"]
+                estimated_value, _ = self.mga_data_input.extract_attribute_value(
+                    attribute_name=coords[f"set_{self.mga_solution.config['objective_type']}"],
+                    attribute_dict=self.mga_data_input.characteristics_scales_dict,
+                )
                 characteristic_value = estimated_value
 
             self.characteristic_scales.values[index] = characteristic_value
@@ -185,6 +172,9 @@ class ModelingToGenerateAlternatives:
         self.characteristic_scales = self.generate_characteristic_scales()
         self.direction_search_vector = self.generate_random_directions()
 
+        key_map = {"technologies": "location", "carriers": "nodes"}
+        location_key = key_map[self.mga_solution.config["objective_type"]]
+
         weights = xr.full_like(self.characteristic_scales, fill_value=np.nan)
 
         for index in np.ndindex(self.characteristic_scales.shape):
@@ -195,7 +185,7 @@ class ModelingToGenerateAlternatives:
             coords_subset_tuple = tuple(
                 {
                     key: coords[key]
-                    for key in [f"set_{self.objective_type}", f"set_{self.geography_key_to_use}"]
+                    for key in [f"set_{self.mga_solution.config['objective_type']}", f"set_{location_key}"]
                     if key in coords
                 }.values()
             )
