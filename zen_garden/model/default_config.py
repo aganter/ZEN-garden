@@ -127,6 +127,7 @@ class System(Subscriptable):
     set_transport_technologies_loss_exponential: list[str] = []
     double_capex_transport: bool = False
     set_nodes: list[str] = []
+    set_supernodes: bool = False
     exclude_parameters_from_TSA: bool = True
     conduct_scenario_analysis: bool = False
     run_default_scenario: bool = True
