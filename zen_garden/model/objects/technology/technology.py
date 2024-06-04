@@ -697,6 +697,19 @@ class Technology(Element):
             unit_category={"emissions": 1},
         )
 
+        if optimization_setup.system["set_supernodes"]:
+            variables.add_variable(
+                model,
+                name="capacity_supernodes",
+                index_sets=cls.create_custom_set(
+                    ["set_technologies", "set_capacity_types", "set_supernodes", "set_time_steps_yearly"],
+                    optimization_setup,
+                ),
+                bounds=(0, np.inf),
+                doc="size of installed technology at supernodes s and time t",
+                unit_category={"energy_quantity": 1, "time": -1},
+            )
+
         # install technology
         # Note: binary variables are written into the lp file by linopy even if they are not relevant for the optimization,
         # which makes all problems MIPs. Therefore, we only add binary variables, if really necessary. Gurobi can handle this
@@ -895,6 +908,14 @@ class Technology(Element):
             rule=rules.disjunct_off_technology_rule,
             doc="disjunct to indicate that technology is off",
         )
+
+        if optimization_setup.system["set_supernodes"]:
+            constraints.add_constraint_block(
+                model,
+                name="constraint_sum_technologies_capacity_supernodes",
+                constraint=rules.constraint_technology_capacity_supernodes_block(),
+                doc="capacity of technology at supernodes",
+            )
 
         # if nothing was added we can remove the tech vars again
         if model.constraints.ncons == n_cons:
@@ -2027,5 +2048,25 @@ class TechnologyRules(GenericRule):
             constraints,
             model=self.model,
             index_values=index.get_unique(["set_technologies"]),
+            index_names=["set_technologies"],
+        )
+
+    def constraint_technology_capacity_supernodes_block(self):
+        """
+        Set the capacity of the supernodes to the sum of the capacities of the nodes that belong to the supernode thanks
+        to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
+        """
+        constraints = []
+        for supernode, nodes in self.optimization_setup.energy_system.grouped_nodes_into_supernodes:
+            for tech in self.sets["set_technologies"]:
+                for capacity_type in self.system["set_capacity_types"]:
+                    for year in self.sets["set_time_steps_yearly"]:
+                        lhs = self.variables["capacity_supernodes"].loc[tech, capacity_type, supernode, year]
+                        rhs = self.variables["capacity"].loc[tech, capacity_type, nodes, year].sum()
+                        constraints.append(lhs == rhs)
+        return self.constraints.return_contraints(
+            constraints,
+            model=self.model,
+            index_values=self.sets["set_technologies"],
             index_names=["set_technologies"],
         )

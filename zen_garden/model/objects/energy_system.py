@@ -162,7 +162,7 @@ class EnergySystem:
         if self.system["set_supernodes"]:
             set_supernodes_file = self.data_input.read_input_csv("set_supernodes")
             self.set_supernodes = set_supernodes_file["supernode"].tolist()
-            self.grouped_nodes_into_supernodes = self.group_nodes_by_super_node()
+            self.group_nodes_by_super_node()
 
     def calculate_edges_from_nodes(self):
         """calculates set_nodes_on_edges from set_nodes
@@ -259,17 +259,15 @@ class EnergySystem:
     def group_nodes_by_super_node(self):
         """generates supernodes and adds them to the set of nodes"""
         supernodes = self.set_supernodes
-        grouped_nodes = []
         unassigned_nodes = set(self.set_nodes)
         for supernode in supernodes:
             nodes_in_supernode = [node for node in self.set_nodes if node.startswith(supernode)]
             if nodes_in_supernode:
-                grouped_nodes.append([supernode, nodes_in_supernode])
+                self.grouped_nodes_into_supernodes.append([supernode, nodes_in_supernode])
                 unassigned_nodes -= set(nodes_in_supernode)
         assert (
             not unassigned_nodes
         ), f"The following nodes do not correspond to a supernode: {', '.join(unassigned_nodes)}"
-        return self.grouped_nodes_into_supernodes
 
     ### --- classmethods to construct sets, parameters, variables, and constraints, that correspond to EnergySystem --- ###
 
@@ -325,6 +323,12 @@ class EnergySystem:
             name="set_time_steps_storage",
             data=self.time_steps.time_steps_storage,
             doc="Set of storage level time steps",
+        )
+        # supernodes
+        self.optimization_setup.sets.add_set(
+            name="set_supernodes",
+            data=[sublist[0] for sublist in self.grouped_nodes_into_supernodes],
+            doc="Set of supernodes",
         )
 
     def construct_params(self):
