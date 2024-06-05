@@ -914,7 +914,7 @@ class Technology(Element):
                 model,
                 name="constraint_sum_technologies_capacity_supernodes",
                 constraint=rules.constraint_technology_capacity_supernodes_block(),
-                doc="capacity of technology at supernodes",
+                doc="capacity of technologies at supernodes",
             )
 
         # if nothing was added we can remove the tech vars again
@@ -2056,6 +2056,10 @@ class TechnologyRules(GenericRule):
         Set the capacity of the supernodes to the sum of the capacities of the nodes that belong to the supernode thanks
         to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
         """
+        index_values, index_names = Element.create_custom_set(
+            ["set_technologies", "set_location", "set_time_steps_yearly"], self.optimization_setup
+        )
+        index = ZenIndex(index_values, index_names)
         constraints = []
         capacity_types = self.variables["capacity"].coords["set_capacity_types"].values
         for supernode, nodes in self.optimization_setup.energy_system.grouped_nodes_into_supernodes:
@@ -2071,6 +2075,6 @@ class TechnologyRules(GenericRule):
         return self.constraints.return_contraints(
             constraints,
             model=self.model,
-            index_values=self.sets["set_technologies"],
-            index_names=["set_technologies"],
+            index_values=index.get_unique(["set_technologies", "set_time_steps_yearly"]),
+            index_names=["set_technologies", "set_time_steps_yearly"],
         )

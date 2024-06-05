@@ -9,6 +9,7 @@ Class defining a standard Element. Contains methods to add parameters, variables
 optimization problem. Parent class of the Carrier and Technology classes .The class takes the concrete
 optimization model as an input.
 """
+
 import copy
 import itertools
 import logging
@@ -18,18 +19,20 @@ import time
 from pathlib import Path
 from zen_garden.preprocess.extract_input_data import DataInput
 
+
 class Element:
     """
     Class defining a standard Element
     """
+
     # set label
     label = "set_elements"
 
     def __init__(self, element: str, optimization_setup):
-        """ initialization of an element
+        """initialization of an element
 
         :param element: element that is added to the model
-        :param optimization_setup: The OptimizationSetup the element is part of """
+        :param optimization_setup: The OptimizationSetup the element is part of"""
         # set attributes
         self.name = element
         self._name = element
@@ -42,14 +45,19 @@ class Element:
         # get input path
         self.get_input_path()
         # create DataInput object
-        self.data_input = DataInput(element=self, system=self.optimization_setup.system,
-                                    analysis=self.optimization_setup.analysis, solver=self.optimization_setup.solver,
-                                    energy_system=self.energy_system, unit_handling=self.energy_system.unit_handling)
+        self.data_input = DataInput(
+            element=self,
+            system=self.optimization_setup.system,
+            analysis=self.optimization_setup.analysis,
+            solver=self.optimization_setup.solver,
+            energy_system=self.energy_system,
+            unit_handling=self.energy_system.unit_handling,
+        )
         # dict to save the parameter units element-wise (and save them in the results later on)
         self.units = {}
 
     def get_input_path(self):
-        """ get input path where input data is stored input_path"""
+        """get input path where input data is stored input_path"""
         # get technology type
         class_label = self.label
         # get path dictionary
@@ -66,7 +74,7 @@ class Element:
         self.input_path = Path(paths[class_label][self.name]["folder"])
 
     def store_scenario_dict(self):
-        """ stores scenario dict in each data input object """
+        """stores scenario dict in each data input object"""
         # store scenario dict
         self.data_input.scenario_dict = self.optimization_setup.scenario_dict
 
@@ -74,9 +82,9 @@ class Element:
     # Here, after defining EnergySystem-specific components, the components of the other classes are constructed
     @classmethod
     def construct_model_components(cls, optimization_setup):
-        """ constructs the model components of the class <Element>
+        """constructs the model components of the class <Element>
 
-        :param optimization_setup: The OptimizationSetup the element is part of """
+        :param optimization_setup: The OptimizationSetup the element is part of"""
         logging.info("\n--- Construct model components ---\n")
         pid = os.getpid()
         # construct pe.Sets
@@ -110,9 +118,9 @@ class Element:
 
     @classmethod
     def construct_sets(cls, optimization_setup):
-        """ constructs the pe.Sets of the class <Element>
+        """constructs the pe.Sets of the class <Element>
 
-        :param optimization_setup: The OptimizationSetup the element is part of """
+        :param optimization_setup: The OptimizationSetup the element is part of"""
         logging.info("Construct pe.Sets")
         # construct pe.Sets of energy system
         optimization_setup.energy_system.construct_sets()
@@ -122,9 +130,9 @@ class Element:
 
     @classmethod
     def construct_params(cls, optimization_setup):
-        """ constructs the pe.Params of the class <Element>
+        """constructs the pe.Params of the class <Element>
 
-        :param optimization_setup: The OptimizationSetup the element is part of """
+        :param optimization_setup: The OptimizationSetup the element is part of"""
         logging.info("Construct pe.Params")
         # construct pe.Params of energy system
         optimization_setup.energy_system.construct_params()
@@ -134,9 +142,9 @@ class Element:
 
     @classmethod
     def construct_vars(cls, optimization_setup):
-        """ constructs the pe.Vars of the class <Element>
+        """constructs the pe.Vars of the class <Element>
 
-        :param optimization_setup: The OptimizationSetup the element is part of """
+        :param optimization_setup: The OptimizationSetup the element is part of"""
         logging.info("Construct pe.Vars")
         # construct pe.Vars of energy system
         optimization_setup.energy_system.construct_vars()
@@ -146,9 +154,9 @@ class Element:
 
     @classmethod
     def construct_constraints(cls, optimization_setup):
-        """ constructs the pe.Constraints of the class <Element>
+        """constructs the pe.Constraints of the class <Element>
 
-        :param optimization_setup: The OptimizationSetup the element is part of """
+        :param optimization_setup: The OptimizationSetup the element is part of"""
         logging.info("Construct pe.Constraints")
         # construct pe.Constraints of energy system
         optimization_setup.energy_system.construct_constraints()
@@ -159,11 +167,11 @@ class Element:
 
     @classmethod
     def create_custom_set(cls, list_index, optimization_setup):
-        """ creates custom set for model component 
+        """creates custom set for model component
 
         :param list_index: list of names of indices
         :param optimization_setup: The OptimizationSetup the element is part of
-        :return list_index: list of names of indices """
+        :return list_index: list of names of indices"""
         list_index_overwrite = copy.copy(list_index)
         sets = optimization_setup.sets
         indexing_sets = optimization_setup.energy_system.indexing_sets
@@ -210,8 +218,11 @@ class Element:
                         # if index is set_location
                         elif index == "set_location":
                             # if element in set_conversion_technologies or set_storage_technologies, append set_nodes
-                            if (element in sets["set_conversion_technologies"] or element in sets["set_storage_technologies"] \
-                                    or element in sets["set_retrofitting_technologies"]):
+                            if (
+                                element in sets["set_conversion_technologies"]
+                                or element in sets["set_storage_technologies"]
+                                or element in sets["set_retrofitting_technologies"]
+                            ):
                                 list_sets.append(sets["set_nodes"])
                             # if element in set_transport_technologies
                             elif element in sets["set_transport_technologies"]:
@@ -219,7 +230,9 @@ class Element:
                         # if set is built for pwa capex:
                         elif "set_capex" in index:
                             if element in sets["set_conversion_technologies"]:
-                                capex_is_pwa = optimization_setup.get_attribute_of_specific_element(cls, element, "capex_is_pwa")
+                                capex_is_pwa = optimization_setup.get_attribute_of_specific_element(
+                                    cls, element, "capex_is_pwa"
+                                )
                                 # if technology is modeled as pwa, break for linear index
                                 if "linear" in index and capex_is_pwa:
                                     append_element = False
@@ -267,7 +280,7 @@ class Element:
 
     @classmethod
     def check_on_off_modeled(cls, tech, optimization_setup):
-        """ this classmethod checks if the on-off-behavior of a technology needs to be modeled.
+        """this classmethod checks if the on-off-behavior of a technology needs to be modeled.
         If the technology has a minimum load of 0 for all nodes and time steps,
         and all dependent carriers have a lower bound of 0 (only for conversion technologies modeled as pwa),
         then on-off-behavior is not necessary to model

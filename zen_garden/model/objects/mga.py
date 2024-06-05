@@ -1,6 +1,6 @@
 """""
 Class defining Modeling to Generate Alternatives functionalities:
-- Sanity checks for input data 
+- Sanity checks for input data
 - Load and store input data for the MGA scenario
 - Generate weigths for the MGA objective function based on random direction and characteristic scales
 - Add a cost constraint to the optimization problem

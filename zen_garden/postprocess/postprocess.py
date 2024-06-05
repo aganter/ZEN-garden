@@ -56,6 +56,7 @@ class Postprocess:
         :param include_year2operation: Specify if the year2operation dict should be included in the results file
         """
         logging.info("--- Postprocess results ---")
+        logging.info("")
         # get the necessary stuff from the model
         self.model = model.model
         self.scenarios = scenarios
