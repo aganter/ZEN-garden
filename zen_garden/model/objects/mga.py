@@ -131,7 +131,10 @@ class ModelingToGenerateAlternatives:
         """
         dict_to_check = self.mga_data_input.characteristics_scales_dict
         # Check that the value of the coords of the objective variables are a subset of keys of the dictionary
-        for key in getattr(self.optimized_setup.model.solution, self.mga_objective_obj).values.tolist():
+        subset_objective = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
+        set_solution_variables = getattr(self.optimized_setup.model.solution, self.mga_objective_obj).values.tolist()
+        common_variables = list(set(subset_objective).intersection(set_solution_variables))
+        for key in common_variables:
             assert key in dict_to_check.keys(), f"{key} is not in the characteristic scales dictionary"
         # Check each element has keys "default_value" to be a number and "unit" to be a string or a number
         for key in dict_to_check.keys():
@@ -177,7 +180,12 @@ class ModelingToGenerateAlternatives:
             "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
             "estimated to roughly match its expected magnitude in the near-optimal space.",
         )
-        xr_variables = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
+        complete_xr_variables = getattr(
+            self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"]
+        )
+        subset_objective = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
+        condition = complete_xr_variables[self.mga_objective_obj].isin(subset_objective)
+        xr_variables = complete_xr_variables.where(condition, drop=True)
         self.characteristic_scales = xr.full_like(xr_variables, fill_value=np.nan)
 
         for index in np.ndindex(xr_variables.shape):

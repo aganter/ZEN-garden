@@ -1010,10 +1010,6 @@ class CarrierRules(GenericRule):
         Set the flow import of carriers at the supernodes to be the sum of the flow imports of the nodes that belong
         to the supernode thanks to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
         """
-        index_values, index_names = Element.create_custom_set(
-            ["set_carriers", "set_nodes", "set_time_steps_yearly"], self.optimization_setup
-        )
-        index = ZenIndex(index_values, index_names)
         constraints = []
         for supernode, nodes in self.optimization_setup.energy_system.grouped_nodes_into_supernodes:
             for carr in self.sets["set_carriers"]:
@@ -1027,6 +1023,6 @@ class CarrierRules(GenericRule):
         return self.constraints.return_contraints(
             constraints,
             model=self.model,
-            index_values=index.get_unique(["set_carriers", "set_time_steps_operation"]),
-            index_names=["set_carriers", "set_time_steps_operation"],
+            index_values=self.sets["set_carriers"],
+            index_names=["set_carriers"],
         )
