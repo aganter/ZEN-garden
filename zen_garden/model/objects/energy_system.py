@@ -516,9 +516,9 @@ class EnergySystem:
             objective = self.rules.objective_total_carbon_emissions(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "risk":
             logging.info("Objective of minimizing risk not yet implemented")
-            objective_rule = self.rules.objective_risk_rule(self.optimization_setup.model)
+            objective = self.rules.objective_risk_rule(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "mga":
-            objective_rule = self.rules.objective_mga(self.optimization_setup.model)
+            objective = self.rules.objective_mga(self.optimization_setup.model)
         else:
             raise KeyError(f"Objective type {self.optimization_setup.analysis['objective']} not known")
 

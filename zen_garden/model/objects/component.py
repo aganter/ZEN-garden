@@ -783,7 +783,7 @@ class Constraint(Component):
                         _key = "-".join([str(k) for k in key])
                     else:
                         _key = str(key)
-                    _name = f"{name}--{key}"
+                    _name = f"{name}--{_key}"
                     self.add_single_constraint(_name, cons)
                     self.docs[name] = self.compile_doc_string(doc, index_list=list(cons.indexes), name=_name)
             elif isinstance(constraint,lp.constraints.Constraint) or isinstance(constraint, lp.constraints.AnonymousConstraint):

@@ -335,12 +335,7 @@ class Carrier(Element):
         rules.constraint_nodal_energy_balance()
 
         if optimization_setup.system["set_supernodes"]:
-            constraints.add_constraint_block(
-                model,
-                name="constraint_sum_carrier_flow_import_supernodes",
-                constraint=rules.constraint_carrier_flow_import_supernodes_block(),
-                doc="flow import of carriers at supernodes",
-            )
+            rules.constraint_carrier_flow_import_supernodes()
 
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
@@ -719,28 +714,13 @@ class CarrierRules(GenericRule):
         ### return
         self.constraints.add_constraint("constraint_nodal_energy_balance", constraints)
 
-    def constraint_carrier_flow_import_supernodes_block(self):
+    def constraint_carrier_flow_import_supernodes(self):
         """
         Set the flow import of carriers at the supernodes to be the sum of the flow imports of the nodes that belong
         to the supernode thanks to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
         """
-        index_values, index_names = Element.create_custom_set(
-            ["set_carriers", "set_nodes", "set_time_steps_yearly"], self.optimization_setup
-        )
-        index = ZenIndex(index_values, index_names)
-        constraints = []
-        for supernode, nodes in self.optimization_setup.energy_system.grouped_nodes_into_supernodes:
-            for carr in self.sets["set_carriers"]:
-                for step in self.sets["set_time_steps_operation"]:
-                    lhs = (
-                        self.variables["flow_import_supernodes"].loc[carr, supernode, step]
-                        - self.variables["flow_import"].loc[carr, nodes, step].sum()
-                    )
-                    rhs = 0
-                    constraints.append(lhs == rhs)
-        return self.constraints.return_contraints(
-            constraints,
-            model=self.model,
-            index_values=index.get_unique(levels=["set_carriers", "set_time_steps_yearly"]),
-            index_names=["set_carriers", "set_time_steps_yearly"],
-        )
+        lhs = self.variables["flow_import_supernodes"] - self.variables["flow_import"].sum(dim="set_nodes")
+        rhs = 0
+        constraints = lhs == rhs
+
+        self.constraints.add_constraint("constraint_carrier_flow_import_supernodes", constraints)

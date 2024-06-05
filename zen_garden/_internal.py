@@ -81,7 +81,7 @@ def main(config, dataset_path=None, job_index=None):
             config.mga.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
             config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
             mga_output_folder = StringUtils.get_output_folder(analysis=config.mga.analysis, system=config.mga["system"])
-            config.mga.system.update(system)
+            config.mga.system.update(config.system)
             config.mga.system.update(config.mga.immutable_system_elements)
 
             scenarios, elements = ScenarioUtils.get_scenarios(

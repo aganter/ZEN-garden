@@ -18,7 +18,6 @@ from scipy.stats import truncnorm
 
 from zen_garden.preprocess.extract_input_data import DataInputMGA
 from zen_garden.model.optimization_setup import OptimizationSetup
-from zen_garden.model.objects.component import Constraint
 from zen_garden.utils import InputDataChecks
 from zen_garden.utils import StringUtils
 from zen_garden.postprocess.postprocess import Postprocess
@@ -83,7 +82,7 @@ class ModelingToGenerateAlternatives:
         self.sanity_checks_characteristic_scales_file()
         self.characteristic_scales = None
 
-        self.cost_constraint = Constraint(self.optimized_setup.sets)
+        self.cost_constraint = None
         self.cost_slack_variables = self.config_mga["cost_slack_variables"]
 
     def sanity_checks_mga_iteration_scenario(self):
@@ -243,18 +242,12 @@ class ModelingToGenerateAlternatives:
         pid = os.getpid()
         t_start = time.perf_counter()
         constraints = self.mga_solution.constraints
-        constraints.add_constraint_rule(
-            self.mga_solution.model,
-            name="constraint_optimal_cost_total_deviation",
-            index_sets=self.mga_solution.sets["set_time_steps_yearly"],
-            rule=self.constraint_cost_total_deviation,
-            doc="Limit on total cost of the energy system",
-        )
+        self.constraint_cost_total_deviation(model_constraints=constraints)
         t_end = time.perf_counter()
         logging.info("Time to construct pe.Sets: %.4f seconds", t_end - t_start)
         logging.info("Memory usage: %s MB", psutil.Process(pid).memory_info().rss / 1024**2)
 
-    def constraint_cost_total_deviation(self, year):
+    def constraint_cost_total_deviation(self, model_constraints):
         """
         Limit on the total cost objective of the energy system based on the optimized total cost of the energy system
         and a chosen deviation indicated by the cost_slack_variables.
@@ -262,14 +255,11 @@ class ModelingToGenerateAlternatives:
         :return: Constraint for the total cost of the energy system (type: Constraint)
         """
 
-        lhs = sum(
-            self.mga_solution.model.variables["net_present_cost"][year]
-            for year in self.mga_solution.sets["set_time_steps_yearly"]
-        )
+        lhs = self.mga_solution.model.variables["net_present_cost"].sum(dim="set_time_steps_yearly")
         rhs = (1 + self.cost_slack_variables) * self.optimized_setup.model.objective_value
-        cost_constraint = lhs <= rhs
+        self.cost_constraint = lhs <= rhs
 
-        return self.cost_constraint.return_contraints(cost_constraint)
+        model_constraints.add_constraint("constraint_optimal_cost_total_deviation", self.cost_constraint)
 
     def run(self):
         """
