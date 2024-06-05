@@ -2057,12 +2057,16 @@ class TechnologyRules(GenericRule):
         to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
         """
         constraints = []
+        capacity_types = self.variables["capacity"].coords["set_capacity_types"].values
         for supernode, nodes in self.optimization_setup.energy_system.grouped_nodes_into_supernodes:
             for tech in self.sets["set_technologies"]:
-                for capacity_type in self.system["set_capacity_types"]:
+                for capacity_type in capacity_types:
                     for year in self.sets["set_time_steps_yearly"]:
-                        lhs = self.variables["capacity_supernodes"].loc[tech, capacity_type, supernode, year]
-                        rhs = self.variables["capacity"].loc[tech, capacity_type, nodes, year].sum()
+                        lhs = (
+                            self.variables["capacity_supernodes"].loc[tech, capacity_type, supernode, year]
+                            - self.variables["capacity"].loc[tech, capacity_type, nodes, year].sum()
+                        )
+                        rhs = 0
                         constraints.append(lhs == rhs)
         return self.constraints.return_contraints(
             constraints,

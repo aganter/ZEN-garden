@@ -974,44 +974,27 @@ class EnergySystemRules(GenericRule):
 
     def objective_mga(self, model):
         """
-        Objective function for minimizing the MGA objective.
-
-        The objective is to minimize the sum of the weighted objective values of all years.
+        Objective function of MGA
+        The objective is the sum of the weighted decision variables of all years.
 
         .. math::
-            J = \sum_{y \in \mathcal{Y}} \frac{d}{L} \cdot x_{\text{aggregated}, y}
+            J = Sum_{y in Y} frac{d}{L} cdot x_{aggregated, y}
 
         :param model: Optimization model.
 
         :return: MGA objective function.
         """
-        objective_type = self.optimization_setup.config["objective_type"]
-        assert objective_type, "No MGA objective type specified."
-        logging.info("Decision variables to optimize: %s", objective_type)
         total = 0
         for index in np.ndindex(self.optimization_setup.mga_weights.shape):
             coords = {
                 dim: self.optimization_setup.mga_weights.coords[dim].values[index[dim_idx]]
                 for dim_idx, dim in enumerate(self.optimization_setup.mga_weights.dims)
             }
+
             weight = self.optimization_setup.mga_weights.sel(coords).values
             if not np.isnan(weight):
-                if objective_type == "technologies":
-                    variables = "capacity"
-                    objective_variable = model.variables[variables][
-                        coords[f"set_{objective_type}"],
-                        coords["set_capacity_types"],
-                        coords["set_location"],
-                        coords["set_time_steps_yearly"],
-                    ]
-                elif objective_type == "carriers":
-                    variables = "flow_import"
-                    objective_variable = model.variables[variables][
-                        coords[f"set_{objective_type}"],
-                        coords["set_nodes"],
-                        coords["set_time_steps_operation"],
-                    ]
-                else:
-                    raise KeyError(f"Objective type {objective_type} not known." "Choose 'technologies' or 'carriers'")
+                objective_variable = model.variables[self.optimization_setup.config["objective_variables"]][
+                    tuple(coords.values())
+                ]
                 total += weight * objective_variable
         return total

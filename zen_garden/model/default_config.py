@@ -180,7 +180,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
     """
 
     modeling_to_generate_alternatives: bool = False
-    objective_type: str = "technologies"
+    objective_variables: str = "technologies"
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()
@@ -195,6 +195,14 @@ class ModelingToGenerateAlternatives(Subscriptable):
         "conduct_scenario_analysis": True,
         "run_default_scenario": False,
     }
+    allowed_mga_objective_objects: list[str] = [
+        "set_carriers",
+        "set_technologies",
+        "set_conversion_technologies",
+        "set_storage_technologies",
+        "set_transport_technologies",
+    ]
+    allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
 
 
 class Config(Subscriptable):
@@ -211,3 +219,4 @@ class Config(Subscriptable):
 
     # Modeling to Generate Alternatives
     mga: ModelingToGenerateAlternatives = ModelingToGenerateAlternatives()
+    objective_variables: str = ""

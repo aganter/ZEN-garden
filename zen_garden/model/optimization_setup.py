@@ -75,8 +75,9 @@ class OptimizationSetup(object):
         self.parameters = None
         self.constraints = None
         self.sets = None
-        # Add this parameter for the MGA iterations, so default is none
+        # Add these parameters for the MGA iterations, so default is none
         self.mga_weights = None
+        self.mga_objective_coords: list = []
 
         # sorted list of class names
         element_classes = self.dict_element_classes.keys()

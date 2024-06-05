@@ -78,6 +78,7 @@ def main(config, dataset_path=None, job_index=None):
         # Fit the optimization problem for every steps defined in the config and save the results
         optimization_setup.fit_and_save()
         logging.info("--- Original Optimization finished ---")
+        logging.info("")
 
         # MODELING TO GENERATE ALTERNATIVES
         if config.mga["modeling_to_generate_alternatives"]:
@@ -96,7 +97,7 @@ def main(config, dataset_path=None, job_index=None):
             for scenario, scenario_dict in zip(scenarios, elements):
                 mga_iterations = ModelingToGenerateAlternatives(
                     config_mga=config,
-                    optized_setup=optimization_setup,
+                    optimized_setup=optimization_setup,
                     scenario_name=scenario,
                     scenario_dict=scenario_dict,
                 )

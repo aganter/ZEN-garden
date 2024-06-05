@@ -237,7 +237,7 @@ class DataInput:
         else:
             if self.element.config.mga["modeling_to_generate_alternatives"]:
                 logging.warning(
-                    "WARNING: Attributes file does not exist, because this is not expected for MGA iterations."
+                    "WARNING: Attributes file does not exist, because this is expected for MGA iterations."
                 )
                 attribute_dict = None
             else:
@@ -361,7 +361,7 @@ class DataInput:
         :return: attribute value, attribute unit
         """
         if attribute_name not in attribute_dict:
-            energy_to_power_ratio
+            raise AttributeError(f"Attribute {attribute_name} does not exist in input data of {self.element.name}")
         try:
             attribute_value = float(attribute_dict[attribute_name]["default_value"])
             attribute_unit = attribute_dict[attribute_name]["unit"]
