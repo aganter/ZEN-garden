@@ -47,19 +47,13 @@ class Results:
         if data_type == "units" and not component.has_units:
             return None
 
-        scenario_names = (
-            self.solution_loader.scenarios.keys()
-            if scenario_name is None
-            else [scenario_name]
-        )
+        scenario_names = self.solution_loader.scenarios.keys() if scenario_name is None else [scenario_name]
 
         ans = {}
 
         for scenario_name in scenario_names:
             scenario = self.solution_loader.scenarios[scenario_name]
-            ans[scenario_name] = self.solution_loader.get_component_data(
-                scenario, component, data_type=data_type
-            )
+            ans[scenario_name] = self.solution_loader.get_component_data(scenario, component, data_type=data_type)
 
         return ans
 
@@ -81,14 +75,10 @@ class Results:
         :param element_name: Filter results by a given element
         :param keep_raw: Keep the raw values of the rolling horizon optimization
         """
-        assert component.timestep_type is not None
-        series = self.solution_loader.get_component_data(
-            scenario, component, keep_raw=keep_raw
-        )
+        assert component.timestep_type is not None, "Component has no timestep type."
+        series = self.solution_loader.get_component_data(scenario, component, keep_raw=keep_raw)
 
-        if element_name is not None and element_name in series.index.get_level_values(
-            0
-        ):
+        if element_name is not None and element_name in series.index.get_level_values(0):
             series = series.loc[element_name]
 
         if year is None:
@@ -116,17 +106,10 @@ class Results:
 
             return ans
 
-        sequence_timesteps = self.solution_loader.get_sequence_time_steps(
-            scenario, component.timestep_type
-        )
+        sequence_timesteps = self.solution_loader.get_sequence_time_steps(scenario, component.timestep_type)
 
-        if (
-            component.component_type is ComponentType.dual
-            and component.timestep_type is not None
-        ):
-            timestep_duration = self.solution_loader.get_timestep_duration(
-                scenario, component
-            )
+        if component.component_type is ComponentType.dual and component.timestep_type is not None:
+            timestep_duration = self.solution_loader.get_timestep_duration(scenario, component)
 
             annuity = self._get_annuity(scenario)
             series = series.div(timestep_duration, axis=1)
@@ -147,9 +130,7 @@ class Results:
         if year is not None:
             _total_hours_per_year = scenario.system.unaggregated_time_steps_per_year
 
-            hours_of_year = list(
-                range(year * _total_hours_per_year, (year + 1) * _total_hours_per_year)
-            )
+            hours_of_year = list(range(year * _total_hours_per_year, (year + 1) * _total_hours_per_year))
 
             output_df = output_df[hours_of_year]
 
@@ -231,9 +212,7 @@ class Results:
             ans = series.unstack(component.timestep_name)
             return ans[years]
 
-        timestep_duration = self.solution_loader.get_timestep_duration(
-            scenario, component
-        )
+        timestep_duration = self.solution_loader.get_timestep_duration(scenario, component)
 
         unstacked_series = series.unstack(component.timestep_name)
         total_value = unstacked_series.multiply(timestep_duration, axis=1)  # type: ignore
@@ -249,9 +228,7 @@ class Results:
                 ans.insert(len(ans.columns), year, total_value[timestep_list].sum(axis=1, skipna=False))  # type: ignore # noqa
 
         if "mf" in ans.index.names:
-            ans = ans.reorder_levels(
-                [i for i in ans.index.names if i != "mf"] + ["mf"]
-            ).sort_index(axis=0)
+            ans = ans.reorder_levels([i for i in ans.index.names if i != "mf"] + ["mf"]).sort_index(axis=0)
 
         return ans
 
@@ -284,9 +261,7 @@ class Results:
 
         for scenario_name in scenario_names:
             scenario = self.solution_loader.scenarios[scenario_name]
-            current_total = self.get_total_per_scenario(
-                scenario, component, element_name, year, keep_raw
-            )
+            current_total = self.get_total_per_scenario(scenario, component, element_name, year, keep_raw)
 
             if type(current_total) is pd.Series:
                 current_total = current_total.rename(component_name)
@@ -295,9 +270,7 @@ class Results:
 
         return self._concat_scenarios_dict(scenarios_dict)
 
-    def _concat_scenarios_dict(
-        self, scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"]
-    ) -> pd.DataFrame:
+    def _concat_scenarios_dict(self, scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"]) -> pd.DataFrame:
         """
         Concatenates a dict of the form str: Data to one dataframe.
 
@@ -310,16 +283,12 @@ class Results:
             return ans
 
         if isinstance(scenarios_dict[scenario_names[0]], pd.Series):
-            total_value = pd.concat(
-                scenarios_dict, keys=scenarios_dict.keys(), axis=1
-            ).T
+            total_value = pd.concat(scenarios_dict, keys=scenarios_dict.keys(), axis=1).T
         else:
             try:
                 total_value = pd.concat(scenarios_dict, keys=scenarios_dict.keys())  # type: ignore # noqa
             except Exception:
-                total_value = pd.concat(
-                    scenarios_dict, keys=scenarios_dict.keys(), axis=1
-                ).T
+                total_value = pd.concat(scenarios_dict, keys=scenarios_dict.keys(), axis=1).T
         return total_value
 
     def _get_annuity(self, scenario: Scenario, discount_to_first_step: bool = True):
@@ -332,9 +301,7 @@ class Results:
         system = scenario.system
         discount_rate_component = self.solution_loader.components["discount_rate"]
         # calculate annuity
-        discount_rate = self.solution_loader.get_component_data(
-            scenario, discount_rate_component
-        ).squeeze()
+        discount_rate = self.solution_loader.get_component_data(scenario, discount_rate_component).squeeze()
 
         years = list(range(0, system["optimized_years"]))
 
@@ -347,34 +314,24 @@ class Results:
                 interval_between_years_this_year = system.interval_between_years
             if self.solution_loader.has_rh:
                 if discount_to_first_step:
-                    annuity[year] = interval_between_years_this_year * (
-                        1 / (1 + discount_rate)
-                    )
+                    annuity[year] = interval_between_years_this_year * (1 / (1 + discount_rate))
                 else:
                     annuity[year] = sum(
                         ((1 / (1 + discount_rate)) ** (_intermediate_time_step))
-                        for _intermediate_time_step in range(
-                            0, interval_between_years_this_year
-                        )
+                        for _intermediate_time_step in range(0, interval_between_years_this_year)
                     )
             else:
                 if discount_to_first_step:
                     annuity[year] = interval_between_years_this_year * (
-                        (1 / (1 + discount_rate))
-                        ** (interval_between_years * (year - years[0]))
+                        (1 / (1 + discount_rate)) ** (interval_between_years * (year - years[0]))
                     )
                 else:
                     annuity[year] = sum(
                         (
                             (1 / (1 + discount_rate))
-                            ** (
-                                interval_between_years * (year - years[0])
-                                + _intermediate_time_step
-                            )
+                            ** (interval_between_years * (year - years[0]) + _intermediate_time_step)
                         )
-                        for _intermediate_time_step in range(
-                            0, interval_between_years_this_year
-                        )
+                        for _intermediate_time_step in range(0, interval_between_years_this_year)
                     )
         return annuity
 
@@ -401,9 +358,7 @@ class Results:
             return None
 
         component = self.solution_loader.components[constraint]
-        assert (
-            component.component_type is ComponentType.dual
-        ), "Given constraint name is not of type Dual."
+        assert component.component_type is ComponentType.dual, "Given constraint name is not of type Dual."
 
         _duals = self.get_full_ts(
             component_name=constraint,
@@ -430,20 +385,14 @@ class Results:
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
-        res = self.get_df(
-            component_name, scenario_name=scenario_name, data_type="units"
-        )
+        res = self.get_df(component_name, scenario_name=scenario_name, data_type="units")
         if res is None:
             return None
         units = res[scenario_name]
         if droplevel:
             # TODO make more flexible
-            loc_idx = ["set_nodes", "set_location", "set_edges"]
-            time_idx = [
-                "set_time_steps_yearly",
-                "set_time_steps_operation",
-                "set_time_steps_storage",
-            ]
+            loc_idx = ["node", "location", "edge"]
+            time_idx = ["year", "time_operation", "time_storage_level"]
             drop_idx = pd.Index(loc_idx + time_idx).intersection(units.index.names)
             units.index = units.index.droplevel(drop_idx.to_list())
             units = units[~units.index.duplicated()]
@@ -513,9 +462,7 @@ class Results:
 
 if __name__ == "__main__":
     try:
-        spec = importlib.util.spec_from_file_location(
-            "module", Path(__file__).parents[3] / "data" / "config.py"
-        )
+        spec = importlib.util.spec_from_file_location("module", Path(__file__).parents[3] / "data" / "config.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         config = module.config
@@ -524,9 +471,7 @@ if __name__ == "__main__":
             config = Config(json.load(f))
 
     model_name = os.path.basename(config.analysis["dataset"])
-    if os.path.exists(
-        out_folder := os.path.join(config.analysis["folder_output"], model_name)
-    ):
+    if os.path.exists(out_folder := os.path.join(config.analysis["folder_output"], model_name)):
         r = Results(out_folder)
     else:
         logging.critical("No results folder found!")
