@@ -95,6 +95,8 @@ def main(config, dataset_path=None, job_index=None):
             ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
 
             for scenario, scenario_dict in zip(scenarios, elements):
+                logging.info("--- MGA for: %s ---", scenario)
+                logging.info("")
                 mga_iterations = ModelingToGenerateAlternatives(
                     config_mga=config,
                     optimized_setup=optimization_setup,
@@ -103,5 +105,5 @@ def main(config, dataset_path=None, job_index=None):
                 )
                 mga_iterations.run()
 
-    logging.info("--- Optimization finished ---")
+    logging.info("--- MGA run finished ---")
     return optimization_setup
