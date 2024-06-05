@@ -131,9 +131,9 @@ class ModelingToGenerateAlternatives:
         """
         dict_to_check = self.mga_data_input.characteristics_scales_dict
         # Check that the value of the coords of the objective variables are a subset of keys of the dictionary
-        subset_objective = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
-        set_solution_variables = getattr(self.optimized_setup.model.solution, self.mga_objective_obj).values.tolist()
-        common_variables = list(set(subset_objective).intersection(set_solution_variables))
+        subset_objective_vars = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
+        set_solution_vars = getattr(self.optimized_setup.model.solution, self.mga_objective_obj).values.tolist()
+        common_variables = list(set(subset_objective_vars).intersection(set_solution_vars))
         for key in common_variables:
             assert key in dict_to_check.keys(), f"{key} is not in the characteristic scales dictionary"
         # Check each element has keys "default_value" to be a number and "unit" to be a string or a number
@@ -183,8 +183,8 @@ class ModelingToGenerateAlternatives:
         complete_xr_variables = getattr(
             self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"]
         )
-        subset_objective = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
-        condition = complete_xr_variables[self.mga_objective_obj].isin(subset_objective)
+        subset_objective_vars = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
+        condition = complete_xr_variables[self.mga_objective_obj].isin(subset_objective_vars)
         xr_variables = complete_xr_variables.where(condition, drop=True)
         self.characteristic_scales = xr.full_like(xr_variables, fill_value=np.nan)
 
