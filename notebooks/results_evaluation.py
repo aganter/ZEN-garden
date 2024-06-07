@@ -1947,6 +1947,7 @@ def draw_electricity_generation(electricity_data, shapefile_path, file_path, yea
 if __name__ == '__main__':
 
     folder_path = 'scenarios_biomass_070624'
+    # scenarios to be analyzed
     scenarios = [#'scenario_',
                  #'scenario_electrification',
                  #'scenario_hydrogen',
@@ -1970,13 +1971,14 @@ if __name__ == '__main__':
                  #'scenario_biomass_share_0.7'
                  ]
 
+    ## save csv files for specific variables
     #for scenario in scenarios:
      #   save_total(folder_path, scenario)
-
     #for scenario in scenarios:
      #   save_imports_exports(folder_path, scenario)
 
-    # generate sankey diagram
+    ## generate sankey diagram
+    # target technologies with only inputs
     target_technologies = ['BF_BOF',
                            'BF_BOF_CCS',
                            'EAF',
@@ -1989,6 +1991,7 @@ if __name__ == '__main__':
                            'refinery',
                            'biomethane_SMR_methanol', 'biomethane_SMR', 'biomethane_SMR_CCS', 'biomethane_haber_bosch'
                            ]
+    # intermediate technologies with inputs and outputs
     intermediate_technologies = [#'anaerobic_digestion',
         'biomethane_conversion',
         'ASU',
@@ -2003,8 +2006,9 @@ if __name__ == '__main__':
         'carbon_storage',
         'carbon_evaporation'
     ]
-    years = [0,
 
+    # years to plot sankey diagrams for
+    years = [0,
              #6,
              #8,
              #13,
@@ -2015,6 +2019,7 @@ if __name__ == '__main__':
      #  for scenario in scenarios:
       #      generate_sankey_diagram(folder_path, scenario, target_technologies, intermediate_technologies, year, title="Process depiction in", save_file=False)
 
+    ## generate map with pie charts for biomass usage
     years = [0, #8, 13
              #6,
              16,
@@ -2025,8 +2030,7 @@ if __name__ == '__main__':
             shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
             #draw_wedges_on_map(folder_path, shapefile_path, year, radius_factor=0.004, scenario=scenario)
 
-    # generate bar charts for hydrogen production tech mix
-
+    ## generate bar charts for hydrogen production tech mix
     carrier = 'hydrogen'
     #for scenario in scenarios:
      #     plot_outputs(folder_path, scenario, carrier, save_file=True)
@@ -2035,26 +2039,10 @@ if __name__ == '__main__':
         df = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
         df_input = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
         years = [0, 6, 16, 26]
+        # plot location and size of hydrogen production technologies
         #plot_dataframe_on_map(df, df_input, 'technology', years,'nuts_data/NUTS_RG_20M_2021_4326.shp', save_png=True)
 
-    for scenario in scenarios:
-        transport_data = res_scenario.get_total("flow_transport").xs(scenario).reset_index()
-        shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
-        output_data = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
-        electricity_data = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
-        file_path = "el_generation_2022.xlsx"
-        years = [0,
-                 6,
-                 16,
-                 26
-                 ]
-        #for year in years:
-         #   draw_transport_and_capture(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
-          #  draw_hydrogen_pipelines(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
-         #   draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year, scenario, figsize=(20, 20))
-            #draw_electricity_generation(electricity_data, shapefile_path, file_path, year, scenario, figsize=(20, 20))
-
-
+    ## auxiliary plots to analyze results
     #calc_lco(scenario = "scenario_", discount_rate = 0.06, carrier="ammonia")
 
     technologies = ['ASU', 'haber_bosch', 'e_haber_bosch', 'EAF', 'BF_BOF', 'DRI', 'SMR', 'methanol_synthesis', 'refinery',
@@ -2064,10 +2052,18 @@ if __name__ == '__main__':
      #   plot_capacity_addition(folder_path, scenario, technology, save_file=False)
       #  plot_existing_capacity(folder_path, scenario, technology, save_file=False)
 
+
+    ####################################################################################################################
+    ####################### PLOTS FOR PAPER ############################################################################
+    ####################################################################################################################
+
+
+    ## single vs. integrated industries bar plots (claim 1)
     #for scenario in scenarios:
-     #   plot_carbon_capture(scenario)
+    #    plot_carbon_capture(scenario) # double check computations on how to assign biomass feedstocks
     #    plot_biomass_per_industry(scenario)
 
+    ## pareto frontiers for varying biomass avaialbilities (claim 2)
     results = res_scenario
     scenarios = [
         'scenario_', 'scenario_biomass_share_0.7',
@@ -2095,5 +2091,24 @@ if __name__ == '__main__':
 
     carrier = 'electricity'
     #plot_biomass_and_electricity(carrier, results, years)
+
+
+    # plot transport and electricity generation maps (claim 3)
+    for scenario in scenarios:
+        transport_data = res_scenario.get_total("flow_transport").xs(scenario).reset_index()
+        shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
+        output_data = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
+        electricity_data = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
+        file_path = "el_generation_2022.xlsx"
+        years = [0,
+                 6,
+                 16,
+                 26
+                 ]
+        #for year in years:
+         #   draw_transport_and_capture(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
+          #  draw_hydrogen_pipelines(transport_data, output_data, shapefile_path, year, scenario, figsize=(20, 20))
+         #   draw_transport_arrows_and_biomass_usage(transport_data, shapefile_path, year, scenario, figsize=(20, 20))
+            #draw_electricity_generation(electricity_data, shapefile_path, file_path, year, scenario, figsize=(20, 20)) ## claim 3
 
 
