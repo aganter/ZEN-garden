@@ -31,7 +31,7 @@ def generate_existing_capacities(file_demand, lifetime, technology, max_load):
     expanded_df = pd.DataFrame(new_rows)
 
     expanded_df = expanded_df.drop(['demand'], axis=1)
-    expanded_df.to_csv(f'../data/hard_to_abate/set_technologies/set_conversion_technologies/{technology}/capacity_existing_seconds.csv', index=False)
+    expanded_df.to_csv(f'../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/{technology}/capacity_existing_seconds.csv', index=False)
 
     return expanded_df
 
@@ -61,7 +61,7 @@ def generate_existing_capacity_ASU(file_demand, lifetime, technology, max_load):
     expanded_df = pd.DataFrame(new_rows)
 
     expanded_df = expanded_df.drop(['demand'], axis=1)
-    expanded_df.to_csv(f'../data/hard_to_abate/set_technologies/set_conversion_technologies/{technology}/capacity_existing_seconds.csv', index=False)
+    expanded_df.to_csv(f'../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/{technology}/capacity_existing_seconds.csv', index=False)
 
     return expanded_df
 
@@ -84,7 +84,7 @@ def generate_existing_capacities_steel(file_demand, lifetime_BF_BOF, lifetime_EA
     print(expanded_df_BF_BOF.head())
     expanded_df_BF_BOF = expanded_df_BF_BOF.drop(['demand'], axis=1)
     expanded_df_BF_BOF.to_csv(
-        f'../data/hard_to_abate/set_technologies/set_conversion_technologies/BF_BOF/capacity_existing_seconds.csv',
+        f'../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/BF_BOF/capacity_existing_seconds.csv',
         index=False)
 
     capacity_existing_EAF = capacity_existing.copy()
@@ -102,7 +102,7 @@ def generate_existing_capacities_steel(file_demand, lifetime_BF_BOF, lifetime_EA
     print(expanded_df_EAF.head())
     expanded_df_EAF = expanded_df_EAF.drop(['demand'], axis=1)
     expanded_df_EAF.to_csv(
-        f'../data/hard_to_abate/set_technologies/set_conversion_technologies/EAF/capacity_existing_seconds.csv',
+        f'../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/EAF/capacity_existing_seconds.csv',
         index=False)
 
     capacity_existing_DRI = capacity_existing.copy()
@@ -120,7 +120,7 @@ def generate_existing_capacities_steel(file_demand, lifetime_BF_BOF, lifetime_EA
     expanded_df_DRI = expanded_df_DRI.drop(['demand'], axis=1)
     print(expanded_df_DRI.head())
     expanded_df_DRI.to_csv(
-        f'../data/hard_to_abate/set_technologies/set_conversion_technologies/DRI/capacity_existing_seconds.csv',
+        f'../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/DRI/capacity_existing_seconds.csv',
         index=False)
 
 
@@ -165,17 +165,17 @@ def existing_capacities_hydrogen(file_path):
     electrolysis_capacity = electrolysis_capacity.drop('eigl_process', axis=1)
     electrolysis_capacity['year_construction'] = electrolysis_capacity['year_construction'].apply(lambda year: adjust_year(year, lifetime=10))
     electrolysis_capacity = electrolysis_capacity.groupby(['node', 'year_construction'], as_index=False).agg({'capacity_existing': 'sum'})
-    electrolysis_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/electrolysis/capacity_existing.csv', index=False)
+    electrolysis_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/electrolysis/capacity_existing.csv', index=False)
 
     SMR_capacity = filtered_df[filtered_df['eigl_process'].str.contains('other or unknown', case=False, na=False)]
     SMR_capacity = SMR_capacity.drop('eigl_process', axis=1)
-    #SMR_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/SMR/capacity_existing.csv', index=False)
+    #SMR_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/SMR/capacity_existing.csv', index=False)
 
     SMR_CCS_capacity = filtered_df[filtered_df['eigl_process'].str.contains('CCS', case=False, na=False)]
     SMR_CCS_capacity = SMR_CCS_capacity.drop('eigl_process', axis=1)
     SMR_CCS_capacity['year_construction'] = SMR_CCS_capacity['year_construction'].apply(lambda year: adjust_year(year, lifetime=25))
     SMR_CCS_capacity = SMR_CCS_capacity.groupby(['node', 'year_construction'], as_index=False).agg({'capacity_existing': 'sum'})
-    SMR_CCS_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/SMR_CCS/capacity_existing.csv', index=False)
+    SMR_CCS_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/SMR_CCS/capacity_existing.csv', index=False)
 
 def existing_capacities_carbon_capture(file_path):
     with open(file_path, 'rb') as file:
@@ -210,13 +210,13 @@ def existing_capacities_carbon_capture(file_path):
     DAC_capacity = DAC_capacity.drop(['capture_type', 'emission_type'], axis=1)
     DAC_capacity['year_construction'] = DAC_capacity['year_construction'].apply(lambda year: adjust_year(year, lifetime=25))
     DAC_capacity = DAC_capacity.groupby(['node', 'year_construction'], as_index=False).agg({'capacity_existing': 'sum'})
-    DAC_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/DAC/capacity_existing.csv', index=False)
+    DAC_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/DAC/capacity_existing.csv', index=False)
 
     BF_BOF_CCS_capacity = filtered_df[filtered_df['emission_type'].str.contains('steel', case=False, na=False)]
     BF_BOF_CCS_capacity = BF_BOF_CCS_capacity.drop(['emission_type', 'capture_type'], axis=1)
     BF_BOF_CCS_capacity['year_construction'] = BF_BOF_CCS_capacity['year_construction'].apply(lambda year: adjust_year(year, lifetime=25))
     BF_BOF_CCS_capacity = BF_BOF_CCS_capacity.groupby(['node', 'year_construction'], as_index=False).agg({'capacity_existing': 'sum'})
-    BF_BOF_CCS_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/set_retrofitting_technologies/BF_BOF_CCS/capacity_existing.csv', index=False)
+    BF_BOF_CCS_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/set_retrofitting_technologies/BF_BOF_CCS/capacity_existing.csv', index=False)
 
 def existing_capacities_steel(file_path):
     with open(file_path, 'rb') as file:
@@ -253,7 +253,7 @@ def existing_capacities_steel(file_path):
     BF_BOF_capacity['year_construction'] = BF_BOF_capacity['year_construction'].apply(lambda year: adjust_year(year, lifetime=40))
     BF_BOF_capacity = BF_BOF_capacity.groupby(['node', 'year_construction'], as_index=False).agg({'capacity_existing': 'sum'})
     BF_BOF_capacity = BF_BOF_capacity[BF_BOF_capacity['year_construction'] != 0.0]
-    BF_BOF_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/BF_BOF/capacity_existing.csv', index=False)
+    BF_BOF_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/BF_BOF/capacity_existing.csv', index=False)
 
     demand_steel = pd.read_csv("../data/hard_to_abate/set_carriers/steel/demand.csv")
     steel_merged = pd.merge(demand_steel, BF_BOF_capacity, how='left', on='node')
@@ -270,7 +270,7 @@ def existing_capacities_steel(file_path):
     DRI_capacity['year_construction'] = DRI_capacity['year_construction'].apply(lambda year: adjust_year(year, lifetime=25))
     DRI_capacity = DRI_capacity.groupby(['node', 'year_construction'], as_index=False).agg({'capacity_existing': 'sum'})
     DRI_capacity = DRI_capacity[DRI_capacity['year_construction'] != 0.0]
-    DRI_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/DRI/capacity_existing.csv', index=False)
+    DRI_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/DRI/capacity_existing.csv', index=False)
 
     EAF_capacity = filtered_df[filtered_df['primary_production_type'].str.contains('EAF', case=False, na=False)]
     EAF_capacity = EAF_capacity.drop('primary_production_type', axis=1)
@@ -288,7 +288,7 @@ def existing_capacities_steel(file_path):
     print(steel_merged['capacity_existing'].sum()/steel_merged['demand'].sum())
 
     print(steel_merged)
-    EAF_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/EAF/capacity_existing.csv', index=False)
+    EAF_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/EAF/capacity_existing.csv', index=False)
 
 def existing_capacities_cement(file_path):
     with open(file_path, 'rb') as file:
@@ -328,7 +328,7 @@ def existing_capacities_cement(file_path):
     merged_df.loc[(merged_df['year_construction'] > 0.0) & (merged_df['capacity_existing'] == 0.0) & (~merged_df['demand'].isna()), 'capacity_existing'] = merged_df['demand']
     merged_df = merged_df[['node', 'year_construction', 'capacity_existing']]
     print(merged_df)
-    cement_plant_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/cement_plant/capacity_existing.csv', index=False)
+    cement_plant_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/cement_plant/capacity_existing.csv', index=False)
 
 def existing_capacities_methanol(file_path, sheet_name):
     with open(file_path, 'rb') as file:
@@ -368,7 +368,7 @@ def existing_capacities_methanol(file_path, sheet_name):
     merged_df = pd.merge(methanol_synthesis_capacity, demand_methanol, on='node', how='left')
     merged_df = merged_df[['node', 'year_construction', 'capacity_existing']]
     print(merged_df)
-    methanol_synthesis_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/methanol_synthesis/capacity_existing.csv', index=False)
+    methanol_synthesis_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/methanol_synthesis/capacity_existing.csv', index=False)
 
 def existing_capacities_ammonia(file_path, sheet_name):
     with open(file_path, 'rb') as file:
@@ -408,7 +408,7 @@ def existing_capacities_ammonia(file_path, sheet_name):
     merged_df = pd.merge(haber_bosch_capacity, demand_ammonia, on='node', how='left')
     merged_df = merged_df[['node', 'year_construction', 'capacity_existing']]
     print(merged_df)
-    haber_bosch_capacity.to_csv('../data/hard_to_abate/set_technologies/set_conversion_technologies/haber_bosch/capacity_existing.csv', index=False)
+    haber_bosch_capacity.to_csv('../data/hard_to_abate_biomass_040624/set_technologies/set_conversion_technologies/haber_bosch/capacity_existing.csv', index=False)
     return haber_bosch_capacity
 
 def compare_capa_to_demand(demand_file, capacity_file, capacity_file_steel):

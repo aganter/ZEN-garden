@@ -47,13 +47,13 @@ def natural_gas_prices(prices_file, shapefile_path):
     price_import = nuts2[['NUTS_ID', 'price_import']]
     price_import = price_import.rename(columns={'NUTS_ID': 'nodes'})
     print(price_import)
-    price_import.to_csv('../data/hard_to_abate/set_carriers/natural_gas/price_import_high.csv', index=False)
+    price_import.to_csv('../data/hard_to_abate_biomass_040624/set_carriers/natural_gas/price_import_high.csv', index=False)
 
 def new_start_year(file):
     df = pd.read_csv(file)
     df.loc[df['year'] == 2023, 'price_import_yearly_variation'] = 1.00000
     print(df)
-    df.to_csv('../data/hard_to_abate/set_carriers/natural_gas/price_import_yearly_variation.csv', index=False)
+    df.to_csv('../data/hard_to_abate_biomass_040624/set_carriers/natural_gas/price_import_yearly_variation.csv', index=False)
 
 
 shapefile_path = "../notebooks/nuts_data/NUTS_RG_20M_2021_4326.shp"

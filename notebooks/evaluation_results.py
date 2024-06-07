@@ -14,10 +14,12 @@ from plotly.subplots import make_subplots
 import matplotlib.ticker as ticker
 import plotly.io as pio
 
-res_scenario = Results("../outputs/hard_to_abate_2024_new_constraint/")
+res_scenario = Results("../outputs/hard_to_abate_2024_steel/")
 
 df_emissions = res_scenario.get_df("carbon_emissions_cumulative")
 print(df_emissions)
+emissions = res_scenario.get_total("carbon_emissions_annual")
+print(emissions)
 def get_emissions(folder_path, scenario):
     scenario_name_mapping = {
         'scenario_': 'Baseline Scenario',
@@ -201,7 +203,7 @@ def generate_sankey_diagram(folder_path, scenario, target_technologies, intermed
         cement_technologies = ['cement_plant', 'cement_plant_oxy_combustion', 'cement_plant_pcc_coal', 'cement_plant_pcc_ng']
         methanol_technologies = ['gasification_methanol', 'methanol_synthesis', 'methanol_from_hydrogen']
         refining_technologies = ['refinery']
-        all_technologies = ['BF_BOF','BF_BOF_CCS', 'EAF', 'carbon_liquefication', 'carbon_removal', 'carbon_storage',
+        all_technologies = ['BF_BOF','BF_BOF_CCS', 'EAF', 'carbon_liquefaction', 'carbon_removal', 'carbon_storage',
                            'cement_plant', 'cement_plant_oxy_combustion', 'cement_plant_pcc_coal', 'cement_plant_pcc_ng',
                            'e_haber_bosch', 'haber_bosch', 'gasification_methanol', 'methanol_from_hydrogen', 'methanol_synthesis',
                            'refinery']
@@ -390,7 +392,7 @@ if __name__ == '__main__':
 
     # generate sankey diagram
     target_technologies = [#'BF_BOF','BF_BOF_CCS', 'EAF', 'BF_BOF_retrofit', 'BF_BOF_CCS_retrofit'
-                           #'carbon_liquefication', 'carbon_removal', 'carbon_storage',
+                           #'carbon_liquefaction', 'carbon_removal', 'carbon_storage',
                            #'cement_plant', 'cement_plant_oxy_combustion', 'cement_plant_pcc_coal', 'cement_plant_pcc_ng', 'cement_plant_post_comb',
                            'e_haber_bosch', 'haber_bosch',
                            #'gasification_methanol', 'methanol_from_hydrogen', 'methanol_synthesis',
@@ -404,7 +406,7 @@ if __name__ == '__main__':
                                  'SMR', 'SMR_CCS', 'gasification', 'gasification_CCS',
                                  'electrolysis',
                                  'photovoltaics', 'pv_ground', 'pv_rooftop', 'wind_offshore', 'wind_onshore',
-                                 'carbon_liquefication', 'carbon_removal', 'carbon_storage'
+                                 'carbon_liquefaction', 'carbon_removal', 'carbon_storage'
                                 ]
     years = ['0', '3', '13']
     #for year in years:
@@ -1214,7 +1216,7 @@ def generate_sankey_diagram(folder_path, scenario, target_technologies, intermed
         'methanol': 'methanol',
         'ammonia': 'ammonia',
         'BF_BOF_CCS': 'BF_BOF_CCS',
-        'carbon_liquefication': 'CCS',
+        'carbon_liquefaction': 'CCS',
         'carbon_removal': 'CCS',
         'carbon_storage': 'CCS',
         'e_haber_bosch': 'e_haber_bosch',
@@ -2419,7 +2421,7 @@ if __name__ == '__main__':
     target_technologies = ['BF_BOF',
                            'BF_BOF_CCS',
                            'EAF',
-                           'carbon_liquefication',
+                           'carbon_liquefaction',
                            'carbon_storage',
                            'cement_plant',
                             'cement_plant_oxy_combustion', 'cement_plant_post_comb',
@@ -2443,7 +2445,7 @@ if __name__ == '__main__':
                                  'carbon_conversion', 'carbon_methanol_conversion',
                                  'SMR_methanol', 'gasification_methanol_h2'
                                  #'photovoltaics', 'pv_ground', 'pv_rooftop', 'wind_offshore', 'wind_onshore',
-                                 'carbon_liquefication', 'carbon_removal',
+                                 'carbon_liquefaction', 'carbon_removal',
                                  'carbon_storage',
                                  'carbon_evaporation'
                                 ]
