@@ -35,7 +35,16 @@ from matplotlib.colors import LogNorm
 
 plt.rcParams.update({'font.size': 22})
 
-res_scenario = Results("../outputs/hard_to_abate_scenarios_biomass_070624/")
+res_scenario = Results("../outputs/hard_to_abate_scenarios_240524/")
+
+dry_biomass = (res_scenario.get_total('flow_conversion_input').xs('scenario_').xs('dry_biomass', level = 'carrier').sum() /
+               res_scenario.get_total('availability_import').xs('scenario_').xs('dry_biomass', level='carrier').sum())
+
+wet_biomass =  (res_scenario.get_total('flow_conversion_input').xs('scenario_').xs('wet_biomass', level='carrier').sum() /
+                res_scenario.get_total('availability_import').xs('scenario_').xs('wet_biomass', level= 'carrier').sum())
+
+biomass_cement = (res_scenario.get_total('flow_conversion_input').xs('scenario_').xs('biomass_cement', level='carrier').sum() /
+                  res_scenario.get_total('availability_import').xs('scenario_').xs('biomass_cement', level='carrier').sum())
 
 '''res_ammonia = Results("../outputs/hard_to_abate_ammonia_280524")
 res_cement = Results("../outputs/hard_to_abate_cement_280524")
@@ -1948,12 +1957,12 @@ if __name__ == '__main__':
 
     folder_path = 'scenarios_biomass_070624'
     # scenarios to be analyzed
-    scenarios = [#'scenario_',
+    scenarios = ['scenario_',
                  #'scenario_electrification',
                  #'scenario_hydrogen',
                  #'scenario_biomass',
                  #'scenario_CCS',
-                 #'scenario_high_demand',
+                 'scenario_high_demand',
                  #'scenario_low_demand',
                  #'scenario_biomass_high_price_2',
                  #'scenario_biomass_high_price_3',
@@ -1961,7 +1970,7 @@ if __name__ == '__main__':
                  #'scenario_biomass_high_price_7',
                  #'scenario_biomass_high_price_10',
                  #'scenario_no_biomass',
-                 'scenario_biomass_share_0.0',
+                 #'scenario_biomass_share_0.0',
                  #'scenario_biomass_share_0.1',
                  #'scenario_biomass_share_0.2',
                  #'scenario_biomass_share_0.3',
@@ -2007,12 +2016,13 @@ if __name__ == '__main__':
         'carbon_evaporation'
     ]
 
-    # years to plot sankey diagrams for
+    ## years to plot sankey diagrams for
     years = [0,
-             #6,
+             6,
              #8,
              #13,
-             #16,
+             16,
+             20,
              26
              ]
     #for year in years:
@@ -2020,15 +2030,15 @@ if __name__ == '__main__':
       #      generate_sankey_diagram(folder_path, scenario, target_technologies, intermediate_technologies, year, title="Process depiction in", save_file=False)
 
     ## generate map with pie charts for biomass usage
-    years = [0, #8, 13
+    years = [#0, #8, 13
              #6,
-             16,
+            # 16,
              26
              ]
     for scenario in scenarios:
         for year in years:
             shapefile_path = "nuts_data/NUTS_RG_20M_2021_4326.shp"
-            #draw_wedges_on_map(folder_path, shapefile_path, year, radius_factor=0.004, scenario=scenario)
+            draw_wedges_on_map(folder_path, shapefile_path, year, radius_factor=0.004, scenario=scenario)
 
     ## generate bar charts for hydrogen production tech mix
     carrier = 'hydrogen'
@@ -2060,18 +2070,18 @@ if __name__ == '__main__':
 
     ## single vs. integrated industries bar plots (claim 1)
     #for scenario in scenarios:
-    #    plot_carbon_capture(scenario) # double check computations on how to assign biomass feedstocks
+     #   plot_carbon_capture(scenario) # double check computations on how to assign biomass feedstocks
     #    plot_biomass_per_industry(scenario)
 
     ## pareto frontiers for varying biomass avaialbilities (claim 2)
     results = res_scenario
-    scenarios = [
+    '''scenarios = [
         'scenario_', 'scenario_biomass_share_0.7',
         'scenario_biomass_share_0.6', 'scenario_biomass_share_0.5',
         'scenario_biomass_share_0.4', 'scenario_biomass_share_0.3',
         'scenario_biomass_share_0.2',
         'scenario_biomass_share_0.1', 'scenario_biomass_share_0.0'
-    ]
+    ]'''
     transport_techs = ['carbon_pipeline', 'hydrogen_pipeline']
     years = [0, 1, 2, 3, 4, 5,
              6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
@@ -2100,9 +2110,12 @@ if __name__ == '__main__':
         output_data = res_scenario.get_total("flow_conversion_output").xs(scenario).reset_index()
         electricity_data = res_scenario.get_total("flow_conversion_input").xs(scenario).reset_index()
         file_path = "el_generation_2022.xlsx"
-        years = [0,
-                 6,
+        years = [#0,
+                 #6,
                  16,
+                 19,
+                 20,
+                 21,
                  26
                  ]
         #for year in years:

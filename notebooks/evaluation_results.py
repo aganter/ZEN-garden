@@ -14,7 +14,7 @@ from plotly.subplots import make_subplots
 import matplotlib.ticker as ticker
 import plotly.io as pio
 
-res_scenario = Results("../outputs/hard_to_abate_2024_steel/")
+res_scenario = Results("../outputs/hard_to_abate_refining_2024/")
 
 df_emissions = res_scenario.get_df("carbon_emissions_cumulative")
 print(df_emissions)
@@ -35,7 +35,6 @@ def get_emissions(folder_path, scenario):
 
     carbon_emissions_carrier = res_scenario.get_df('carbon_emissions_carrier', scenario)
     file_path = os.path.join(folder_path, f"carbon_emissions_carrier_{scenario}.csv")
-    print(carbon_emissions_carrier)
     carbon_emissions_carrier.to_csv(file_path)
 
     file_path = os.path.join(folder_path, f"carbon_emissions_carrier_{scenario}.csv")
