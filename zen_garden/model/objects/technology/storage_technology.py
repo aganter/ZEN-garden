@@ -403,24 +403,39 @@ class StorageTechnologyRules(GenericRule):
 
         # variables
         flow_import = self.variables["flow_import"]
+        flow_export = self.variables["flow_export"]
         flow_input = self.variables["flow_conversion_input"]
+        flow_output = self.variables["flow_conversion_output"]
         flow_storage_charge = self.variables["flow_storage_charge"]
         flow_storage_discharge = self.variables["flow_storage_discharge"]
 
-        const_1, const_2, const_3 = {}, {}, {}
+        const_in_1, const_in_2, const_in_3 = {}, {}, {}
+        const_out_1, const_out_2, const_out_3 = {}, {}, {}
         for carrier in index.get_unique([0]):
             if (self.parameters.availability_import.loc[carrier]>0).any():
                 techs_in = [tech for tech in self.sets["set_conversion_technologies"] if carrier in self.sets["set_input_carriers"][tech]]
                 if techs_in:
                     storage_techs = [tech for tech in self.sets["set_storage_technologies"] if
                              carrier in self.sets["set_reference_carriers"][tech]]
-                    const_1[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")<=0
-                    const_2[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") + flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")<=0
-                    const_3[carrier] = flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")<=0
+                    const_in_1[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")>=0
+                    const_in_2[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") + flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")>=0
+                    const_in_3[carrier] = flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")>=0
+            if (self.parameters.availability_export.loc[carrier]>0).any():
+                techs_out = [tech for tech in self.sets["set_conversion_technologies"] if carrier in self.sets["set_output_carriers"][tech]]
+                if techs_out:
+                    storage_techs = [tech for tech in self.sets["set_storage_technologies"] if
+                             carrier in self.sets["set_reference_carriers"][tech]]
+                    const_out_1[carrier] = flow_export.loc[carrier] - flow_output.loc[techs_out, carrier].sum("set_conversion_technologies") - flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")>=0
+                    const_out_2[carrier] = flow_export.loc[carrier] - flow_output.loc[techs_out, carrier].sum("set_conversion_technologies") + flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")>=0
+                    const_out_3[carrier] = flow_output.loc[techs_out, carrier].sum("set_conversion_technologies") - flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")>=0
 
-        self.constraints.add_constraint("constraint_charge_discharge_1", const_1)
-        self.constraints.add_constraint("constraint_charge_discharge_2", const_2)
-        self.constraints.add_constraint("constraint_charge_discharge_3", const_3)
+        ## add additional storage constraints
+        self.constraints.add_constraint("constraint_charge_discharge_in_1", const_in_1)
+        self.constraints.add_constraint("constraint_charge_discharge_in_2", const_in_2)
+        self.constraints.add_constraint("constraint_charge_discharge_in_3", const_in_3)
+        self.constraints.add_constraint("constraint_charge_discharge_out_1", const_out_1)
+        self.constraints.add_constraint("constraint_charge_discharge_out_2", const_out_2)
+        self.constraints.add_constraint("constraint_charge_discharge_out_3", const_out_3)
 
 
     def constraint_storage_technology_capex(self):
