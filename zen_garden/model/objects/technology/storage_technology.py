@@ -153,6 +153,9 @@ class StorageTechnology(Technology):
         # storage level
         variables.add_variable(model, name="storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), bounds=(0, np.inf),
             doc='storage level of storage technology ón node in each storage time step', unit_category={"energy_quantity": 1})
+        # storage charge and discharge
+        variables.add_variable(model, name="storage_charge", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), binary=True,
+                    doc='storage charge is 1 if storage is charged and zero if storage is discharged', unit_category={})
 
     @classmethod
     def construct_constraints(cls, optimization_setup):
@@ -173,7 +176,7 @@ class StorageTechnology(Technology):
         rules.constraint_couple_storage_level()
 
         # couple storage charging and discharging
-        rules.constraint_charge_discharge()
+        rules.constraint_storage_charge_decision()
 
         # limit energy to power ratios of capacity additions
         rules.constraint_capacity_energy_to_power_ratio()
@@ -394,48 +397,28 @@ class StorageTechnologyRules(GenericRule):
 
         self.constraints.add_constraint("constraint_couple_storage_level",constraints)
 
-    def constraint_charge_discharge(self):
+    def constraint_storage_charge_decision(self):
         """constraint to ensure that charge and discharge do not occur at the same time"""
         ### index sets
-        index_values, index_names = StorageTechnology.create_custom_set(["set_carriers", "set_nodes", "set_time_steps_operation"], self.optimization_setup)
+        index_values, index_names = StorageTechnology.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_operation"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
-        rhs = xr.DataArray(0, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
 
         # variables
-        flow_import = self.variables["flow_import"]
-        flow_export = self.variables["flow_export"]
-        flow_input = self.variables["flow_conversion_input"]
-        flow_output = self.variables["flow_conversion_output"]
         flow_storage_charge = self.variables["flow_storage_charge"]
         flow_storage_discharge = self.variables["flow_storage_discharge"]
 
-        const_in_1, const_in_2, const_in_3 = {}, {}, {}
-        const_out_1, const_out_2, const_out_3 = {}, {}, {}
-        for carrier in index.get_unique([0]):
-            if (self.parameters.availability_import.loc[carrier]>0).any():
-                techs_in = [tech for tech in self.sets["set_conversion_technologies"] if carrier in self.sets["set_input_carriers"][tech]]
-                if techs_in:
-                    storage_techs = [tech for tech in self.sets["set_storage_technologies"] if
-                             carrier in self.sets["set_reference_carriers"][tech]]
-                    const_in_1[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")>=0
-                    const_in_2[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") + flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")>=0
-                    const_in_3[carrier] = flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")>=0
-            if (self.parameters.availability_export.loc[carrier]>0).any():
-                techs_out = [tech for tech in self.sets["set_conversion_technologies"] if carrier in self.sets["set_output_carriers"][tech]]
-                if techs_out:
-                    storage_techs = [tech for tech in self.sets["set_storage_technologies"] if
-                             carrier in self.sets["set_reference_carriers"][tech]]
-                    const_out_1[carrier] = flow_export.loc[carrier] - flow_output.loc[techs_out, carrier].sum("set_conversion_technologies") - flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")>=0
-                    const_out_2[carrier] = flow_export.loc[carrier] - flow_output.loc[techs_out, carrier].sum("set_conversion_technologies") + flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")>=0
-                    const_out_3[carrier] = flow_output.loc[techs_out, carrier].sum("set_conversion_technologies") - flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")>=0
-
+        # determine BigM based on the maximum flow
+        mask = xr.DataArray(1, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
+        availability_import = self.parameters.availability_import
+        BigM = availability_import.max(["set_carriers","set_time_steps_operation"])
         ## add additional storage constraints
-        self.constraints.add_constraint("constraint_charge_discharge_in_1", const_in_1)
-        self.constraints.add_constraint("constraint_charge_discharge_in_2", const_in_2)
-        self.constraints.add_constraint("constraint_charge_discharge_in_3", const_in_3)
-        self.constraints.add_constraint("constraint_charge_discharge_out_1", const_out_1)
-        self.constraints.add_constraint("constraint_charge_discharge_out_2", const_out_2)
-        self.constraints.add_constraint("constraint_charge_discharge_out_3", const_out_3)
+        lhs = flow_storage_charge - self.variables["storage_charge"] * BigM.broadcast_like(mask)
+        constraints = lhs <= 0
+        self.constraints.add_constraint("storage_charge_decision", constraints)
+
+        lhs = flow_storage_discharge + self.variables["storage_charge"] * BigM.broadcast_like(mask)
+        constraints = lhs <= BigM.broadcast_like(mask)
+        self.constraints.add_constraint("storage_discharge_decision", constraints)
 
 
     def constraint_storage_technology_capex(self):
