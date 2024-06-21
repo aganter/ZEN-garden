@@ -172,6 +172,9 @@ class StorageTechnology(Technology):
         # couple storage levels
         rules.constraint_couple_storage_level()
 
+        # couple storage charging and discharging
+        rules.constraint_charge_discharge()
+
         # limit energy to power ratios of capacity additions
         rules.constraint_capacity_energy_to_power_ratio()
 
@@ -390,6 +393,35 @@ class StorageTechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_couple_storage_level",constraints)
+
+    def constraint_charge_discharge(self):
+        """constraint to ensure that charge and discharge do not occur at the same time"""
+        ### index sets
+        index_values, index_names = StorageTechnology.create_custom_set(["set_carriers", "set_nodes", "set_time_steps_operation"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+        rhs = xr.DataArray(0, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
+
+        # variables
+        flow_import = self.variables["flow_import"]
+        flow_input = self.variables["flow_conversion_input"]
+        flow_storage_charge = self.variables["flow_storage_charge"]
+        flow_storage_discharge = self.variables["flow_storage_discharge"]
+
+        const_1, const_2, const_3 = {}, {}, {}
+        for carrier in index.get_unique([0]):
+            if (self.parameters.availability_import.loc[carrier]>0).any():
+                techs_in = [tech for tech in self.sets["set_conversion_technologies"] if carrier in self.sets["set_input_carriers"][tech]]
+                if techs_in:
+                    storage_techs = [tech for tech in self.sets["set_storage_technologies"] if
+                             carrier in self.sets["set_reference_carriers"][tech]]
+                    const_1[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_charge.loc[storage_techs].sum("set_storage_technologies")<=0
+                    const_2[carrier] = flow_import.loc[carrier] - flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") + flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")<=0
+                    const_3[carrier] = flow_input.loc[techs_in, carrier].sum("set_conversion_technologies") - flow_storage_discharge.loc[storage_techs].sum("set_storage_technologies")<=0
+
+        self.constraints.add_constraint("constraint_charge_discharge_1", const_1)
+        self.constraints.add_constraint("constraint_charge_discharge_2", const_2)
+        self.constraints.add_constraint("constraint_charge_discharge_3", const_3)
+
 
     def constraint_storage_technology_capex(self):
         """ definition of the capital expenditures for the storage technology
