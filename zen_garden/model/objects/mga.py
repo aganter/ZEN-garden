@@ -7,7 +7,6 @@ Class defining Modeling to Generate Alternatives functionalities:
 - Capability to solve the optimization problem for N iterations defined in the config and save the results
 """
 
-from pathlib import Path
 import os
 import logging
 import time
@@ -72,7 +71,7 @@ class ModelingToGenerateAlternatives:
             solver=self.config_mga.solver,
             energy_system=self.mga_solution.energy_system,
             unit_handling=None,
-            scenario_name=self.scenario_name,
+            scenario_name=self.scenario_dict["base_scenario"],
         )
         self.sanity_checks_mga_iteration_scenario()
         self.decision_variables: list[list] = []
@@ -256,7 +255,7 @@ class ModelingToGenerateAlternatives:
         """
 
         lhs = self.mga_solution.model.variables["net_present_cost"].sum(dim="set_time_steps_yearly")
-        rhs = (1 + self.cost_slack_variables) * self.optimized_setup.model.objective_value
+        rhs = (1 + self.cost_slack_variables) * self.optimized_setup.model.objective.value
         self.cost_constraint = lhs <= rhs
 
         model_constraints.add_constraint("constraint_optimal_cost_total_deviation", self.cost_constraint)
@@ -265,34 +264,30 @@ class ModelingToGenerateAlternatives:
         """
         Solve the optimization problem
         """
-        for iteration in range(self.config_mga["n_objectives"]):
-            logging.info("")
-            logging.info("--- MGA Iteration %s ---", iteration + 1)
-            logging.info("")
-            steps_horizon = self.mga_solution.get_optimization_horizon()
-            self.generate_weights()
 
-            for step in steps_horizon:
-                StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step)
-                self.mga_solution.overwrite_time_indices(step)
-                self.mga_solution.construct_optimization_problem()
-                self.add_cost_constraint()
-                self.mga_solution.solve()
+        steps_horizon = self.mga_solution.get_optimization_horizon()
+        self.generate_weights()
 
-                if not self.mga_solution.optimality:
-                    self.mga_solution.write_IIS()
-                    break
+        for step in steps_horizon:
+            StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step)
+            self.mga_solution.overwrite_time_indices(step)
+            self.mga_solution.construct_optimization_problem()
+            self.add_cost_constraint()
+            self.mga_solution.solve()
 
-                self.mga_solution.add_results_of_optimization_step(step)
-                scenario_name, subfolder, param_map = self.mga_solution.generate_output_paths(
-                    config_system=self.config_mga.system, step=step, steps_horizon=steps_horizon
-                )
-                subfolder = (subfolder, Path(f"iteration_{iteration + 1}"))
-                Postprocess(
-                    model=self.mga_solution,
-                    scenarios=self.config_mga.scenarios,
-                    model_name=self.mga_solution.model_name,
-                    subfolder=subfolder,
-                    scenario_name=scenario_name,
-                    param_map=param_map,
-                )
+            if not self.mga_solution.optimality:
+                self.mga_solution.write_IIS()
+                break
+
+            self.mga_solution.add_results_of_optimization_step(step)
+            scenario_name, subfolder, param_map = self.mga_solution.generate_output_paths(
+                config_system=self.config_mga.system, step=step, steps_horizon=steps_horizon
+            )
+            Postprocess(
+                model=self.mga_solution,
+                scenarios=self.config_mga.scenarios,
+                model_name=self.mga_solution.model_name,
+                subfolder=subfolder,
+                scenario_name=scenario_name,
+                param_map=param_map,
+            )

@@ -236,9 +236,7 @@ class DataInput:
             )
         else:
             if self.element.config.mga["modeling_to_generate_alternatives"]:
-                logging.warning(
-                    "WARNING: Attributes file does not exist, because this is expected for MGA iterations."
-                )
+                logging.warning("WARNING: Attributes file does not exist, because this is expected for MGA iterations.")
                 attribute_dict = None
             else:
                 raise FileNotFoundError(f"Attributes file does not exist for {self.element.name}")

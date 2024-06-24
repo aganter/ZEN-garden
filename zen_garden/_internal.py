@@ -90,7 +90,11 @@ def main(config, dataset_path=None, job_index=None):
             ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
 
             for scenario, scenario_dict in zip(scenarios, elements):
-                logging.info("--- MGA for: %s ---", scenario)
+                parts = scenario.split("_")
+                scenario_name = "_".join(parts[:-2])
+                iteration = int(parts[-1])
+                logging.info("--- MGA for: %s ---", scenario_name)
+                logging.info("--- Iteration %s ---", iteration + 1)
                 logging.info("")
                 mga_iterations = ModelingToGenerateAlternatives(
                     config_mga=config,
