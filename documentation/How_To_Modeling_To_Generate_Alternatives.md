@@ -10,7 +10,7 @@ Modeling to Generate Alternatives (MGA) is a method aimed at identifying a range
 
 where:
 - `A` and `b` are the system's constraints,
-- `c^T x` represents the system cost,
+- `$c^T x$` represents the system cost,
 - `f_opt` is the optimal cost,
 - `ε` is the slack parameter defining the cost margin.
 
@@ -29,6 +29,7 @@ $$
   & c^T x \leq (1 + \epsilon)f_opt\\ 
   &x\geq0    \\
 \end{aligned}
+\end{equation}
 $$
 
 The feasible region of this optimization problem is simply the full near-optimal space. The objective function is used to seek boundary points where the variables take on extreme, efficient values. Each solution of the above optimization problem yields a vertex of the near-optimal space. The space can therefore be explored by repeatedly solving the optimization problem for different weights `w`. Existing methods typically differ in how they choose the objective coefficients to optimize.
@@ -37,6 +38,7 @@ The feasible region of this optimization problem is simply the full near-optimal
 
 In the ZEN-garden repository, we developed the Random Directions method, which identifies the near-optimal space using randomly generated objectives. 
 The objective weights of these production variables are determined randomly on the interval `[0,1]`. Let `β_i ∼ Unif(0,1)` be such a randomly generated objective coefficient. The Random Directions MGA formulation is then:
+
 $$
 \begin{equation}
 \begin{aligned}
