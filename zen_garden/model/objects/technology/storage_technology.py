@@ -410,7 +410,7 @@ class StorageTechnologyRules(GenericRule):
         # determine BigM based on the maximum flow
         mask = xr.DataArray(1, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
         availability_import = self.parameters.availability_import
-        BigM = availability_import.max(["set_carriers","set_time_steps_operation"])
+        BigM = availability_import.max(["set_carriers","set_time_steps_operation"])*1.2
         ## add additional storage constraints
         lhs = flow_storage_charge - self.variables["storage_charge"] * BigM.broadcast_like(mask)
         constraints = lhs <= 0
