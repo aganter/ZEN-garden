@@ -1,14 +1,7 @@
 # ZEN-garden Modeling to Generate Alternatives Documentation
 
 <table><tr><td valign="center"> 
-  <img align="left" height="25px" src="https://github.com/RRE-ETH/ZEN-garden/actions/workflows/pytest_with_conda.yml/badge.svg?branch=development_ZENx_MC_AG"> 
-  <img align="left" height="25px" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jafluri/5d0d79e86182cd9ccd785d824b1f9ac7/raw/zen_coverage.json">
-  <b> (Development Branch) </b>
-</td></tr></table>
-<hr style="height: 5px; background-color: black;">
-<p align="center">
-  <img src="https://github.com/ZEN-universe/ZEN-garden/assets/114185605/d6a9aca9-74b0-4a82-8295-43e6a78b8450" alt="drawing" width="200"/>
-</p>
+  <b> (Maddalena Cenedese Branch) </b>
 
 
 ## Overview
