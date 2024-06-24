@@ -341,10 +341,10 @@ class DataInput:
                 if len(set_nodes_config) == 0 and not len(set_nodes_input) == 0:
                     self.system["set_nodes"] = set_nodes_input
                     set_nodes_config = set_nodes_input
-                else:
-                    assert len(set_nodes_config) > 1, f"ZENx is a spatially distributed model. Please specify at least 2 nodes."
-                    _missing_nodes = list(set(set_nodes_config).difference(set_nodes_input))
-                    assert len(_missing_nodes) == 0, f"The nodes {_missing_nodes} were declared in the config but do not exist in the input file {self.folder_path + 'set_nodes'}"
+                #else:
+                #    assert len(set_nodes_config) > 1, f"ZENx is a spatially distributed model. Please specify at least 2 nodes."
+                #    _missing_nodes = list(set(set_nodes_config).difference(set_nodes_input))
+                #    assert len(_missing_nodes) == 0, f"The nodes {_missing_nodes} were declared in the config but do not exist in the input file {self.folder_path + 'set_nodes'}"
                 if not isinstance(set_nodes_config, list):
                     set_nodes_config = set_nodes_config.to_list()
                 set_nodes_config.sort()
