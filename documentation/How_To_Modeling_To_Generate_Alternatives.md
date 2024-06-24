@@ -4,9 +4,9 @@
 
 Modeling to Generate Alternatives (MGA) is a method aimed at identifying a range of solutions that are close to the minimum cost within a specified margin. This margin, denoted as ε (epsilon), represents a cost fraction and is typically set between 5% and 20%. The goal is to explore the solution space defined by:
 
-- **Original Problem Constraint:** $Ax \eq b$
+- **Original Problem Constraint:** $Ax = b$
 - **Cost Constraint:** $c^T x ≤ (1 + ε)f_{opt}$
-- **Non-negativity Constraint:** $x \heq 0$
+- **Non-negativity Constraint:** $x \geq 0$
 
 where:
 - $A$ and $b$ are the system's constraints,
@@ -37,7 +37,7 @@ The feasible region of this optimization problem is simply the full near-optimal
 ### Random Directions
 
 In the ZEN-garden repository, we developed the Random Directions method, which identifies the near-optimal space using randomly generated objectives. 
-The objective weights of these production variables are determined randomly on the interval $[0,1]$. Let $\Beta_i ∼ Unif(0,1)$ be such a randomly generated objective coefficient. The Random Directions MGA formulation is then:
+The objective weights of these production variables are determined randomly on the interval $[0,1]$. Let $β_i ∼ Unif(0,1)$ be such a randomly generated objective coefficient. The Random Directions MGA formulation is then:
 
 $$
 \begin{equation}
