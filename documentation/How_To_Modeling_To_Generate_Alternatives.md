@@ -1,9 +1,5 @@
 # ZEN-garden Modeling to Generate Alternatives Documentation
 
-<table><tr><td valign="center"> 
-  <b> (Maddalena Cenedese Branch) </b>
-
-
 ## Overview
 
 Modeling to Generate Alternatives (MGA) is a method aimed at identifying a range of solutions that are close to the minimum cost within a specified margin. This margin, denoted as ε (epsilon), represents a cost fraction and is typically set between 5% and 20%. The goal is to explore the solution space defined by:
