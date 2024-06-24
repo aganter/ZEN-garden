@@ -307,7 +307,7 @@ class CarrierRules(GenericRule):
         flow_export = self.variables["flow_export"]
         ts_per_balancing_period = self.system["balancing_period"]
         if ts_per_balancing_period==1:
-            lhs = (flow_export - self.variables["flow_export_balancing"]).where(mask)            # special case hourly balancing
+            lhs = (flow_export - self.variables["flow_export_balancing"]).where(mask)  # special case hourly balancing
         elif ts_per_balancing_period>1:
             ts_set = "set_time_steps_operation"
             ts_operation = np.array(self.sets[ts_set].data)

@@ -154,7 +154,7 @@ class StorageTechnology(Technology):
         variables.add_variable(model, name="storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), bounds=(0, np.inf),
             doc='storage level of storage technology ón node in each storage time step', unit_category={"energy_quantity": 1})
         # storage charge and discharge
-        variables.add_variable(model, name="storage_charge", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_operation"], optimization_setup), binary=True,
+        variables.add_variable(model, name="storage_charge", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_operation"], optimization_setup), integer=True, bounds=(0,1),
                     doc='storage charge is 1 if storage is charged and zero if storage is discharged', unit_category={})
 
     @classmethod
@@ -407,17 +407,26 @@ class StorageTechnologyRules(GenericRule):
         flow_storage_charge = self.variables["flow_storage_charge"]
         flow_storage_discharge = self.variables["flow_storage_discharge"]
 
-        # determine BigM based on the maximum flow
-        mask = xr.DataArray(1, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
+        # mask techs
+        reference_carriers = self.sets["set_reference_carriers"]
         availability_import = self.parameters.availability_import
-        BigM = availability_import.max(["set_carriers","set_time_steps_operation"])*1.2
+        mask = xr.DataArray(True, coords=[index.get_unique(index_names[0])], dims=[index_names[0]])
+        for storage_tech in index.get_unique(index_names[0]):
+            carrier = reference_carriers[storage_tech]
+            if availability_import.loc[carrier].max() == 0:
+                mask.loc[storage_tech] = False
+
+        # determine BigM based on the maximum flow
+        zeros = xr.DataArray(0.0, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
+        BigM = availability_import.max(["set_carriers","set_time_steps_operation"]).where(mask)*1.2
+        BigM = BigM.broadcast_like(zeros)
         ## add additional storage constraints
-        lhs = flow_storage_charge - self.variables["storage_charge"] * BigM.broadcast_like(mask)
-        constraints = lhs <= 0
+        lhs = (flow_storage_charge - self.variables["storage_charge"] * BigM).where(mask)
+        constraints = lhs <= zeros.where(mask)
         self.constraints.add_constraint("storage_charge_decision", constraints)
 
-        lhs = flow_storage_discharge + self.variables["storage_charge"] * BigM.broadcast_like(mask)
-        constraints = lhs <= BigM.broadcast_like(mask)
+        lhs = (flow_storage_discharge + self.variables["storage_charge"] * BigM).where(mask)
+        constraints = lhs <= BigM.where(mask)
         self.constraints.add_constraint("storage_discharge_decision", constraints)
 
 
