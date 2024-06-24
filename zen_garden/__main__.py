@@ -60,7 +60,8 @@ def run_module(args=None):
         required=False,
         type=str,
         default=None,
-        help="A comma separated list (no spaces) of indices of the scenarios to run, if None, all scenarios are run in sequence",
+        help="A comma separated list (no spaces) of indices of the scenarios to run, if None, all scenarios are run in"
+        "sequence",
     )
     parser.add_argument(
         "--job_index_var",
@@ -78,17 +79,17 @@ def run_module(args=None):
     # change working directory to the directory of the config file
     config_path, config_file = os.path.split(args.config)
     os.chdir(config_path)
-    ### import the config
+    # Import the config
     if config_file.endswith(".py"):
         spec = importlib.util.spec_from_file_location("module", config_file)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         config = module.config
     else:
-        with open(args.config, "r") as f:
+        with open(args.config, "r", encoding="utf-8") as f:
             config = default_config.Config(**json.load(f))
 
-    ### get the job index
+    # Get the job index
     job_index = args.job_index
     if job_index is None:
         if (job_index := os.environ.get(args.job_index_var)) is not None:
@@ -96,7 +97,7 @@ def run_module(args=None):
     else:
         job_index = [int(i) for i in job_index.split(",")]
 
-    ### run
+    # Run
     main(config=config, dataset_path=args.dataset, job_index=job_index)
 
 
