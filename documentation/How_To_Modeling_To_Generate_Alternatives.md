@@ -36,13 +36,12 @@ The feasible region of this optimization problem is simply the full near-optimal
 
 ### Random Directions
 
-In the ZEN-garden repository, we developed the Random Directions method, which identifies the near-optimal space using randomly generated objectives. 
-The objective weights of these production variables are determined randomly on the interval $[0,1]$. Let $β_i ∼ Unif(0,1)$ be such a randomly generated objective coefficient. The Random Directions MGA formulation is then:
+In the ZEN-garden repository, we developed the Random Directions method, which identifies the near-optimal space using randomly generated objectives. The objective weights of these production variables are determined randomly on the interval $[0,1]$. Let $d_i \sim Norm(0,1)$ be such a randomly generated objective coefficient. However, in the context of generating directions on a hypersphere, $d$ is not just a set of coefficients but represents the direction vector of research. The Random Directions MGA formulation is then:
 
 $$
 \begin{equation}
 \begin{aligned}
-\min_{x} \quad & \sum β_i x_i\\
+\min_{x} \quad & f(x)= \sum \d_i x_i\\
 \textrm{s.t.} \quad & Ax = b\\
   & c^T x \leq (1 + \epsilon)f_{opt}\\
   &x\geq0    \\
@@ -50,4 +49,12 @@ $$
 \end{equation}
 $$
 
-Random Directions repeatedly solves this equation to obtain different boundary points. Thi method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal spacen and possible parallelization.
+For each direction vector $d$, we can then define an MGA objective function. Let $x = [x_{1}, x_{2}, ..., x_{{N_d}}]$ be the decision variables of interest. The objective function is then:
+
+$$
+f_d = \sum_{i=1}^{N_d} \frac{d_i}{L_i} x_{i}
+$$
+
+$L_i$ is the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
+
+Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization.
