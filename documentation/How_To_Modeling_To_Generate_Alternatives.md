@@ -55,6 +55,6 @@ $$
 f(x) = \sum_{i=1}^{N_d} \frac{d_i}{L_i} x_{i}
 $$
 
-where we just add the term $L_i$. $L_i$ is the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
+where we just add the term $L_i$, the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
 
 Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization.
