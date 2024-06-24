@@ -407,28 +407,33 @@ class StorageTechnologyRules(GenericRule):
         flow_storage_charge = self.variables["flow_storage_charge"]
         flow_storage_discharge = self.variables["flow_storage_discharge"]
 
-        # mask techs
-        reference_carriers = self.sets["set_reference_carriers"]
+        # determine BigM based on the import availabilities
         availability_import = self.parameters.availability_import
-        mask = xr.DataArray(True, coords=[index.get_unique(index_names[0])], dims=[index_names[0]])
-        for storage_tech in index.get_unique(index_names[0]):
-            carrier = reference_carriers[storage_tech]
-            if availability_import.loc[carrier].max() == 0:
-                mask.loc[storage_tech] = False
+        availability_export = self.parameters.availability_export
+        zeros = xr.DataArray(0, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
+        BigM = xr.DataArray(np.nan, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
+        reference_carrier = self.sets["set_reference_carriers"]
+        for tech in self.sets["set_storage_technologies"]:
+            carrier = reference_carrier[tech]
+            _imp = availability_import.loc[carrier]
+            _exp = availability_export.loc[carrier]
+            if (_exp==np.inf).all():
+                if (_imp==0).all():
+                    continue
+            _imp = _imp.where(_imp!=np.inf,0).max(["set_time_steps_operation"])
+            _exp = _exp.where(_exp!=np.inf,0).max(["set_time_steps_operation"])
+            BigM.loc[tech,:,:] = _imp.where(_imp>_exp,_exp).sum("set_carriers") * 1.2 # 20% buffer
 
-        # determine BigM based on the maximum flow
-        zeros = xr.DataArray(0.0, coords=[index.get_unique([i]) for i in index_names], dims=index_names)
-        BigM = availability_import.max(["set_carriers","set_time_steps_operation"]).where(mask)*1.2
-        BigM = BigM.broadcast_like(zeros)
-        ## add additional storage constraints
-        lhs = (flow_storage_charge - self.variables["storage_charge"] * BigM).where(mask)
-        constraints = lhs <= zeros.where(mask)
-        self.constraints.add_constraint("storage_charge_decision", constraints)
+        # create mask
+        mask = BigM.notnull()
 
-        lhs = (flow_storage_discharge + self.variables["storage_charge"] * BigM).where(mask)
-        constraints = lhs <= BigM.where(mask)
-        self.constraints.add_constraint("storage_discharge_decision", constraints)
-
+        # formulate constraints
+        lhs1 = (flow_storage_charge - self.variables["storage_charge"] * BigM).where(mask)
+        const1 = lhs1 <= zeros.where(mask)
+        self.constraints.add_constraint("storage_charge_decision", const1)
+        lhs2 = (flow_storage_discharge + self.variables["storage_charge"] * BigM).where(mask)
+        const2 = lhs2 <= BigM.where(mask)
+        self.constraints.add_constraint("storage_discharge_decision", const2)
 
     def constraint_storage_technology_capex(self):
         """ definition of the capital expenditures for the storage technology
