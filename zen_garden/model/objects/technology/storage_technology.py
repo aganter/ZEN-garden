@@ -154,7 +154,7 @@ class StorageTechnology(Technology):
         variables.add_variable(model, name="storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), bounds=(0, np.inf),
             doc='storage level of storage technology ón node in each storage time step', unit_category={"energy_quantity": 1})
         # storage charge and discharge
-        variables.add_variable(model, name="storage_charge", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), binary=True,
+        variables.add_variable(model, name="storage_charge", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_operation"], optimization_setup), binary=True,
                     doc='storage charge is 1 if storage is charged and zero if storage is discharged', unit_category={})
 
     @classmethod
