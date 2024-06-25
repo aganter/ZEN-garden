@@ -88,5 +88,5 @@ The **ModelingToGenerateAlternatives** class provides functionalities to impleme
 
 ### Configurate MGA method 
 This is how the data folder looks like:
-
+![image](https://github.com/ZEN-universe/ZEN-garden/assets/Data_Folder_General.png)
 
