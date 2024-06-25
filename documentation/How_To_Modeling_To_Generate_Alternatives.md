@@ -100,7 +100,8 @@ This is how the data folder looks like:
 Let's analyze it:
 
 - `config.py`: 
- In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
+
+In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
 
   ```python
   class ModelingToGenerateAlternatives(Subscriptable):
@@ -132,5 +133,5 @@ Let's analyze it:
       ]
       allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
 
- This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `congig.py` the user needs to set:
- - 
+This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `congig.py` the user needs to set:
+- aaa
