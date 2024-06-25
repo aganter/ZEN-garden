@@ -101,7 +101,7 @@ Let's analyze it:
 
 - `config.py`: 
 
-In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
+  In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
 
   ```python
   class ModelingToGenerateAlternatives(Subscriptable):
@@ -132,6 +132,18 @@ In the `default_config.py` there is a new class called `ModelingToGenerateAltern
           "set_transport_technologies",
       ]
       allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
+  ```
 
-This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `congig.py` the user needs to set:
-- aaa
+  This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `config.py` the user needs to set:
+  ``` 
+  mga = config.mga
+  ```
+  <p align="center">
+    <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Config_File.png" alt="Config File" width="600" />
+</p>
+
+- The parameter `modeling_to_generate_alternatives` equals to True to activate the MGA method
+- The user needs to define the path for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file paths
+- `analysis`, `system`, and `solver` are deep copy of the default config ones, this is just for robustness against dumb errors
+-  It is fundamental that the ```mga.analysis['folder_output']``` is the same of the ```config.analysis['folder_output']```
+- The parameter `cost_slack_variables` that is the allowed percetage of cost deviation
