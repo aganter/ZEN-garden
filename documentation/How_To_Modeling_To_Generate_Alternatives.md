@@ -25,7 +25,7 @@ $$
 \begin{equation}
 \begin{aligned}
 \min_{x} \quad & w^T x\\
-\textrm{s.t.} \quad & Ax = b\\
+\textrm{s.t.} \quad & Ax \leq b\\
   & c^T x \leq (1 + \epsilon)f_{opt}\\ 
   &x\geq0    \\
 \end{aligned}
@@ -42,7 +42,7 @@ $$
 \begin{equation}
 \begin{aligned}
 \min_{x} \quad & f(x)= \sum d_i x_i\\
-\textrm{s.t.} \quad & Ax = b\\
+\textrm{s.t.} \quad & Ax \leq b\\
   & c^T x \leq (1 + \epsilon)f_{opt}\\
   &x\geq0    \\
 \end{aligned}
@@ -58,3 +58,29 @@ $$
 where we just add the term $L_i$, the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
 
 Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization.
+
+
+## How to MGA
+
+### MGA class
+
+The **ModelingToGenerateAlternatives** class provides functionalities to implement the **Modeling to Generate Alternatives (MGA)** method. This class ensures the exploration of near-optimal solutions by generating alternative solutions that are within a specified cost margin from the optimal solution. Here’s a detailed breakdown of the class functionalities:
+
+### Key Functionalities
+- **Sanity Checks for Input Data:**
+  - **Sanity Checks on MGA Iteration Scenario:** Ensures that the input data structure is correct and consistent with the expected format. It verifies the dictionary structure, existence of necessary keys, and that values match the expected coordinate system of the objective variables.
+  - **Sanity Checks on Characteristic Scales File:** Confirms that the characteristic scales dictionary is correctly formatted, with appropriate keys and values, ensuring that scales are properly defined for normalizing variables.
+
+- **Loading and Storing Input Data:**
+  - **Store Input Data:** Reads and stores the input data necessary for the MGA scenario. This involves updating the configuration and decision variables to ensure all necessary data is available for the MGA process.
+
+- **Generating Weights for MGA Objective Function:**
+  - **Generate Random Directions:** Produces random direction vectors from a normal distribution for each decision variable. These directions are used to explore different regions of the solution space.
+  - **Generate Characteristic Scales:** Creates characteristic scales for the decision variables, which are used to normalize the variables. This helps in handling variables of different scales more effectively.
+  - **Generate Weights:** Combines the random direction vectors and characteristic scales to generate weights for the MGA objective function. These weights are necessary in formulating the objective function for exploring near-optimal solutions as seen above.
+
+- **Adding Cost Constraint:**
+  - **Add Cost Constraint:** Adds a constraint to the optimization problem to limit the total cost based on the optimal solution's cost and the allowed deviation defined by the cost slack variables. This ensures that the generated alternatives remain within the specified cost margin.
+
+- **Solving the Optimization Problem:**
+  - **Run:** Executes the MGA process by solving the optimization problem. For each iteration, it generates weights, constructs the optimization problem with the cost constraint and the new objective function, and solves it to find a near-optimal solution. The results are saved for further analysis.
