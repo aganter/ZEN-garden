@@ -97,3 +97,40 @@ This is how the data folder looks like:
     <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Data_Folder_General.png" alt="Data Folder Structure" width="600" />
 </p>
 
+Let's analyze it:
+
+- `config.py`: 
+ In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
+
+  ```python
+  class ModelingToGenerateAlternatives(Subscriptable):
+      """
+      This class is used to model the behavior of the system to generate alternatives.
+      """
+      
+      modeling_to_generate_alternatives: bool = False
+      objective_variables: str = "technologies"
+      analysis: Analysis = Analysis()
+      solver: Solver = Solver()
+      system: System = System()
+
+      characteristic_scales_path: str = ""
+      cost_slack_variables: float = 0.0
+      folder_path: Path = Path("data/")
+      # Keep the same name for code consistency and usability: this are the MGA iterations
+      scenarios: dict[str, Any] = {"": {}}
+      immutable_system_elements: dict = {
+          "conduct_scenario_analysis": True,
+          "run_default_scenario": False,
+      }
+      allowed_mga_objective_objects: list[str] = [
+          "set_carriers",
+          "set_technologies",
+          "set_conversion_technologies",
+          "set_storage_technologies",
+          "set_transport_technologies",
+      ]
+      allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
+
+ This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `congig.py` the user needs to set:
+ - 

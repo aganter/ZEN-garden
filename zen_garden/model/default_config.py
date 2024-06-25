@@ -85,8 +85,6 @@ class HeaderDataInputs(Subscriptable):
     set_capacity_types: str = "capacity_type"
 
 
-
-
 class System(Subscriptable):
     model_config = ConfigDict(extra="allow")
     set_carriers: list[str] = []
@@ -144,6 +142,7 @@ class Solver(Subscriptable):
     rounding_decimal_points_capacity: int = 4
     analyze_numerics: bool = True
 
+
 class TimeSeriesAggregation(Subscriptable):
     slv: Solver = Solver()
     clusterMethod: str = "hierarchical"
@@ -174,6 +173,7 @@ class Analysis(Subscriptable):
     folder_name_system_specification: str = "system_specification"
     earliest_year_of_data: int = 1900
 
+
 class ModelingToGenerateAlternatives(Subscriptable):
     """
     This class is used to model the behavior of the system to generate alternatives.
@@ -185,7 +185,6 @@ class ModelingToGenerateAlternatives(Subscriptable):
     solver: Solver = Solver()
     system: System = System()
 
-    n_objectives: int = 1
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
     folder_path: Path = Path("data/")
