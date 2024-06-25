@@ -207,7 +207,7 @@ This format exploits the existing functionalities for scenarios, particularly:
 
 For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives` folder.
 
-### Supernodes
+## Supernodes
 At the beginning of this document, one of the challenges of MGA is mentioned. To overcome this problem, there are new functionalities to decrease the number of decision variables and aggregate them together.
 
 1. The MGA objective function can account for a user-defined number of variables as explained above.
