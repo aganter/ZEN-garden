@@ -90,5 +90,5 @@ The **ModelingToGenerateAlternatives** class provides functionalities to impleme
 This is how the data folder looks like:
 
 <div style="text-align:center;">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Data_Folder_General.png" alt="Data Folder Structure" width="400" />
+    ![Data Folder Structure](https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Data_Folder_General.png)
 </div>
