@@ -142,8 +142,30 @@ Let's analyze it:
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/1d6c06a3669d0ec06b8d581a0f7fd31fffe9d891/documentation/images/Config_File.png" alt="Config File" width="600" />
 </p>
 
-- The parameter `modeling_to_generate_alternatives` equals to True to activate the MGA method
-- The user needs to define the path for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file paths
-- `analysis`, `system`, and `solver` are deep copy of the default config ones, this is just for robustness against dumb errors
--  It is fundamental that the ```mga.analysis['folder_output']``` is the same of the ```config.analysis['folder_output']```
-- The parameter `cost_slack_variables` that is the allowed percetage of cost deviation
+  - The parameter `modeling_to_generate_alternatives` equals to True to activate the MGA method
+  - The user needs to define the path for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file
+  - `analysis`, `system`, and `solver` are deep copies of the default config ones, this is just for robustness against dumb errors
+  -  It is fundamental that the ```mga.analysis['folder_output']``` is the same of the ```config.analysis['folder_output']```
+  - The parameter `cost_slack_variables` that is the allowed percetage of cost deviation
+
+- The `modeling_to_generate_alternatives` folder looks like: 
+  <p align="center">
+    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/MGA_Folder.png" width="600" />
+</p>
+ 
+ - The `1_carbon_storage.json` file is the dictionary where we set the indications for the new objective function, in particular: 
+ ``` python 
+  {
+    "objective_variables": "capacity_supernodes",
+    "objective_set": {
+        "set_technologies": [
+            "carbon_storage"
+        ],
+        "set_supernodes": [
+            "CH",
+            "DE"
+        ]
+    }
+  }
+ ```
+  - aaaa
