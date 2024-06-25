@@ -1,10 +1,19 @@
-"""""
-Class defining Modeling to Generate Alternatives functionalities:
-- Sanity checks for input data
-- Load and store input data for the MGA scenario
-- Generate weigths for the MGA objective function based on random direction and characteristic scales
-- Add a cost constraint to the optimization problem
-- Capability to solve the optimization problem for N iterations defined in the config and save the results
+"""
+  :Title:        ZEN-GARDEN
+  :Created:      April-2024
+  :Authors:      Maddalena Cenedese (mcenedese@student.ethz.ch)
+  :Organization: Labratory of Reliability and Risk Engineering, ETH Zurich
+
+    Class defining Modeling to Generate Alternatives functionalities:
+    - Initialize the MGA object
+    - Perform sanity checks on the MGA iteration scenario
+    - Perform sanity checks on the characteristic scales file
+    - Store the input data for the MGA scenario
+    - Generate random directions for each decision variable
+    - Generate characteristic scales for the new decision variables
+    - Generate weights for the MGA objective function based on random direction and characteristic scales
+    - Add a cost constraint to the optimization problem
+    - Solve the optimization problem and write the results
 """
 
 import os
@@ -53,6 +62,7 @@ class ModelingToGenerateAlternatives:
 
         input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
         input_data_checks.check_dataset()
+        # Initialize the OptimizationSetup object for the MGA iteration model
         self.mga_solution: OptimizationSetup = OptimizationSetup(
             config=self.config_mga,
             model_name=self.optimized_setup.model_name,
@@ -64,6 +74,8 @@ class ModelingToGenerateAlternatives:
         self.mga_objective_loc = None
 
         self.input_path = self.config_mga["folder_path"]
+
+        # Initialize the DataInputMGA object
         self.mga_data_input = DataInputMGA(
             element=self,
             system=self.config_mga.system,
@@ -159,7 +171,7 @@ class ModelingToGenerateAlternatives:
     def generate_random_directions(self) -> dict:
         """
         Generate random directions from a normal distribution with mean 0 and standard deviation 1 for each of the
-        decision variables.
+        decision variables. The samples are taken and truncated to the interval [-1, 1].
 
         :return: Random direction_search_vector for each of the decision variables (type: dict)
         """
@@ -206,11 +218,9 @@ class ModelingToGenerateAlternatives:
 
         return self.characteristic_scales.rename("characteristic_scales")
 
-    def generate_weights(self) -> xr.DataArray:
+    def generate_weights(self):
         """
         Generate weights for MGA objective function based on random direction and characteristic scales.
-
-        :return: Weights DataArray (type: xr.DataArray)
         """
         self.characteristic_scales = self.generate_characteristic_scales()
         self.direction_search_vector = self.generate_random_directions()
@@ -235,7 +245,7 @@ class ModelingToGenerateAlternatives:
 
     def add_cost_constraint(self):
         """
-        Add a cost constraint to the optimization problem
+        Add a cost deviation constraint to the optimization problem
         """
         logging.info("Construct pe.Constraint for the Total Cost Deviation allowed")
         pid = os.getpid()
@@ -250,10 +260,7 @@ class ModelingToGenerateAlternatives:
         """
         Limit on the total cost objective of the energy system based on the optimized total cost of the energy system
         and a chosen deviation indicated by the cost_slack_variables.
-
-        :return: Constraint for the total cost of the energy system (type: Constraint)
         """
-
         lhs = self.mga_solution.model.variables["net_present_cost"].sum(dim="set_time_steps_yearly")
         rhs = (1 + self.cost_slack_variables) * self.optimized_setup.model.objective.value
         self.cost_constraint = lhs <= rhs
@@ -262,7 +269,7 @@ class ModelingToGenerateAlternatives:
 
     def run(self):
         """
-        Solve the optimization problem
+        Solve the optimization problem and postprocess the results
         """
 
         steps_horizon = self.mga_solution.get_optimization_horizon()
