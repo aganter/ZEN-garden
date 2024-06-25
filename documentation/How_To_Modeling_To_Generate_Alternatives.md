@@ -66,7 +66,7 @@ Random Directions repeatedly solves this equation to obtain different boundary p
 
 The **ModelingToGenerateAlternatives** class provides functionalities to implement the **Modeling to Generate Alternatives (MGA)** method. This class ensures the exploration of near-optimal solutions by generating alternative solutions that are within a specified cost margin from the optimal solution. Here’s a detailed breakdown of the class functionalities:
 
-### Key Functionalities
+#### Key Functionalities
 - **Sanity Checks for Input Data:**
   - **Sanity Checks on MGA Iteration Scenario:** Ensures that the input data structure is correct and consistent with the expected format. It verifies the dictionary structure, existence of necessary keys, and that values match the expected coordinate system of the objective variables.
   - **Sanity Checks on Characteristic Scales File:** Confirms that the characteristic scales dictionary is correctly formatted, with appropriate keys and values, ensuring that scales are properly defined for normalizing variables.
@@ -84,3 +84,9 @@ The **ModelingToGenerateAlternatives** class provides functionalities to impleme
 
 - **Solving the Optimization Problem:**
   - **Run:** Executes the MGA process by solving the optimization problem. For each iteration, it generates weights, constructs the optimization problem with the cost constraint and the new objective function, and solves it to find a near-optimal solution. The results are saved for further analysis.
+
+
+### Configurate MGA method 
+This is how the data folder looks like:
+
+
