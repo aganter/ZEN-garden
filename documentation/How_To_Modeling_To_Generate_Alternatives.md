@@ -2,24 +2,23 @@
 
 ## Overview
 
-Modeling to Generate Alternatives (MGA) is a method aimed at identifying a range of solutions that are close to the minimum cost within a specified margin. This margin, denoted as ε (epsilon), represents a cost fraction and is typically set between 5% and 20%. The goal is to explore the solution space defined by:
+Modeling to Generate Alternatives (MGA) identifies a range of solutions close to the minimum cost within a specified margin, ε (epsilon), typically set between 5% and 20%. This method explores the solution space defined by:
 
 - **Original Problem Constraint:** $Ax = b$
 - **Cost Constraint:** $c^T x ≤ (1 + ε)f_{opt}$
 - **Non-negativity Constraint:** $x \geq 0$
 
 where:
-- $A$ and $b$ are the system's constraints,
-- $c^T x$ represents the system cost,
+- $A$ and $b$ represent the system's constraints,
+- $c^T x$ denotes the system cost,
 - $f_{opt}$ is the optimal cost,
-- $\epsilon$ is the slack parameter defining the cost margin.
+- ε is the slack parameter defining the cost margin.
 
-The inclusion of the cost deviation constraint $c^T x ≤ (1 + ε)f_{opt}$ expands the original problem's constraints to include solutions within ε of the optimal cost, $f_{opt}$. This approach ensures the solution space is convex, as it is defined by linear constraints.
-
+Including the cost deviation constraint $c^T x ≤ (1 + ε)f_{opt}$ expands the original problem's constraints to encompass solutions within ε of the optimal cost, ensuring a convex solution space defined by linear constraints.
 
 ### Methodology
 
-Most established MGA methods identify vertices of the projected near-optimal space by solving repeated, independent optimization problems. These problems typically are of the form:
+Established MGA methods identify vertices of the near-optimal space by solving repeated, independent optimization problems of the form:
 
 $$
 \begin{equation}
@@ -32,11 +31,11 @@ $$
 \end{equation}
 $$
 
-The feasible region of this optimization problem is simply the full near-optimal space. The objective function is used to seek boundary points where the variables take on extreme, efficient values. Each solution of the above optimization problem yields a vertex of the near-optimal space. The space can therefore be explored by repeatedly solving the optimization problem for different weights $w$. Existing methods typically differ in how they choose the objective coefficients to optimize.
+The feasible region of this problem is the full near-optimal space. The objective function seeks boundary points where variables take on extreme, efficient values, with each solution yielding a vertex of the near-optimal space. Methods typically vary in how they select the objective coefficients.
 
 ### Random Directions
 
-In the ZEN-garden repository, we developed the Random Directions method, which identifies the near-optimal space using randomly generated objectives. The objective weights of these production variables are determined randomly on the interval $[0,1]$. Let $d_i \sim Norm(0,1)$ be such a randomly generated objective coefficient. However, in the context of generating directions on a hypersphere, $d$ is not just a set of coefficients but represents the direction vector of research. The Random Directions MGA formulation is then:
+The ZEN-garden repository introduces the Random Directions method, identifying the near-optimal space using randomly generated objectives. Objective weights for production variables are randomly determined within the [0,1] interval. Let $d_i \sim Norm(0,1)$ represent a randomly generated objective coefficient. In this context, $d$ represents the direction vector of research. The Random Directions MGA formulation is:
 
 $$
 \begin{equation}
@@ -49,23 +48,22 @@ $$
 \end{equation}
 $$
 
-Let $x = [x_{1}, x_{2}, ..., x_{{N_d}}]$ be the decision variables of interest. The "real" objective function is then:
+Let $x = [x_{1}, x_{2}, ..., x_{{N_d}}]$ be the decision variables. The objective function is:
 
 $$
 f(x) = \sum_{i=1}^{N_d} \frac{d_i}{L_i} x_{i}
 $$
 
-where we just add the term $L_i$, the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
+where $L_i$ is the characteristic scale that normalizes the variables, enhancing performance when variables have vastly different scales.
 
-Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization. Characteristic scales are derived from the $x$ values in the optimal solution when available. If $x$ values are zero, the scales are estimated to align with the expected magnitude of variables in the near-optimal space.
+Random Directions solves this equation repeatedly to obtain different boundary points, allowing for broad exploration of the near-optimal space and potential parallelization. Characteristic scales are derived from the $x$ values in the optimal solution or estimated to match the expected magnitude of variables in the near-optimal space if $x$ values are zero.
 
 ### Challenges
 
-One of the challenges in MGA is identifying all feasible solutions that satisfy the cost deviation constraint, especially for large-scale problems. Computing the entire near-optimal space for all variables is often not practical due to computational limitations. Therefore, most analyses focus on a subset of variables, projecting the near-optimal space onto a smaller, more manageable set of aggregate variables ($x_{agg} = g(x)$). This projection maintains the convexity of the solution space, facilitating the exploration of near-optimal solutions.
-
+A challenge in MGA is identifying all feasible solutions that meet the cost deviation constraint, especially in large-scale problems. Computing the entire near-optimal space for all variables is often impractical due to computational limits. Thus, analyses typically focus on a subset of variables, projecting the near-optimal space onto a smaller set of aggregate variables ($x_{agg} = g(x)$), maintaining the solution space's convexity and facilitating exploration of near-optimal solutions.
 
 ## How to MGA
-### MGA class
+### MGA Class
 
 The **ModelingToGenerateAlternatives** class provides functionalities to implement the **Modeling to Generate Alternatives (MGA)** method. This class ensures the exploration of near-optimal solutions by generating alternative solutions that are within a specified cost margin from the optimal solution. Here’s a detailed breakdown of the class functionalities:
 
@@ -82,15 +80,14 @@ The **ModelingToGenerateAlternatives** class provides functionalities to impleme
   - **Generate Characteristic Scales:** Creates characteristic scales for the decision variables, which are used to normalize the variables. This helps in handling variables of different scales more effectively.
   - **Generate Weights:** Combines the random direction vectors and characteristic scales to generate weights for the MGA objective function. These weights are necessary in formulating the objective function for exploring near-optimal solutions as seen above.
 
-- **Adding Cost Constraint:**
-  - **Add Cost Constraint:** Adds a constraint to the optimization problem to limit the total cost based on the optimal solution's cost and the allowed deviation defined by the cost slack variables. This ensures that the generated alternatives remain within the specified cost margin.
+- **Adding Cost Deviation Constraint:**
+  - **Add Cost Deviation Constraint:** Adds a constraint to the optimization problem to limit the total cost based on the optimal solution's cost and the allowed deviation defined by the cost slack variables. This ensures that the generated alternatives remain within the specified cost margin.
 
 - **Solving the Optimization Problem:**
-  - **Run:** Executes the MGA process by solving the optimization problem. For each iteration, it generates weights, constructs the optimization problem with the cost constraint and the new objective function, and solves it to find a near-optimal solution. The results are saved for further analysis.
+  - **Run:** Executes the MGA process by solving the optimization problem. It generates weights, constructs the optimization problem with the cost deviation constraint and the new objective function, and solves it to find a near-optimal solution. The results are saved for further analysis.
 
-
-### Configure MGA method 
-This is how the data folder looks like:
+### Configure MGA Method
+This is what the data folder looks like:
 
 <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Data_Folder_General.png" alt="Data Folder Structure" width="600" />
@@ -99,11 +96,10 @@ This is how the data folder looks like:
 Let's analyze it:
 
 #### Config
-
-In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
+In the `default_config.py`, there is a new class called `ModelingToGenerateAlternatives`:
 
 ```python
- class ModelingToGenerateAlternatives(Subscriptable):
+class ModelingToGenerateAlternatives(Subscriptable):
     """
     This class is used to model the behavior of the system to generate alternatives.
     """
@@ -116,7 +112,7 @@ In the `default_config.py` there is a new class called `ModelingToGenerateAltern
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
     folder_path: Path = Path("data/")
-    # Keep the same name for code consistency and usability: this are the MGA iterations
+    # Keep the same name for code consistency and usability: these are the MGA iterations
     scenarios: dict[str, Any] = {"": {}}
     immutable_system_elements: dict = {
         "conduct_scenario_analysis": True,
@@ -132,7 +128,7 @@ In the `default_config.py` there is a new class called `ModelingToGenerateAltern
     allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
 ```
 
-This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `config.py` the user needs to set:
+This class handles all the necessary parameters to set up the MGA algorithm. In particular, in the `config.py`, the user needs to set:
 
 ```mga = config.mga```
 
@@ -140,85 +136,80 @@ This class handles all the necessary paramters to set up the the MGA algorithm, 
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/1d6c06a3669d0ec06b8d581a0f7fd31fffe9d891/documentation/images/Config_File.png" alt="Config File" width="800" />
 </p>
 
-  - The parameter `modeling_to_generate_alternatives` equals to True to activate the MGA method
-  - The user needs to define the path for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file
-  - `analysis`, `system`, and `solver` are deep copies of the default config ones, this is just for robustness against dumb errors
-  -  It is fundamental that the ```mga.analysis['folder_output']``` is the same of the ```config.analysis['folder_output']```
-  - The parameter `cost_slack_variables` that is the allowed percetage of cost deviation
+- The parameter `modeling_to_generate_alternatives` should be set to True to activate the MGA method.
+  - The user needs to define the paths for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file.
+  - `analysis`, `system`, and `solver` are deep copies of the default config, which is done for robustness against errors.
+  - It is fundamental that `mga.analysis['folder_output']` is the same as `config.analysis['folder_output']`.
+  - The parameter `cost_slack_variables` defines the allowed percentage of cost deviation.
 
-#### MGA folder 
-The `modeling_to_generate_alternatives` folder looks like: 
+#### MGA Folder
+The `modeling_to_generate_alternatives` folder looks like:
 
-  <p align="center">
+<p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/MGA_Folder.png" width="600" />
 </p>
- 
-The `1_carbon_storage.json` file is the dictionary where we set the indications for the new objective function, in particular: 
-``` python 
-  {
-    "objective_variables": "capacity_supernodes",
-    "objective_set": {
-        "set_technologies": [
-            "carbon_storage"
-        ],
-        "set_supernodes": [
-            "CH",
-            "DE"
-        ]
-    }
+
+The `1_carbon_storage.json` file is the dictionary where we set the parameters for the new objective function, specifically:
+```python
+{
+  "objective_variables": "capacity_supernodes",
+  "objective_set": {
+      "set_technologies": [
+          "carbon_storage"
+      ],
+      "set_supernodes": [
+          "CH",
+          "DE"
+      ]
   }
+}
 ```
+- The element types of the objective variables: the user can choose among the variables defined in the optimization problem. For example, in the dictionary above, we opt for `"capacity_supernodes"`. At the moment, it is not possible to simultaneously optimize carriers and technologies.
+- The `objective_set` key must contain two keys that refer to the coordinates of the `"capacity_supernodes"` variable array:
+  1. The first specifies the object's coordinate. The user can choose among `"set_carriers", "set_technologies", "set_conversion_technologies", "set_storage_technologies", "set_transport_technologies"`. For example, in the dictionary above, we opt to optimize `carbon_storage`, which is a technology. Therefore, the correct key for the list will be `set_technologies`. Using any other key will result in an error in the code.
+  2. The second specifies the location coordinate. The user can choose among `"set_nodes", "set_location", "set_edges", "set_supernodes"`. For example, in the dictionary above, the correct coordinate for `carbon_storage` is `"set_supernodes"`. Using any other coordinate will result in an error in the code.
 
- - The elements type of the objective variables, the user can choose among the variables defined in the optimization problem. For example, in the dictionary above we opt for the `"capacity_supernodes"`. At the moment is not possibile to have simoultaneously optimized carriers and technologies. 
- - The `objective_set` key must contain two keys, that refer to the coordinates of the `"capacity_supernodes"` variable array:
-  1. The first specifies the objects coordinate, the user can choose among: `"set_carriers", "set_technologies", "set_conversion_technologies", "set_storage_technologies", "set_transport_technologies"`. For example, in the dictionary above, we opt for optimize the `carbon_storage` that is a technology, so the right key for the list will be `set_technology`. All the other will return an error in the code.
-  2. The second specifies the location coordinate, the user can choose among: `"set_nodes", "set_location", "set_edges", "set_supernodes"`. For example, in the dictionary above, the right coordinate for `carbon_storage` is `"set_supernodes"`. All the other will return an error in the code.
-
-#### Characteristic Scale 
-The `characteristic_scale.json` file is a dictionary strctured as follow:
-``` python 
-  {
-   "carbon_storage": {
+#### Characteristic Scale
+The `characteristic_scale.json` file is structured as follows:
+```python
+{
+  "carbon_storage": {
     "default_value": 4,
     "unit": "GW"
-   }
   }
+}
+```
+It must contain as primary keys all the variables we would like to optimize in the objective function, so in this case, it is enough to have just `"carbon_storage"`. Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable, as explained in the Methodology section.
+
+#### MGA Iterations
+The `mga_iterations.py` resembles the `scenarios.py` in format:
+```python
+NUMBER_OF_ITERATIONS = 20
+scenarios = dict()
+
+scenarios["1_carbon_storage"] = {
+  "analysis": {"objective": "mga"},
+  "ModelingToGenerateAlternatives": {
+    "objective_elements_definition": {
+      "file": "1_carbon_storage",
+      "default_op": [1 for _ in range(NUMBER_OF_ITERATIONS)],
+    }
+  },
+}
 ```
 
-It must contains as primary keys all the variables we would like to optimize in the objective function, so in this case it is enough to have just `"carbon_storage"`. 
-Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable as explained in the Methodology section.  
+#### MGA Iterations
+The scenario name is the same as the file we need to load to build the MGA objective function.
+This format exploits the existing functionalities for scenarios, particularly:
+- With the key `"analysis"`, the user needs to change the objective function to `"mga"`.
+- `"file"` sets the file name from which the values must be read.
+- `"default_opt"` is a list of ones with a length equal to the number of iterations of Random MGA the user wants to perform.
 
-#### MGA iterations 
-The `mga_iterations.py` looks like the `scenarios.py`, with the following format: 
-``` python 
-  NUMBER_OF_ITERATIONS = 20
-  scenarios = dict()
+For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives` folder.
 
-  scenarios["1_carbon_storage"] = {
-    "analysis": {"objective": "mga"},
-    "ModelingToGenerateAlternatives": {
-      "objective_elements_definition": {
-        "file": "1_carbon_storage",
-        "default_op": [1 for _ in range(NUMBER_OF_ITERATIONS)],
-      }
-    },
-  }
-```
-  
-The scenario name is the same of the file we need to load to build the MGA objective function.
-This format exploits the exisitng functionalities for scenarios, in particular:
-- With the key `"analysis"` the user needs change the objective function to `"mga"` 
--  `"file"` sets the file anem from which the values must be read
-- `"default_opt"` is a list of ones  with lenght equal to the number of iteration of Random MGA the user wants to perform.
+### Supernodes
+At the beginning of this document, one of the challenges of MGA is mentioned. To overcome this problem, there are new functionalities to decrease the number of decision variables and aggregate them together.
 
-For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives`
-
-
-
-### Supernodes 
-At the beginning of this documents it is mentioned one of the challenge of MGA. To overcome this problem, there is a new functionalities to decrease the number of decision variables and aggregate them together. 
-
-1. The MGA objective function can count for a user defined number of variables as it is explained above
-2. The supernodes aggregation gives the possibilities to aggregate nodes by country. In the `system.py` file, the user can now set `system["set_supernodes"] = True`. In this way, in the optimization problem there will defined:
-  - New sets to be the supernodes, aggregations of nodes by country. For example, nodes `"BE10", "BE21", "BE22"` belongs to node `"BE"`
-  - New aggregated variables for `capacity` and `flow_import`
+1. The MGA objective function can account for a user-defined number of variables as explained above.
+2. The supernodes aggregation gives the possibility to aggregate nodes by country. In the `system.py` file, the user can now set `system["set_supernodes"] = True`. This way, in the optimization problem, new sets are defined as supernodes, aggregations of nodes by country. For example, nodes `"BE10", "BE21", "BE22"` belong to node `"BE"`.
+3. New aggregated variables for `capacity` and `flow_import` are defined accordingly.
