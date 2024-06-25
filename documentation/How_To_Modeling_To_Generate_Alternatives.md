@@ -60,8 +60,12 @@ where we just add the term $L_i$, the characteristic scale that approximately no
 Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization.
 
 
-## How to MGA
+### Challenges
 
+One of the challenges in MGA is identifying all feasible solutions that satisfy the cost deviation constraint, especially for large-scale problems. Computing the entire near-optimal space for all variables is often not practical due to computational limitations. Therefore, most analyses focus on a subset of variables, projecting the near-optimal space onto a smaller, more manageable set of aggregate variables ($x_{agg} = g(x)$). This projection maintains the convexity of the solution space, facilitating the exploration of near-optimal solutions.
+
+
+## How to MGA
 ### MGA class
 
 The **ModelingToGenerateAlternatives** class provides functionalities to implement the **Modeling to Generate Alternatives (MGA)** method. This class ensures the exploration of near-optimal solutions by generating alternative solutions that are within a specified cost margin from the optimal solution. Here’s a detailed breakdown of the class functionalities:
@@ -86,10 +90,10 @@ The **ModelingToGenerateAlternatives** class provides functionalities to impleme
   - **Run:** Executes the MGA process by solving the optimization problem. For each iteration, it generates weights, constructs the optimization problem with the cost constraint and the new objective function, and solves it to find a near-optimal solution. The results are saved for further analysis.
 
 
-### Configurate MGA method 
+### Configure MGA method 
 This is how the data folder looks like:
 
 <p align="center">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Data_Folder_General.png" alt="Data Folder Structure" width="400" />
+    <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Data_Folder_General.png" alt="Data Folder Structure" width="600" />
 </p>
 
