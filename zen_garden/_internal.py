@@ -89,6 +89,8 @@ def main(config, dataset_path=None, job_index=None):
             )
             ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
 
+            # The scenario will create a double level folder structure: the first to be the different MGA objectives
+            # and the second to be the iterations for each objective
             for scenario, scenario_dict in zip(scenarios, elements):
                 parts = scenario.split("_")
                 scenario_name = "_".join(parts[:-2])
@@ -104,5 +106,6 @@ def main(config, dataset_path=None, job_index=None):
                 )
                 mga_iterations.run()
 
-    logging.info("--- MGA run finished ---")
+            logging.info("--- MGA run finished ---")
+
     return optimization_setup
