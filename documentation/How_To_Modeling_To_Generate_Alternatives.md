@@ -98,44 +98,43 @@ This is how the data folder looks like:
 
 Let's analyze it:
 
-- `config.py`: 
+#### Config
 
-  In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
+In the `default_config.py` there is a new class called `ModelingToGenerateAlternatives`
 
-  ```python
-  class ModelingToGenerateAlternatives(Subscriptable):
-      """
-      This class is used to model the behavior of the system to generate alternatives.
-      """
-      
-      modeling_to_generate_alternatives: bool = False
-      analysis: Analysis = Analysis()
-      solver: Solver = Solver()
-      system: System = System()
+```python
+ class ModelingToGenerateAlternatives(Subscriptable):
+    """
+    This class is used to model the behavior of the system to generate alternatives.
+    """
+    
+    modeling_to_generate_alternatives: bool = False
+    analysis: Analysis = Analysis()
+    solver: Solver = Solver()
+    system: System = System()
 
-      characteristic_scales_path: str = ""
-      cost_slack_variables: float = 0.0
-      folder_path: Path = Path("data/")
-      # Keep the same name for code consistency and usability: this are the MGA iterations
-      scenarios: dict[str, Any] = {"": {}}
-      immutable_system_elements: dict = {
-          "conduct_scenario_analysis": True,
-          "run_default_scenario": False,
-      }
-      allowed_mga_objective_objects: list[str] = [
-          "set_carriers",
-          "set_technologies",
-          "set_conversion_technologies",
-          "set_storage_technologies",
-          "set_transport_technologies",
-      ]
-      allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
-  ```
+    characteristic_scales_path: str = ""
+    cost_slack_variables: float = 0.0
+    folder_path: Path = Path("data/")
+    # Keep the same name for code consistency and usability: this are the MGA iterations
+    scenarios: dict[str, Any] = {"": {}}
+    immutable_system_elements: dict = {
+        "conduct_scenario_analysis": True,
+        "run_default_scenario": False,
+    }
+    allowed_mga_objective_objects: list[str] = [
+        "set_carriers",
+        "set_technologies",
+        "set_conversion_technologies",
+        "set_storage_technologies",
+        "set_transport_technologies",
+    ]
+    allowed_mga_objective_locations: list[str] = ["set_nodes", "set_location", "set_edges", "set_supernodes"]
+```
 
-  This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `config.py` the user needs to set:
-  ``` 
-  mga = config.mga
-  ```
+This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `config.py` the user needs to set:
+```mga = config.mga```
+
   <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/1d6c06a3669d0ec06b8d581a0f7fd31fffe9d891/documentation/images/Config_File.png" alt="Config File" width="600" />
 </p>
@@ -146,13 +145,15 @@ Let's analyze it:
   -  It is fundamental that the ```mga.analysis['folder_output']``` is the same of the ```config.analysis['folder_output']```
   - The parameter `cost_slack_variables` that is the allowed percetage of cost deviation
 
-- The `modeling_to_generate_alternatives` folder looks like: 
+#### MGA folder 
+The `modeling_to_generate_alternatives` folder looks like: 
+
   <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/MGA_Folder.png" width="600" />
 </p>
  
- The `1_carbon_storage.json` file is the dictionary where we set the indications for the new objective function, in particular: 
- ``` python 
+The `1_carbon_storage.json` file is the dictionary where we set the indications for the new objective function, in particular: 
+``` python 
   {
     "objective_variables": "capacity_supernodes",
     "objective_set": {
@@ -165,28 +166,29 @@ Let's analyze it:
         ]
     }
   }
- ```
+```
+
  - The elements type of the objective variables, the user can choose among the variables defined in the optimization problem. For example, in the dictionary above we opt for the `"capacity_supernodes"`. At the moment is not possibile to have simoultaneously optimized carriers and technologies. 
  - The `objective_set` key must contain two keys, that refer to the coordinates of the `"capacity_supernodes"` variable array:
   1. The first specifies the objects coordinate, the user can choose among: `"set_carriers", "set_technologies", "set_conversion_technologies", "set_storage_technologies", "set_transport_technologies"`. For example, in the dictionary above, we opt for optimize the `carbon_storage` that is a technology, so the right key for the list will be `set_technology`. All the other will return an error in the code.
   2. The second specifies the location coordinate, the user can choose among: `"set_nodes", "set_location", "set_edges", "set_supernodes"`. For example, in the dictionary above, the right coordinate for `carbon_storage` is `"set_supernodes"`. All the other will return an error in the code.
 
-
- The `characteristic_scale.json` file is a dictionary strctured as follow:
-  ``` python 
+#### Characteristic Scale 
+The `characteristic_scale.json` file is a dictionary strctured as follow:
+``` python 
   {
    "carbon_storage": {
     "default_value": 4,
     "unit": "GW"
    }
   }
-  ```
+```
 
-  It must contains as primary keys all the variables we would like to optimize in the objective function, so in this case it is enough to have just `"carbon_storage"`. 
-  Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable as explained in the Methodology section.  
+It must contains as primary keys all the variables we would like to optimize in the objective function, so in this case it is enough to have just `"carbon_storage"`. 
+Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable as explained in the Methodology section.  
 
- The `mga_iterations.py` looks like the `scenarios.py`, with the following format: 
-  ``` python 
+The `mga_iterations.py` looks like the `scenarios.py`, with the following format: 
+``` python 
   NUMBER_OF_ITERATIONS = 20
   scenarios = dict()
 
@@ -199,12 +201,13 @@ Let's analyze it:
       }
     },
   }
-  ```
-  The scenario name is the same of the file we need to load to build the MGA objective function.
-  This format exploits the exisitng functionalities for scenarios, in particular:
-  - With the key `"analysis"` the user needs change the objective function to `"mga"` 
-  -  `"file"` sets the file anem from which the values must be read
-  - `"default_opt"` is a list of ones  with lenght equal to the number of iteration of Random MGA the user wants to perform.
+```
+  
+The scenario name is the same of the file we need to load to build the MGA objective function.
+This format exploits the exisitng functionalities for scenarios, in particular:
+- With the key `"analysis"` the user needs change the objective function to `"mga"` 
+-  `"file"` sets the file anem from which the values must be read
+- `"default_opt"` is a list of ones  with lenght equal to the number of iteration of Random MGA the user wants to perform.
 
-  For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives`
+For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives`
 
