@@ -57,7 +57,7 @@ $$
 
 where we just add the term $L_i$, the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
 
-Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization. Characteristic scales are derived from the `x` values in the optimal solution when available. If `x` values are zero, the scales are estimated to align with the expected magnitude of variables in the near-optimal space.
+Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization. Characteristic scales are derived from the $x$ values in the optimal solution when available. If $x$ values are zero, the scales are estimated to align with the expected magnitude of variables in the near-optimal space.
 
 ### Challenges
 
@@ -133,10 +133,11 @@ In the `default_config.py` there is a new class called `ModelingToGenerateAltern
 ```
 
 This class handles all the necessary paramters to set up the the MGA algorithm, in particular, in the `config.py` the user needs to set:
+
 ```mga = config.mga```
 
   <p align="center">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/1d6c06a3669d0ec06b8d581a0f7fd31fffe9d891/documentation/images/Config_File.png" alt="Config File" width="600" />
+    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/1d6c06a3669d0ec06b8d581a0f7fd31fffe9d891/documentation/images/Config_File.png" alt="Config File" width="800" />
 </p>
 
   - The parameter `modeling_to_generate_alternatives` equals to True to activate the MGA method
@@ -187,6 +188,7 @@ The `characteristic_scale.json` file is a dictionary strctured as follow:
 It must contains as primary keys all the variables we would like to optimize in the objective function, so in this case it is enough to have just `"carbon_storage"`. 
 Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable as explained in the Methodology section.  
 
+#### MGA iterations 
 The `mga_iterations.py` looks like the `scenarios.py`, with the following format: 
 ``` python 
   NUMBER_OF_ITERATIONS = 20
@@ -211,3 +213,12 @@ This format exploits the exisitng functionalities for scenarios, in particular:
 
 For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives`
 
+
+
+### Supernodes 
+At the beginning of this documents it is mentioned one of the challenge of MGA. To overcome this problem, there is a new functionalities to decrease the number of decision variables and aggregate them together. 
+
+1. The MGA objective function can count for a user defined number of variables as it is explained above
+2. The supernodes aggregation gives the possibilities to aggregate nodes by country. In the `system.py` file, the user can now set `system["set_supernodes"] = True`. In this way, in the optimization problem there will defined:
+  - New sets to be the supernodes, aggregations of nodes by country. For example, nodes `"BE10", "BE21", "BE22"` belongs to node `"BE"`
+  - New aggregated variables for `capacity` and `flow_import`
