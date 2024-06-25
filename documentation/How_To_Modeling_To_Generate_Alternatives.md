@@ -139,7 +139,7 @@ Let's analyze it:
   mga = config.mga
   ```
   <p align="center">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/raw/28b9d472debae1b6d739abe6ee4968fecfb59669/documentation/images/Config_File.png" alt="Config File" width="600" />
+    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/1d6c06a3669d0ec06b8d581a0f7fd31fffe9d891/documentation/images/Config_File.png" alt="Config File" width="600" />
 </p>
 
 - The parameter `modeling_to_generate_alternatives` equals to True to activate the MGA method
