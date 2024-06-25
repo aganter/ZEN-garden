@@ -57,8 +57,7 @@ $$
 
 where we just add the term $L_i$, the characteristic scale that approximately normalizes the variables, helping improve performance in cases where the variables are vastly different scales.
 
-Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization.
-
+Random Directions repeatedly solves this equation to obtain different boundary points. This method is not iterative. Each optimization problem is completely independent of previous ones, allowing for a broad exploration of the near-optimal space and possible parallelization. Characteristic scales are derived from the `x` values in the optimal solution when available. If `x` values are zero, the scales are estimated to align with the expected magnitude of variables in the near-optimal space.
 
 ### Challenges
 
@@ -110,7 +109,6 @@ Let's analyze it:
       """
       
       modeling_to_generate_alternatives: bool = False
-      objective_variables: str = "technologies"
       analysis: Analysis = Analysis()
       solver: Solver = Solver()
       system: System = System()
@@ -153,7 +151,7 @@ Let's analyze it:
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/MGA_Folder.png" width="600" />
 </p>
  
- - The `1_carbon_storage.json` file is the dictionary where we set the indications for the new objective function, in particular: 
+ The `1_carbon_storage.json` file is the dictionary where we set the indications for the new objective function, in particular: 
  ``` python 
   {
     "objective_variables": "capacity_supernodes",
@@ -168,4 +166,45 @@ Let's analyze it:
     }
   }
  ```
-  - aaaa
+ - The elements type of the objective variables, the user can choose among the variables defined in the optimization problem. For example, in the dictionary above we opt for the `"capacity_supernodes"`. At the moment is not possibile to have simoultaneously optimized carriers and technologies. 
+ - The `objective_set` key must contain two keys, that refer to the coordinates of the `"capacity_supernodes"` variable array:
+  1. The first specifies the objects coordinate, the user can choose among: `"set_carriers", "set_technologies", "set_conversion_technologies", "set_storage_technologies", "set_transport_technologies"`. For example, in the dictionary above, we opt for optimize the `carbon_storage` that is a technology, so the right key for the list will be `set_technology`. All the other will return an error in the code.
+  2. The second specifies the location coordinate, the user can choose among: `"set_nodes", "set_location", "set_edges", "set_supernodes"`. For example, in the dictionary above, the right coordinate for `carbon_storage` is `"set_supernodes"`. All the other will return an error in the code.
+
+
+ The `characteristic_scale.json` file is a dictionary strctured as follow:
+  ``` python 
+  {
+   "carbon_storage": {
+    "default_value": 4,
+    "unit": "GW"
+   }
+  }
+  ```
+
+  It must contains as primary keys all the variables we would like to optimize in the objective function, so in this case it is enough to have just `"carbon_storage"`. 
+  Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable as explained in the Methodology section.  
+
+ The `mga_iterations.py` looks like the `scenarios.py`, with the following format: 
+  ``` python 
+  NUMBER_OF_ITERATIONS = 20
+  scenarios = dict()
+
+  scenarios["1_carbon_storage"] = {
+    "analysis": {"objective": "mga"},
+    "ModelingToGenerateAlternatives": {
+      "objective_elements_definition": {
+        "file": "1_carbon_storage",
+        "default_op": [1 for _ in range(NUMBER_OF_ITERATIONS)],
+      }
+    },
+  }
+  ```
+  The scenario name is the same of the file we need to load to build the MGA objective function.
+  This format exploits the exisitng functionalities for scenarios, in particular:
+  - With the key `"analysis"` the user needs change the objective function to `"mga"` 
+  -  `"file"` sets the file anem from which the values must be read
+  - `"default_opt"` is a list of ones  with lenght equal to the number of iteration of Random MGA the user wants to perform.
+
+  For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives`
+

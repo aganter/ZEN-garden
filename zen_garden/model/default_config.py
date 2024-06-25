@@ -180,7 +180,6 @@ class ModelingToGenerateAlternatives(Subscriptable):
     """
 
     modeling_to_generate_alternatives: bool = False
-    objective_variables: str = "technologies"
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()
