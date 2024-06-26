@@ -496,6 +496,9 @@ class OptimizationSetup(object):
         elif self.model.termination_condition == "suboptimal":
             logging.info("The optimization is suboptimal")
             self.optimality = True
+        elif self.model.termination_condition == "time_limit":
+            logging.info("The optimization exceeded the time limit")
+            self.optimality = True
         elif self.model.termination_condition == "infeasible":
             logging.info("The optimization is infeasible")
             self.optimality = False

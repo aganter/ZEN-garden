@@ -434,8 +434,8 @@ class StorageTechnologyRules(GenericRule):
         lhs2 = (flow_storage_discharge + self.variables["storage_charge"] * BigM).where(mask)
         const2 = lhs2 <= BigM.where(mask)
         self.constraints.add_constraint("storage_discharge_decision", const2)
-        #const3 = self.variables["storage_charge"].where(mask==False) == 0
-        #self.constraints.add_constraint("storage_charge_decision_zero", const3)
+        const3 = self.variables["storage_charge"].where(mask==False) == 0
+        self.constraints.add_constraint("storage_charge_decision_zero", const3)
 
     def constraint_storage_technology_capex(self):
         """ definition of the capital expenditures for the storage technology
