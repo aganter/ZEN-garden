@@ -287,7 +287,7 @@ class CarrierRules(GenericRule):
         balancing_carriers = self.system["balancing_carriers"]
         skip_balancing = self.system["balancing_period"] == self.system["unaggregated_time_steps_per_year"]
         if not balancing_carriers or skip_balancing:
-            return self.constraints.return_contraints([])
+            return
 
         ### index sets
         # not necessary

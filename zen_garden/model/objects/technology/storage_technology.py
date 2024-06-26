@@ -399,6 +399,8 @@ class StorageTechnologyRules(GenericRule):
 
     def constraint_storage_charge_decision(self):
         """constraint to ensure that charge and discharge do not occur at the same time"""
+        if not self.system["storage_charge_decision"]:
+            return
         ### index sets
         index_values, index_names = StorageTechnology.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_operation"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
