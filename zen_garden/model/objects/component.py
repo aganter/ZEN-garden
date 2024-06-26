@@ -597,11 +597,11 @@ class Parameter(Component):
                 unit_series = unit_series.rename_axis(index=index_list)
                 unit_series = unit_series.sort_index()
                 if "unit_in_base_units" in dict_of_units:
-                    unit_series[:] = dict_of_units["unit_in_base_units"].units
-                    return unit_series.astype(str)
+                    unit_series[:] = str(dict_of_units["unit_in_base_units"].units)
+                    return unit_series
             for key, value in dict_of_units.items():
-                unit_series.loc[pd.IndexSlice[key]] = value
-            return unit_series.astype(str)
+                unit_series.loc[pd.IndexSlice[key]] = str(value)
+            return unit_series
 
     @staticmethod
     def convert_to_dict(data):
@@ -1128,15 +1128,6 @@ class Constraint(Component):
         for num, con in enumerate(constraints):
             coeffs[num, ...,con.lhs.coeffs["_term"]] = con.lhs.coeffs.data
             variables[num, ...,con.lhs.coeffs["_term"]] = con.lhs.vars.data
-            #TODO check
-            #try:
-            #    coeffs[num, ..., :terms] = con.lhs.coeffs.data
-            #    variables[num, ..., :terms] = con.lhs.vars.data
-            #except:
-            #    logging.warning(f"Constraint dimensions do not match. Manually reordering constraint dimensions.")
-            #    dims = [d for d in coeffs.dims if d in list(con.lhs.coeffs.dims)]
-            #    coeffs[num, ..., :terms] = con.lhs.coeffs.transpose(*dims).data
-            #    variables[num, ..., :terms] = con.lhs.vars.transpose(*dims).data
             con_sign = xr.align(sign[num, ...],con.sign,join="left")[1]
             sign[num, ...] = con_sign
             con_rhs = xr.align(rhs[num, ...],con.rhs,join="left")[1]
@@ -1197,13 +1188,12 @@ class Constraint(Component):
                 if sign is not None:
                     xr_sign.loc[index_val] = sign.sel(group=num).data
 
-        # to full arrays
-        xr_lhs = lp.LinearExpression(xr.Dataset({"coeffs": xr_coeffs, "vars": xr_vars}), model)
-
         if rhs is None and sign is None:
-            return xr_lhs
-
-        return lp.constraints.AnonymousConstraint(xr_lhs, xr_sign, xr_rhs)
+            return lp.LinearExpression(xr.Dataset({"coeffs": xr_coeffs, "vars": xr_vars}), model)
+        else:
+            # to full arrays
+            xr_lhs = xr.Dataset({"coeffs": xr_coeffs, "vars": xr_vars,"sign": xr_sign, "rhs": xr_rhs})
+            return lp.constraints.Constraint(xr_lhs,model)
 
     def reorder_list(self, constraints, index_values, index_names, model):
         """
@@ -1237,7 +1227,6 @@ class Constraint(Component):
         # we start with the lhs
         vars, _ = xr.align(constraint.lhs.data.vars, self.index_sets.coords_dataset, join="right", fill_value=-1)
         coeffs, _ = xr.align(constraint.lhs.data.coeffs, self.index_sets.coords_dataset, join="right", fill_value=np.nan)
-        lhs = lp.LinearExpression(xr.Dataset({"coeffs": coeffs, "vars": vars}), constraint.lhs.model)
 
         # now the rhs
         rhs, _ = xr.align(constraint.rhs, self.index_sets.coords_dataset, join="right", fill_value=np.nan)
@@ -1249,9 +1238,25 @@ class Constraint(Component):
         if mask is not None:
             mask, _ = xr.align(mask, self.index_sets.coords_dataset, join="right", fill_value=False)
 
-        return lp.constraints.AnonymousConstraint(lhs, sign, rhs), mask
-
-    def return_contraints(self, constraints, model=None, mask=None, index_values=None, index_names=None,
+        xr_ds = xr.Dataset({"coeffs": coeffs, "vars": vars, "sign": sign, "rhs": rhs})
+        return lp.constraints.Constraint(xr_ds,constraint.lhs.model), mask
+    
+    # def return_constraints(self, constraints, mask=None):
+    #     """ This is a high-level function that returns the constraints in the correct format, i.e. with reordering, masks,
+    #     etc.
+    #     :param constraints: A single constraints or a potentially empty list of constraints.
+    #     :param model: The model to which the constraints belong
+    #     :param mask: A mask with the same shape as the constraints
+    #     :param index_values: The index values corresponding to the group numbers, if reorder is necessary
+    #     :param index_names: The names of the indices, if reorder is necessary
+    #     :param stack_dim_name: If a list of constraints is provided along with index_values and index_names, the
+    #                            constraints are reordered with the provided indices, if a stack_dim_name is provided, the
+    #                            constraints are stacked along a single dimension with the provided name.
+    #     :return: Constraints with can be added
+    #     """
+    #     a=1
+        
+    def return_constraints(self, constraints, model=None, mask=None, index_values=None, index_names=None,
                           stack_dim_name=None):
         """
         This is a high-level function that returns the constraints in the correct format, i.e. with reordering, masks,
@@ -1271,6 +1276,8 @@ class Constraint(Component):
         if constraints is None:
             return constraints
 
+        if isinstance(constraints,list) and len(constraints) == 1 and isinstance(constraints[0], lp.constraints.AnonymousScalarConstraint):
+            constraints = constraints[0]
         # no need to do anything special
         if not isinstance(constraints, list):
             # rule based constraints
