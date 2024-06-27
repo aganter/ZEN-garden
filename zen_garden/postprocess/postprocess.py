@@ -106,23 +106,13 @@ class Postprocess:
         self.save_param_map()
 
         # extract and save sequence time steps, we transform the arrays to lists
-        self.dict_sequence_time_steps = self.flatten_dict(
-            self.energy_system.time_steps.get_sequence_time_steps_dict()
-        )
-
+        self.dict_sequence_time_steps = self.flatten_dict(self.energy_system.time_steps.get_sequence_time_steps_dict())
+        self.dict_sequence_time_steps["optimized_time_steps"] = model.optimized_time_steps
         if include_year2operation:
-            self.dict_sequence_time_steps["time_steps_year2operation"] = (
-                self.get_time_steps_year2operation()
-            )
-            self.dict_sequence_time_steps["time_steps_year2storage"] = (
-                self.get_time_steps_year2storage()
-            )
+            self.dict_sequence_time_steps["time_steps_year2operation"] = self.get_time_steps_year2operation()
+            self.dict_sequence_time_steps["time_steps_year2storage"] = self.get_time_steps_year2storage()
 
         self.save_sequence_time_steps(scenario=scenario_name)
-
-        # case where we should run the post-process as normal
-        if model.analysis["postprocess"]:
-            pass  # TODO: implement this...  # self.process()
 
     def write_file(self, name, dictionary, format=None):
         """Writes the dictionary to file as json, if compression attribute is True, the serialized json is compressed
@@ -161,11 +151,7 @@ class Postprocess:
 
             # if the string is larger than the max output size we compress anyway
             force_compression = False
-            if (
-                format == "json"
-                and sys.getsizeof(serialized_dict) / 1024**2
-                > self.analysis["max_output_size_mb"]
-            ):
+            if format == "json" and sys.getsizeof(serialized_dict) / 1024**2 > self.analysis["max_output_size_mb"]:
                 print(
                     f"WARNING: The file {name}.json would be larger than the maximum allowed output size of "
                     f"{self.analysis['max_output_size_mb']}MB, compressing..."
@@ -192,14 +178,10 @@ class Postprocess:
         elif format == "h5":
             f_name = f"{name}.h5"
             with FileLock(f_name + ".lock").acquire(timeout=300):
-                HDFPandasSerializer.serialize_dict(
-                    file_name=f_name, dictionary=dictionary, overwrite=self.overwrite
-                )
+                HDFPandasSerializer.serialize_dict(file_name=f_name, dictionary=dictionary, overwrite=self.overwrite)
 
         else:
-            raise AssertionError(
-                f"The specified output format {format}, chosen in the config, is not supported"
-            )
+            raise AssertionError(f"The specified output format {format}, chosen in the config, is not supported")
 
     def save_sets(self):
         """Saves the Set values to a json file which can then be
@@ -273,7 +255,7 @@ class Postprocess:
             if len(df.index.names) == len(index_list):
                 df.index.names = index_list
 
-            units = self._unit_df(units,df.index)
+            units = self._unit_df(units, df.index)
             # update dict
             data_frames[param] = self._transform_df(df, doc, units)
 
@@ -304,7 +286,7 @@ class Postprocess:
             if len(df.index.names) == len(index_list):
                 df.index.names = index_list
 
-            units = self._unit_df(units,df.index)
+            units = self._unit_df(units, df.index)
             # we transform the dataframe to a json string and load it into the dictionary as dict
             data_frames[name] = self._transform_df(df, doc, units)
 
@@ -402,10 +384,7 @@ class Postprocess:
 
         if self.param_map is not None:
             # This we only need to save once
-            if (
-                self.system["use_rolling_horizon"]
-                and self.system["conduct_scenario_analysis"]
-            ):
+            if self.system["use_rolling_horizon"] and self.system["conduct_scenario_analysis"]:
                 fname = self.name_dir.parent.parent.joinpath("param_map")
             elif self.subfolder != Path(""):
                 fname = self.name_dir.parent.joinpath("param_map")
@@ -426,9 +405,7 @@ class Postprocess:
 
             # This we only need to save once
         if self.system["use_rolling_horizon"]:
-            fname = self.name_dir.parent.joinpath(
-                f"dict_all_sequence_time_steps{add_on}"
-            )
+            fname = self.name_dir.parent.joinpath(f"dict_all_sequence_time_steps{add_on}")
         else:
             fname = self.name_dir.joinpath(f"dict_all_sequence_time_steps{add_on}")
         self.write_file(fname, self.dict_sequence_time_steps)
@@ -468,12 +445,7 @@ class Postprocess:
         :return: pd.Series of the docstring
         """
         if doc is not None:
-            return (
-                pd.Series(doc.split(";"))
-                .str.split(":", expand=True)
-                .set_index(0)
-                .squeeze()
-            )
+            return pd.Series(doc.split(";")).str.split(":", expand=True).set_index(0).squeeze()
         else:
             return pd.DataFrame()
 
