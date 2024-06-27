@@ -60,7 +60,7 @@ Random Directions solves this equation repeatedly to obtain different boundary p
 
 ### Challenges
 
-A challenge in MGA is identifying all feasible solutions that meet the cost deviation constraint, especially in large-scale problems. Computing the entire near-optimal space for all variables is often impractical due to computational limits. Thus, analyses typically focus on a subset of variables, projecting the near-optimal space onto a smaller set of aggregate variables ($x_{agg} = g(x)$), maintaining the solution space's convexity and facilitating exploration of near-optimal solutions.
+A challenge in MGA is identifying all feasible solutions that meet the cost deviation constraint, especially in large-scale problems. Computing the entire near-optimal space for all variables is often impractical due to computational limits. Thus, analyses typically focus on a subset of variables, projecting the near-optimal space onto a smaller set of aggregate variables $x_{agg} = g(x)$, maintaining the solution space's convexity and facilitating exploration of near-optimal solutions.
 
 ## How to MGA
 ### MGA Class
