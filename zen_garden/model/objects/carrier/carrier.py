@@ -287,6 +287,8 @@ class CarrierRules(GenericRule):
         balancing_carriers = self.system["balancing_carriers"]
         skip_balancing = self.system["balancing_period"] == self.system["unaggregated_time_steps_per_year"]
         if not balancing_carriers or skip_balancing:
+            constraints = self.variables["flow_export_balancing"]==0 # fix unused variable
+            self.constraints.add_constraint("constraint_export_balancing", constraints)
             return
 
         ### index sets
@@ -321,6 +323,8 @@ class CarrierRules(GenericRule):
 
         ### return
         self.constraints.add_constraint("constraint_export_balancing", constraints)
+        constraints = self.variables["flow_export_balancing"].where(mask==0)==0 # fix unused variable
+        self.constraints.add_constraint("constraint_export_balancing_zero", constraints)
 
 
     def constraint_import_share(self):
