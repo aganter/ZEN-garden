@@ -276,7 +276,7 @@ class ModelingToGenerateAlternatives:
         self.generate_weights()
 
         for step in steps_horizon:
-            StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step)
+            StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step, self.config_mga.system)
             self.mga_solution.overwrite_time_indices(step)
             self.mga_solution.construct_optimization_problem()
             self.add_cost_constraint()

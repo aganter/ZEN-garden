@@ -21,12 +21,12 @@ import linopy as lp
 import numpy as np
 import pandas as pd
 
+from zen_garden.preprocess.time_series_aggregation import TimeSeriesAggregation
+from zen_garden.postprocess.postprocess import Postprocess
 from .objects.component import Parameter, Variable, Constraint, IndexSet
 from .objects.element import Element
 from .objects.energy_system import EnergySystem
 from .objects.technology.technology import Technology
-from zen_garden.preprocess.time_series_aggregation import TimeSeriesAggregation
-from zen_garden.postprocess.postprocess import Postprocess
 
 from ..utils import ScenarioDict, IISConstraintParser, StringUtils
 
@@ -114,7 +114,7 @@ class OptimizationSetup(object):
         This method creates a dictionary with the paths of the data split
         by carriers, networks, technologies
         """
-        ## General Paths
+        # General Paths
         # define path to access dataset related to the current analysis
         self.path_data = self.analysis["dataset"]
         assert os.path.exists(self.path_data), f"Folder for input data {self.analysis['dataset']} does not exist!"
@@ -825,7 +825,7 @@ class OptimizationSetup(object):
 
         # iterate through horizon steps
         for step in steps_horizon:
-            StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step)
+            StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step, self.config.system)
             self.overwrite_time_indices(step)
             self.construct_optimization_problem()
             self.solve()
