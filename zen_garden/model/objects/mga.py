@@ -22,6 +22,7 @@ import time
 import numpy as np
 import xarray as xr
 import psutil
+import math
 from scipy.stats import truncnorm
 
 from zen_garden.preprocess.extract_input_data import DataInputMGA
@@ -159,11 +160,12 @@ class ModelingToGenerateAlternatives:
         """
         self.mga_data_input.scenario_dict = self.scenario_dict
 
+        # ModelingToGenerateAlternatives must be a key of the mga_iteration scenarios dictionary
         if self.name in self.mga_data_input.scenario_dict.keys():
             self.mga_solution.config["objective_variables"] = self.mga_data_input.decision_variables_dict[
                 "objective_variables"
             ]
-
+            # Update the list of decision variables by combining the objectives and the locations
             for obj in self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]:
                 for loc in self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_loc]:
                     self.decision_variables.append([obj, loc])
@@ -190,12 +192,20 @@ class ModelingToGenerateAlternatives:
             "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
             "estimated to roughly match its expected magnitude in the near-optimal space.",
         )
+        # Extract the array named as the type of variables that we want to set as objective variables from
+        # the original optimized solution (e.g. capacity)
         complete_xr_variables = getattr(
             self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"]
         )
+        # Extract the exact name of the variables that we want to set as objective variables from the input data
         subset_objective_vars = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
-        condition = complete_xr_variables[self.mga_objective_obj].isin(subset_objective_vars)
-        xr_variables = complete_xr_variables.where(condition, drop=True)
+        # Generate an array that intersects the original array with the subset of variables that we want to set as
+        # objective variables and sum over the time dimension because we are interested in the total amount of the
+        # variable in the system
+        xr_variables = complete_xr_variables.where(
+            complete_xr_variables[self.mga_objective_obj].isin(subset_objective_vars), drop=True
+        ).sum(dim=next(dim for dim in complete_xr_variables.dims if dim.startswith("set_time_steps")), skipna=False)
+        # Initialize the characteristic scales array with the same shape as the variables array
         self.characteristic_scales = xr.full_like(xr_variables, fill_value=np.nan)
 
         for index in np.ndindex(xr_variables.shape):
@@ -228,6 +238,8 @@ class ModelingToGenerateAlternatives:
         weights = xr.full_like(self.characteristic_scales, fill_value=np.nan)
 
         for index in np.ndindex(self.characteristic_scales.shape):
+            # Extract the coordinates of interest of the characteristic scales: the name of objective and the location
+            # and select the value of the characteristic scales at the found coordinates
             coords = {
                 dim: self.characteristic_scales.coords[dim].values[index[dim_idx]]
                 for dim_idx, dim in enumerate(self.characteristic_scales.dims)
@@ -236,8 +248,9 @@ class ModelingToGenerateAlternatives:
                 {key: coords[key] for key in [f"{self.mga_objective_obj}", f"{self.mga_objective_loc}"]}.values()
             )
             characteristic_scale = self.characteristic_scales.sel(coords)
-
-            if coords_subset_tuple in self.direction_search_vector:
+            #  Only if the same coordinates are in the direction_search_vector, and the characteristic scale is not NaN
+            # the weights are calculated
+            if coords_subset_tuple in self.direction_search_vector and not math.isnan(characteristic_scale):
                 direction_search = self.direction_search_vector[coords_subset_tuple]
                 weights.values[index] = direction_search / characteristic_scale
 

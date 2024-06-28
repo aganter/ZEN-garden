@@ -806,16 +806,19 @@ class EnergySystemRules(GenericRule):
         :return: MGA objective function.
         """
         total = 0
+        # Iterate over all weights coordinates
         for index in np.ndindex(self.optimization_setup.mga_weights.shape):
             coords = {
                 dim: self.optimization_setup.mga_weights.coords[dim].values[index[dim_idx]]
                 for dim_idx, dim in enumerate(self.optimization_setup.mga_weights.dims)
             }
-
+            # Get the weight for the current coordinates
             weight = self.optimization_setup.mga_weights.sel(coords).values
+            # If the weight is not NaN, add the weighted decision variable to the total objective
             if not np.isnan(weight):
-                objective_variable = model.variables[self.optimization_setup.config["objective_variables"]][
-                    tuple(coords.values())
-                ]
+                # The weight is the same for all time steps
+                model_variables = model.variables[self.optimization_setup.config["objective_variables"]]
+                time_dim = next(dim for dim in model_variables.dims if dim.startswith("set_time_steps"))
+                objective_variable = sum(model_variables.sel(coords)[year] for year in self.sets[time_dim])
                 total += weight * objective_variable
         return total
