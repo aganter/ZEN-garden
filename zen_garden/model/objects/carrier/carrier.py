@@ -349,11 +349,11 @@ class CarrierRules(GenericRule):
         # not necessary
 
         ### formulate constraint
-        #lhs = self.variables["flow_import"].sum("set_time_steps_operation").where(mask_carrier)
-        #rhs = (self.parameters.availability_import.sum("set_time_steps_operation")*self.parameters.import_share).where(mask_carrier)
-        lhs = self.variables["flow_import"].where(mask_carrier)
-        rhs = self.parameters.availability_import.where(mask_import, max_import).where(mask_carrier)
-        constraints = lhs == rhs
+        lhs = self.variables["flow_import"].sum("set_time_steps_operation").where(mask_carrier)
+        rhs = (self.parameters.availability_import.sum("set_time_steps_operation")*self.parameters.import_share).where(mask_carrier)
+        #lhs = self.variables["flow_import"].where(mask_carrier)
+        #rhs = self.parameters.availability_import.where(mask_import, max_import).where(mask_carrier)
+        constraints = lhs <= rhs
 
         ### return
         self.constraints.add_constraint("constraint_import_share",constraints)
