@@ -285,7 +285,7 @@ class Carrier(Element):
             unit_category={"money": 1, "time": -1},
         )
 
-        if optimization_setup.system["set_supernodes"]:
+        if optimization_setup.system["run_supernodes"]:
             variables.add_variable(
                 model,
                 name="flow_import_supernodes",
@@ -334,7 +334,7 @@ class Carrier(Element):
         # energy balance
         rules.constraint_nodal_energy_balance()
 
-        if optimization_setup.system["set_supernodes"]:
+        if optimization_setup.system["run_supernodes"]:
             rules.constraint_carrier_flow_import_supernodes()
 
         # add pe.Sets of the child classes
@@ -716,11 +716,18 @@ class CarrierRules(GenericRule):
 
     def constraint_carrier_flow_import_supernodes(self):
         """
-        Set the flow import of carriers at the supernodes to be the sum of the flow imports of the nodes that belong
-        to the supernode thanks to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
+        Sum up the carrier flow import from nodes to supernodes
         """
-        lhs = self.variables["flow_import_supernodes"] - self.variables["flow_import"].sum(dim="set_nodes")
+        nodes_to_supernodes = self.sets["set_nodes_in_supernodes"].data
+        flow = self.variables["flow_import"].to_linexpr()
+        flow_supernodes = self.variables["flow_import_supernodes"].to_linexpr()
+        map_supernodes = [nodes_to_supernodes[node] for node in flow.coords["set_nodes"].values]
+        supernode_coord = xr.DataArray(map_supernodes, dims="set_nodes", coords={"set_nodes": flow.coords["set_nodes"]})
+        flow = flow.groupby(supernode_coord).sum(dim="set_nodes")
+        flow = flow.rename({"group": "set_supernodes"})
+        lhs = lp.merge(flow_supernodes, -flow, compat="broadcast_equals",)
         rhs = 0
+
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_carrier_flow_import_supernodes", constraints)

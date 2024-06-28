@@ -462,6 +462,33 @@ class DataInput:
             else:
                 raise FileNotFoundError(f"Input file set_edges.csv is missing from {self.folder_path}")
 
+    def extract_super_locations(self, set_location, extract_supernodes=True):
+        """
+        reads input data to extract supernodes and superedges and save them as two dictionary with key the
+        nodes and edges and values the supernodes and superedges respectively.
+        """
+        super_locations = {}
+
+        if extract_supernodes:
+            file_name = "set_nodes"
+            set_locations = "node"
+            name = "supernode"
+        else:
+            file_name = "set_edges"
+            set_locations = "edge"
+            name = "superedge"
+
+        input_file = self.read_input_csv(file_name)
+        if input_file is None:
+            raise FileNotFoundError(f"Input file {file_name} is missing from {self.folder_path}")
+        if name not in input_file.columns:
+            raise AssertionError(f"Column {name} is missing in {file_name}.")
+
+        filtered_input = input_file[input_file[set_locations].isin(set_location)]
+        for location in set_location:
+            super_locations[location] = filtered_input[filtered_input[set_locations] == location][name].iloc[0]
+        return super_locations
+
     def extract_carriers(self, carrier_type):
         """reads input data and extracts conversion carriers
 

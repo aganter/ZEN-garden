@@ -232,6 +232,17 @@ class Element:
                             # if element in set_transport_technologies
                             elif element in sets["set_transport_technologies"]:
                                 list_sets.append(sets["set_edges"])
+                        elif index == "set_superlocation":
+                            # if element in set_conversion_technologies or set_storage_technologies, append set_supernodes
+                            if (
+                                element in sets["set_conversion_technologies"]
+                                or element in sets["set_storage_technologies"]
+                                or element in sets["set_retrofitting_technologies"]
+                            ):
+                                list_sets.append(sets["set_supernodes"])
+                            # if element in set_transport_technologies
+                            elif element in sets["set_transport_technologies"]:
+                                list_sets.append(sets["set_superedges"])
                         # if set is built for pwa capex:
                         elif "set_capex" in index:
                             if element in sets["set_conversion_technologies"]:

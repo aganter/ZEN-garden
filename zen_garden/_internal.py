@@ -12,9 +12,9 @@ import logging
 import os
 import importlib
 
-from .model.optimization_setup import OptimizationSetup
-from .model.objects.mga import ModelingToGenerateAlternatives
-from .utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
+from zen_garden.model.optimization_setup import OptimizationSetup
+from zen_garden.model.objects.mga import ModelingToGenerateAlternatives
+from zen_garden.utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
 
 # We setup the logger here
 setup_logger()

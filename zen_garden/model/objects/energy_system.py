@@ -77,9 +77,9 @@ class EnergySystem:
         # dict to save the parameter units (and save them in the results later on)
         self.units = {}
 
-        # supernodes initialization
-        self.set_supernodes = None
-        self.grouped_nodes_into_supernodes = []
+        # superlocation initialization
+        self.superedges = {}
+        self.supernodes = {}
 
     def store_input_data(self):
         """retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes"""
@@ -162,10 +162,15 @@ class EnergySystem:
         self.knowledge_spillover_rate = self.data_input.extract_input_data(
             "knowledge_spillover_rate", index_sets=[], unit_category={}
         )
-        if self.system["set_supernodes"]:
-            set_supernodes_file = self.data_input.read_input_csv("set_supernodes")
-            self.set_supernodes = set_supernodes_file["supernode"].tolist()
-            self.group_nodes_by_super_node()
+        if self.system["run_supernodes"]:
+            self.supernodes = self.data_input.extract_super_locations(
+                set_location=self.set_nodes, extract_supernodes=True
+            )
+            self.superedges = self.data_input.extract_super_locations(
+                set_location=self.set_edges, extract_supernodes=False
+            )
+            logging.info("Grouped location into superlocations")
+            logging.info("")
 
     def calculate_edges_from_nodes(self):
         """calculates set_nodes_on_edges from set_nodes
@@ -259,20 +264,7 @@ class EnergySystem:
                 return _reversed_edge
         raise KeyError(f"Edge {edge} has no reversed edge. However, at least one transport technology is bidirectional")
 
-    def group_nodes_by_super_node(self):
-        """generates supernodes and adds them to the set of nodes"""
-        supernodes = self.set_supernodes
-        unassigned_nodes = set(self.set_nodes)
-        for supernode in supernodes:
-            nodes_in_supernode = [node for node in self.set_nodes if node.startswith(supernode)]
-            if nodes_in_supernode:
-                self.grouped_nodes_into_supernodes.append([supernode, nodes_in_supernode])
-                unassigned_nodes -= set(nodes_in_supernode)
-        assert (
-            not unassigned_nodes
-        ), f"The following nodes do not correspond to a supernode: {', '.join(unassigned_nodes)}"
-
-    ### --- classmethods to construct sets, parameters, variables, and constraints, that correspond to EnergySystem --- ###
+    # --- classmethods to construct sets, parameters, variables, and constraints, that correspond to EnergySystem --- #
 
     def construct_sets(self):
         """constructs the pe.Sets of the class <EnergySystem>"""
@@ -327,11 +319,28 @@ class EnergySystem:
             data=self.time_steps.time_steps_storage,
             doc="Set of storage level time steps",
         )
-        # supernodes
+        # superlocations
         self.optimization_setup.sets.add_set(
             name="set_supernodes",
-            data=[sublist[0] for sublist in self.grouped_nodes_into_supernodes],
+            data=set(self.supernodes.values()),
             doc="Set of supernodes",
+        )
+        self.optimization_setup.sets.add_set(
+            name="set_superedges",
+            data=set(self.superedges.values()),
+            doc="Set of superedges",
+        )
+        self.optimization_setup.sets.add_set(
+            name="set_nodes_in_supernodes",
+            data=self.supernodes,
+            doc="Set of nodes in supernodes",
+            index_set="set_nodes",
+        )
+        self.optimization_setup.sets.add_set(
+            name="set_edges_in_superedges",
+            data=self.superedges,
+            doc="Set of edges in superedges",
+            index_set="set_edges",
         )
 
     def construct_params(self):

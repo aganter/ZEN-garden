@@ -715,16 +715,16 @@ class Technology(Element):
             unit_category={"emissions": 1},
         )
 
-        if optimization_setup.system["set_supernodes"]:
+        if optimization_setup.system["run_supernodes"]:
             variables.add_variable(
                 model,
                 name="capacity_supernodes",
                 index_sets=cls.create_custom_set(
-                    ["set_technologies", "set_capacity_types", "set_supernodes", "set_time_steps_yearly"],
+                    ["set_technologies", "set_capacity_types", "set_superlocation", "set_time_steps_yearly"],
                     optimization_setup,
                 ),
                 bounds=(0, np.inf),
-                doc="capacity of installed technologies at supernodes s and time t",
+                doc="capacity of installed technologies at superlocation l and time t",
                 unit_category={"energy_quantity": 1, "time": -1},
             )
 
@@ -857,7 +857,7 @@ class Technology(Element):
             model.variables.remove("tech_on_var")
             model.variables.remove("tech_off_var")
 
-        if optimization_setup.system["set_supernodes"]:
+        if optimization_setup.system["run_supernodes"]:
             rules.constraint_technology_capacity_supernodes()
 
         # add pe.Constraints of the child classes
@@ -1432,11 +1432,19 @@ class TechnologyRules(GenericRule):
 
     def constraint_technology_capacity_supernodes(self):
         """
-        Set the capacity of the supernodes to the sum of the capacities of the nodes that belong to the supernode thanks
-        to the optimization_setup.energy_system.grouped_nodes_into_supernodes list
+        Sum up the carrier flow import from location to superlocation
         """
-        lhs = self.variables["capacity_supernodes"] - self.variables["capacity"].sum(dim="set_location")
+        loc_to_superloc = {**self.sets["set_nodes_in_supernodes"].data, **self.sets["set_edges_in_superedges"].data}
+        capacity = self.variables["capacity"].to_linexpr()
+        capacity_superloc = self.variables["capacity_supernodes"].to_linexpr()
+        map_supernloc = [loc_to_superloc[loc] for loc in capacity.coords["set_location"].values]
+        superloc_coord = xr.DataArray(
+            map_supernloc, dims="set_location", coords={"set_location": capacity.coords["set_location"]}
+        )
+        capacity = capacity.groupby(superloc_coord).sum(dim="set_location")
+        capacity = capacity.rename({"group": "set_superlocation"})
+        lhs = lp.merge(capacity_superloc, -capacity, compat="broadcast_equals",)
         rhs = 0
-        constraints = lhs == rhs
 
+        constraints = lhs == rhs
         self.constraints.add_constraint("constraint_technologies_capacity_supernodes", constraints)
