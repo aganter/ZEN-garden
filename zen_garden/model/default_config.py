@@ -205,7 +205,6 @@ class ModelingToGenerateAlternatives(Subscriptable):
         "set_location",
         "set_edges",
         "set_supernodes",
-        "set_superedges",
         "set_superlocation",
     ]
 
