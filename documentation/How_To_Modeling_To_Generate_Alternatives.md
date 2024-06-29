@@ -121,14 +121,10 @@ class ModelingToGenerateAlternatives(Subscriptable):
     allowed_mga_objective_objects: list[str] = [
         "set_carriers",
         "set_technologies",
-        "set_conversion_technologies",
-        "set_storage_technologies",
-        "set_transport_technologies",
     ]
     allowed_mga_objective_locations: list[str] = [
        "set_nodes",
         "set_location",
-        "set_edges",
         "set_supernodes",
         "set_superlocation",
     ]
