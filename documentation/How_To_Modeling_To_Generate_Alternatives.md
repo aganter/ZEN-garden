@@ -183,6 +183,8 @@ The `characteristic_scale.json` file is structured as follows:
 ```
 It must contain as primary keys all the variables we would like to optimize in the objective function, so in this case, it is enough to have just `"carbon_storage"`. Each primary key defines a dictionary with two keys: `"default_value"` and `"unit"` to approximate the value of the variable, as explained in the Methodology section.
 
+It is important to note that the MGA objective function, if the problem is a multi year optimization, has as decision variables the sum of the variables over the optimized years. The latter is the multiply by the weight. So, the characteristic scale should be an approximation of the value of the variables considering all the optimized years.
+
 #### MGA Iterations
 The `mga_iterations.py` resembles the `scenarios.py` in format:
 ```python
@@ -215,11 +217,10 @@ At the beginning of this document, one of the challenges of MGA is mentioned. To
 1. The MGA objective function can account for a user-defined number of variables as explained above.
 2. The supernodes aggregation gives the possibility to aggregate nodes by country. In the `system.py` file, the user can now set `system["run_supernodes"] = True`. In this way, in the optimization problem, new sets are defined as supernodes, aggregations of nodes by country. For example, nodes `"BE10", "BE21", "BE22"` belong to node `"BE"`. And consequently, new aggregated variables for `capacity` and `flow_import` are defined as the sum of those variable for all the nodes belonging to a supernode. These are called respectively `capacity_supernodes` and `flow_import_supernodes`.
 
-N.B.: In order to be able to perform the supernodes aggregation, the file `all_nodes.csv` and `all_edges.csv` inside the folder `energy_system` must contain an additional column, to be `supernode` and `superedge` respectively, as shown in the following pictures:
+N.B. 1: In order to be able to perform the supernodes aggregation, the file `all_nodes.csv` and `all_edges.csv` inside the folder `energy_system` must contain an additional column, to be `supernode` and `superedge` respectively, as shown in the following pictures:
 <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/supernodes.png" width="400" />
 </p>
 <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/speredgeds.png" width="400" />
 </p>
-
