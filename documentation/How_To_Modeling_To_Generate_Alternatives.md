@@ -219,7 +219,7 @@ At the beginning of this document, one of the challenges of MGA is mentioned. To
 
 N.B. 1: In order to be able to perform the supernodes aggregation, the file `all_nodes.csv` and `all_edges.csv` inside the folder `energy_system` must contain an additional column, to be `supernode` and `superedge` respectively, as shown in the following pictures:
 <p align="center">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/7052e6cc624742e5f7902fc55c16799a888c9eba/documentation/images/supernodes.png" width="400" />
+    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/92d1848062337784c31f9711135cb9c49bf71b4f/documentation/images/supernodes.png" width="400" />
 </p>
 <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/speredgeds.png" width="400" />
