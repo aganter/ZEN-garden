@@ -30,7 +30,7 @@ from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.utils import InputDataChecks
 from zen_garden.utils import StringUtils
 from zen_garden.postprocess.postprocess import Postprocess
-from zen_garden.model.objects.benders import BendersDecomposition
+from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
 
 
 class ModelingToGenerateAlternatives:
@@ -62,15 +62,15 @@ class ModelingToGenerateAlternatives:
         self.scenario_name = scenario_name
         self.scenario_dict = scenario_dict
 
-        input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
-        input_data_checks.check_dataset()
+        self.input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
+        self.input_data_checks.check_dataset()
         # Initialize the OptimizationSetup object for the MGA iteration model
         self.mga_solution: OptimizationSetup = OptimizationSetup(
             config=self.config_mga,
             model_name=self.optimized_setup.model_name,
             scenario_name=self.scenario_name,
             scenario_dict=self.scenario_dict,
-            input_data_checks=input_data_checks,
+            input_data_checks=self.input_data_checks,
         )
         self.mga_objective_obj = None
         self.mga_objective_loc = None
@@ -300,7 +300,6 @@ class ModelingToGenerateAlternatives:
                 config_benders=self.config.benders,
                 monolithic_problem=self.mga_solution,
             )
-            benders_decomposition.create_master_problem()
 
             self.mga_solution.solve()
 

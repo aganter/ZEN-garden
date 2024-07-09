@@ -5,30 +5,24 @@
   :Organization: Labratory of Reliability and Risk Engineering, ETH Zurich
 
     Class to decompose the optimization problem into a MASTER problem, which is the design problem and a set of
-    SUBPROBLEMS, which are the operational problems with different set of uncertaint parameters. 
+    SUBPROBLEMS, which are the operational problems with different set of uncertaint parameters.
     The class is used to define the different benders decomposition method.
 """
 
-import os
-import copy
 import logging
-import time
-import numpy as np
-import xarray as xr
-import psutil
-import math
-import linopy as lp
 
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
-from zen_garden.utils import InputDataChecks
-from zen_garden.utils import StringUtils
-from zen_garden.postprocess.postprocess import Postprocess
+from zen_garden.model.objects.benders_decomposition.master_problem import MasterProblem
 
 
 class BendersDecomposition:
     """
     Class defining the Benders Decomposition method.
+    Initialize the BendersDecomposition object.
+
+    :param config_benders: dictionary containing the configuration of the Benders Decomposition method
+    :param monolithic_problem: OptimizationSetup object of the monolithic problem
     """
 
     label = "BendersDecomposition"
@@ -40,12 +34,7 @@ class BendersDecomposition:
         config_benders: dict,
         monolithic_problem: OptimizationSetup,
     ):
-        """
-        Initialize the BendersDecomposition object.
 
-        :param config_benders: dictionary containing the configuration of the Benders Decomposition method
-        :param monolithic_problem: OptimizationSetup object of the monolithic problem
-        """
         self.name = "BendersDecomposition"
         self.config = config
         self.analysis = analysis
@@ -64,13 +53,31 @@ class BendersDecomposition:
         )
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
+        self.monolithic_variables = self.monolithic_problem.model.variables
         self.design_constraints, self.operational_constraints = self.separate_design_operational_constraints()
+        self.design_variables, self.operational_variables = self.separate_design_operational_variables()
 
-        self.master_model = None
-        self.master_sets = None
-        self.master_parameters = None
-
+        self.master_model = MasterProblem(
+            config=self.monolithic_problem.config,
+            analysis=self.analysis,
+            monolithic_problem=self.monolithic_problem,
+            model_name=self.monolithic_problem.model_name,
+            scenario_name=self.monolithic_problem.scenario_name,
+            scenario_dict=self.monolithic_problem.scenario_dict,
+            input_data_checks=self.monolithic_problem.input_data_checks,
+            design_variables=self.design_variables,
+            operational_variables=self.operational_variables,
+            design_constraints=self.design_constraints,
+            operational_constraints=self.operational_constraints,
+        )
         self.subproblem_models = None
+
+    def add_dummy__constant_variable(self, model, name="dummy_variable"):
+        """
+        Add a dummy variable to the master problem.
+        """
+        dummy_variable = model.add_variables(lower=1, upper=1, name=name, integer=True)
+        return dummy_variable
 
     def separate_design_operational_constraints(self) -> list:
         """
@@ -104,49 +111,33 @@ class BendersDecomposition:
 
         return design_constraints, operational_constraints
 
-    def create_master_problem(self):
+    def separate_design_operational_variables(self) -> list:
         """
-        Create the master problem, which is the design problem.
-        It includes only the design constraints and the objective function is taken from the config as follow:
-        - If the objective function is "mga", we check whether we optimize for design or operational variables:
-            - If design, we use the same objective function as the monolithic problem
-            - If operational, in the master problem we use a dummy constant objective function
-        TODO: Add the possibility to use Benders also when optimize for "total_cost" and "total_carbon_emissions", in
-        the future also for "risk"
-        - If the objective function is "total_cost", we split the objective function into design and operational costs
-        and in the master problem we only include the design costs.
-        - If the obejctive function is "total_carbon_emissions", in the master problem we use a dummy constant
-        objective function
-        """
-        # Create a copy of the monolithic problem for robustness
-        if self.config.solver["solver_dir"] is not None and not os.path.exists(self.config.solver["solver_dir"]):
-            os.makedirs(self.config.solver["solver_dir"])
-        self.master_model = lp.Model(solver_dir=self.config.solver["solver_dir"])
+        Separate the design and operational variables based on the user input preferences defined in the config file.
 
-        # Define the objective function
-        if self.analysis["objective"] == "mga":
-            if "capacity" in str(self.monolithic_problem.model.objective):
-                self.master_model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
-            elif "flow_import" in str(self.monolithic_problem.model.objective):
-                dummy_variables = self.master_model.add_variables(
-                    lower=1, upper=1, name="dummy_master_variable", integer=True
-                )
-                self.master_model.add_objective(lp.LinearExpression(dummy_variables, self.master_model), overwrite=True)
+        :return: design_variables, operational_variables (type: lists of strings)
+        """
+        benders_variables = self.data_input.read_input_csv("variables")
+        design_variables = []
+        operational_variables = []
+
+        # The benders_variables is a dataframe with columns: variable_name and variable_type
+        for _, variable in benders_variables.iterrows():
+            if variable["variable_name"] in self.monolithic_variables:
+                if variable["variable_type"] == "design":
+                    design_variables.append(variable["variable_name"])
+                elif variable["variable_type"] == "operational":
+                    operational_variables.append(variable["variable_name"])
+                else:
+                    raise AssertionError(f"Constraint {variable['variable_name']} has an invalid type.")
             else:
-                raise AssertionError("Objective function not recognized for MGA.")
-        else:
-            logging.error(
-                "Objective function %s not supported for Benders Decomposition at the moment.",
-                self.config.analysis["objective"],
+                logging.warning("Constraint %s is not in the monolithic problem.", variable["variable_name"])
+
+        # At the end we need to ensure we have added all the variables of the monolithic problem
+        if len(design_variables) + len(operational_variables) != len(self.monolithic_variables):
+            missing_variables = set(self.monolithic_variables) - set(design_variables + operational_variables)
+            raise AssertionError(
+                f"The following variables are missing in the benders decomposition: {missing_variables}"
             )
 
-        # Add the monolithic variables to the master problem
-        for variable in self.monolithic_problem.model.variables:
-            self.master_model.variables.add(self.monolithic_problem.model.variables[variable])
-
-        # Add the design constraints to the master problem
-        for constraint in self.monolithic_problem.model.constraints:
-            if constraint in self.design_constraints:
-                self.master_model.constraints.add(self.monolithic_problem.model.constraints[constraint])
-
-        return self.master_model
+        return design_variables, operational_variables
