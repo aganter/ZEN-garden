@@ -296,12 +296,13 @@ class ModelingToGenerateAlternatives:
             self.add_cost_constraint()
             benders_decomposition = BendersDecomposition(
                 config=self.config,
+                analysis=self.config_mga.analysis,
                 config_benders=self.config.benders,
                 monolithic_problem=self.mga_solution,
             )
-            benders_decomposition.separate_design_operational_constraints()
+            benders_decomposition.create_master_problem()
 
-            # self.mga_solution.solve()
+            self.mga_solution.solve()
 
             # if not self.mga_solution.optimality:
             #     self.mga_solution.write_IIS()

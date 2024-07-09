@@ -10,12 +10,14 @@
 """
 
 import os
+import copy
 import logging
 import time
 import numpy as np
 import xarray as xr
 import psutil
 import math
+import linopy as lp
 
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
@@ -34,6 +36,7 @@ class BendersDecomposition:
     def __init__(
         self,
         config: dict,
+        analysis: dict,
         config_benders: dict,
         monolithic_problem: OptimizationSetup,
     ):
@@ -45,6 +48,7 @@ class BendersDecomposition:
         """
         self.name = "BendersDecomposition"
         self.config = config
+        self.analysis = analysis
         self.config_benders = config_benders
         self.monolithic_problem = monolithic_problem
 
@@ -60,7 +64,13 @@ class BendersDecomposition:
         )
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
-        self.benders_constraints = self.data_input.read_input_csv("constraints")
+        self.design_constraints, self.operational_constraints = self.separate_design_operational_constraints()
+
+        self.master_model = None
+        self.master_sets = None
+        self.master_parameters = None
+
+        self.subproblem_models = None
 
     def separate_design_operational_constraints(self) -> list:
         """
@@ -69,31 +79,74 @@ class BendersDecomposition:
 
         :return: design_constraints, operational_constraints (type: lists of strings)
         """
+        benders_constraints = self.data_input.read_input_csv("constraints")
         design_constraints = []
         operational_constraints = []
 
         # The benders_constraints is a dataframe with columns: constraint_name and constraint_type
-        for _, constraint in self.benders_constraints.iterrows():
+        for _, constraint in benders_constraints.iterrows():
             if constraint["constraint_name"] in self.monolithic_constraints:
                 if constraint["constraint_type"] == "design":
                     design_constraints.append(constraint["constraint_name"])
                 elif constraint["constraint_type"] == "operational":
                     operational_constraints.append(constraint["constraint_name"])
                 else:
-                    logging.error("Constraint %s has an invalid type.", constraint["constraint_name"])
+                    raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
             else:
-                logging.error("Constraint %s is not in the monolithic problem.", constraint["constraint_name"])
+                logging.warning("Constraint %s is not in the monolithic problem.", constraint["constraint_name"])
 
         # At the end we need to ensure we have added all the constraints of the monolithic problem
         if len(design_constraints) + len(operational_constraints) != len(self.monolithic_constraints):
             missing_constraints = set(self.monolithic_constraints) - set(design_constraints + operational_constraints)
-            logging.error("The following constraints are missing in the benders decomposition: %s", missing_constraints)
+            raise AssertionError(
+                f"The following constraints are missing in the benders decomposition: {missing_constraints}"
+            )
 
         return design_constraints, operational_constraints
 
     def create_master_problem(self):
         """
         Create the master problem, which is the design problem.
-        It includes only the design constraints and has the same objective function as the monolithic problem.
-        The design constraints are defined by the user in the config file.
+        It includes only the design constraints and the objective function is taken from the config as follow:
+        - If the objective function is "mga", we check whether we optimize for design or operational variables:
+            - If design, we use the same objective function as the monolithic problem
+            - If operational, in the master problem we use a dummy constant objective function
+        TODO: Add the possibility to use Benders also when optimize for "total_cost" and "total_carbon_emissions", in
+        the future also for "risk"
+        - If the objective function is "total_cost", we split the objective function into design and operational costs
+        and in the master problem we only include the design costs.
+        - If the obejctive function is "total_carbon_emissions", in the master problem we use a dummy constant
+        objective function
         """
+        # Create a copy of the monolithic problem for robustness
+        if self.config.solver["solver_dir"] is not None and not os.path.exists(self.config.solver["solver_dir"]):
+            os.makedirs(self.config.solver["solver_dir"])
+        self.master_model = lp.Model(solver_dir=self.config.solver["solver_dir"])
+
+        # Define the objective function
+        if self.analysis["objective"] == "mga":
+            if "capacity" in str(self.monolithic_problem.model.objective):
+                self.master_model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
+            elif "flow_import" in str(self.monolithic_problem.model.objective):
+                dummy_variables = self.master_model.add_variables(
+                    lower=1, upper=1, name="dummy_master_variable", integer=True
+                )
+                self.master_model.add_objective(lp.LinearExpression(dummy_variables, self.master_model), overwrite=True)
+            else:
+                raise AssertionError("Objective function not recognized for MGA.")
+        else:
+            logging.error(
+                "Objective function %s not supported for Benders Decomposition at the moment.",
+                self.config.analysis["objective"],
+            )
+
+        # Add the monolithic variables to the master problem
+        for variable in self.monolithic_problem.model.variables:
+            self.master_model.variables.add(self.monolithic_problem.model.variables[variable])
+
+        # Add the design constraints to the master problem
+        for constraint in self.monolithic_problem.model.constraints:
+            if constraint in self.design_constraints:
+                self.master_model.constraints.add(self.monolithic_problem.model.constraints[constraint])
+
+        return self.master_model
