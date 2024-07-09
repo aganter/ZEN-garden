@@ -303,19 +303,19 @@ class ModelingToGenerateAlternatives:
 
             self.mga_solution.solve()
 
-            # if not self.mga_solution.optimality:
-            #     self.mga_solution.write_IIS()
-            #     break
+            if not self.mga_solution.optimality:
+                self.mga_solution.write_IIS()
+                break
 
-            # self.mga_solution.add_results_of_optimization_step(step)
-            # scenario_name, subfolder, param_map = self.mga_solution.generate_output_paths(
-            #     config_system=self.config_mga.system, step=step, steps_horizon=steps_horizon
-            # )
-            # Postprocess(
-            #     model=self.mga_solution,
-            #     scenarios=self.config_mga.scenarios,
-            #     model_name=self.mga_solution.model_name,
-            #     subfolder=subfolder,
-            #     scenario_name=scenario_name,
-            #     param_map=param_map,
-            # )
+            self.mga_solution.add_results_of_optimization_step(step)
+            scenario_name, subfolder, param_map = self.mga_solution.generate_output_paths(
+                config_system=self.config_mga.system, step=step, steps_horizon=steps_horizon
+            )
+            Postprocess(
+                model=self.mga_solution,
+                scenarios=self.config_mga.scenarios,
+                model_name=self.mga_solution.model_name,
+                subfolder=subfolder,
+                scenario_name=scenario_name,
+                param_map=param_map,
+            )

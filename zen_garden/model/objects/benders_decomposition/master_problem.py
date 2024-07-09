@@ -4,9 +4,12 @@
   :Authors:      Maddalena Cenedese (mcenedese@student.ethz.ch)
   :Organization: Labratory of Reliability and Risk Engineering, ETH Zurich
 
-    Class to decompose the optimization problem into a MASTER problem, which is the design problem and a set of
-    SUBPROBLEMS, which are the operational problems with different set of uncertaint parameters.
-    The class is used to define the different benders decomposition method.
+    Class to define the master problem of the Benders Decomposition method.
+    This class is a child class of the OptimizationSetup class and inherits all the methods and attributes of the
+    parent class.
+    The master problem is the design problem and includes only the design variables and constraints.
+    In order to ensure only the presence of the design variables and constraints, this class removes the operational
+    variables and constraints from the master problem.
 """
 
 import logging
@@ -16,11 +19,8 @@ from zen_garden.model.optimization_setup import OptimizationSetup
 
 class MasterProblem(OptimizationSetup):
     """
-    Class defining the Benders Decomposition method.
-    Initialize the BendersDecomposition object.
-
-    :param config_benders: dictionary containing the configuration of the Benders Decomposition method
-    :param monolithic_problem: OptimizationSetup object of the monolithic problem
+    Class defining the Master Problem of the Benders Decomposition method.
+    Initialize the MasterProblem object.
     """
 
     label = "MasterProblem"
@@ -39,6 +39,22 @@ class MasterProblem(OptimizationSetup):
         design_constraints,
         operational_constraints,
     ):
+        """
+        Initialize the MasterProblem object.
+
+        :param config: dictionary containing the configuration of the optimization problem
+        :param analysis: dictionary containing the analysis configuration
+        :param monolithic_problem: OptimizationSetup object of the monolithic problem
+        :param model_name: name of the model
+        :param scenario_name: name of the scenario
+        :param scenario_dict: dictionary containing the scenario data
+        :param input_data_checks: dictionary containing the input data checks
+        :param design_variables: list of design variables
+        :param operational_variables: list of operational variables
+        :param design_constraints: list of design constraints
+        :param operational_constraints: list of operational constraints
+        """
+
         super().__init__(
             config=config,
             model_name=model_name,
@@ -72,14 +88,14 @@ class MasterProblem(OptimizationSetup):
         Create the master problem, which is the design problem.
         It includes only the design constraints and the objective function is taken from the config as follow:
         - If the objective function is "mga", we check whether we optimize for design or operational variables:
-            - If design, we use the same objective function as the monolithic problem
-            - If operational, in the master problem we use a dummy constant objective function
-        TODO: Add the possibility to use Benders also when optimize for "total_cost" and "total_carbon_emissions", in
+            - If design, the objective function of the master problem is the same as the one of the monolithic problem
+            - If operational, the objective function of the master problem is a dummy constant objective function
+         TODO: Add the possibility to use Benders also when optimize for "total_cost" and "total_carbon_emissions", in
         the future also for "risk"
-        - If the objective function is "total_cost", we split the objective function into design and operational costs
-        and in the master problem we only include the design costs.
-        - If the obejctive function is "total_carbon_emissions", in the master problem we use a dummy constant
-        objective function
+        - If the objective function is "total_cost", this is splitted into design and operational costs and the
+        objective function of the master problem includes only the design costs (capex).
+        - If the obejctive function is "total_carbon_emissions", the objective function of the master problem is a
+        dummy constant objective function
         """
         self.construct_optimization_problem()
         mga = "modeling_to_generate_alternatives"
@@ -92,6 +108,7 @@ class MasterProblem(OptimizationSetup):
         if self.analysis["objective"] == "mga":
             if "capacity" in str(self.monolithic_problem.model.objective):
                 self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
+            # If the objective function optimizes for operational variables, we use a dummy objective in the master
             elif "flow_import" in str(self.monolithic_problem.model.objective):
                 dummy_variable = self.add_dummy__constant_variable(self.model, name="dummy_master_variable")
                 self.model.add_objective(1 * dummy_variable, overwrite=True)
@@ -103,9 +120,7 @@ class MasterProblem(OptimizationSetup):
                 self.config.analysis["objective"],
             )
 
-        # Romove the operational variables and constraints from the master problem
+        # Remove the operational variables and constraints from the master problem
         self.model.remove_constraints(self.operational_constraints)
         for operational_variable in self.operational_variables:
             self.model.remove_variables(operational_variable)
-
-        self.model.constraints

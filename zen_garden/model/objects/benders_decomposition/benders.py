@@ -14,6 +14,7 @@ import logging
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.master_problem import MasterProblem
+from zen_garden.model.objects.benders_decomposition.subproblems import Subproblem
 
 
 class BendersDecomposition:
@@ -70,7 +71,19 @@ class BendersDecomposition:
             design_constraints=self.design_constraints,
             operational_constraints=self.operational_constraints,
         )
-        self.subproblem_models = None
+        self.subproblem_models = Subproblem(
+            config=self.monolithic_problem.config,
+            analysis=self.analysis,
+            monolithic_problem=self.monolithic_problem,
+            model_name=self.monolithic_problem.model_name,
+            scenario_name=self.monolithic_problem.scenario_name,
+            scenario_dict=self.monolithic_problem.scenario_dict,
+            input_data_checks=self.monolithic_problem.input_data_checks,
+            design_variables=self.design_variables,
+            operational_variables=self.operational_variables,
+            design_constraints=self.design_constraints,
+            operational_constraints=self.operational_constraints,
+        )
 
     def add_dummy__constant_variable(self, model, name="dummy_variable"):
         """
