@@ -85,13 +85,6 @@ class BendersDecomposition:
             operational_constraints=self.operational_constraints,
         )
 
-    def add_dummy__constant_variable(self, model, name="dummy_variable"):
-        """
-        Add a dummy variable to the master problem.
-        """
-        dummy_variable = model.add_variables(lower=1, upper=1, name=name, integer=True)
-        return dummy_variable
-
     def separate_design_operational_constraints(self) -> list:
         """
         Separate the design and operational constraints based on the user input preferences defined in the config file.

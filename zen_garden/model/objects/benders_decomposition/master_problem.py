@@ -121,6 +121,8 @@ class MasterProblem(OptimizationSetup):
             )
 
         # Remove the operational variables and constraints from the master problem
+        logging.info("Removing operational constraints from the master problem.")
         self.model.remove_constraints(self.operational_constraints)
+        logging.info("Removing operational variables from the master problem.")
         for operational_variable in self.operational_variables:
             self.model.remove_variables(operational_variable)

@@ -117,5 +117,3 @@ class Subproblem(OptimizationSetup):
                 "Objective function %s not supported for Benders Decomposition at the moment.",
                 self.config.analysis["objective"],
             )
-
-        self.model
