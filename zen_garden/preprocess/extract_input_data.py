@@ -235,8 +235,13 @@ class DataInput:
                 f"The .csv format for attributes is deprecated ({filename} of {self.element.name}). Use .json instead."
             )
         else:
-            if self.element.config.mga["modeling_to_generate_alternatives"]:
-                logging.warning("WARNING: Attributes file does not exist, because this is expected for MGA iterations.")
+            if (
+                self.element.config.mga["modeling_to_generate_alternatives"]
+                or self.element.config.benders["benders_decomposition"]
+            ):
+                logging.warning(
+                    "WARNING: Attributes file does not exist, because this is expected for %s.", self.element.name
+                )
                 attribute_dict = None
             else:
                 raise FileNotFoundError(f"Attributes file does not exist for {self.element.name}")

@@ -111,7 +111,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
 
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
-    folder_path: Path = Path("data/")
+    input_path: Path = Path("data/")
     # Keep the same name for code consistency and usability: these are the MGA iterations
     scenarios: dict[str, Any] = {"": {}}
     immutable_system_elements: dict = {
@@ -217,7 +217,7 @@ At the beginning of this document, one of the challenges of MGA is mentioned. To
 1. The MGA objective function can account for a user-defined number of variables as explained above.
 2. The supernodes aggregation gives the possibility to aggregate nodes by country. In the `system.py` file, the user can now set `system["run_supernodes"] = True`. In this way, in the optimization problem, new sets are defined as supernodes, aggregations of nodes by country. For example, nodes `"BE10", "BE21", "BE22"` belong to node `"BE"`. And consequently, new aggregated variables for `capacity` and `flow_import` are defined as the sum of those variable for all the nodes belonging to a supernode. These are called respectively `capacity_supernodes` and `flow_import_supernodes`.
 
-N.B. 1: In order to be able to perform the supernodes aggregation, the file `all_nodes.csv` and `all_edges.csv` inside the folder `energy_system` must contain an additional column, to be `supernode` and `superedge` respectively, as shown in the following pictures:
+N.B.: In order to be able to perform the supernodes aggregation, the file `set_nodes.csv` and `set_edges.csv` inside the folder `energy_system` must contain an additional column, to be `supernode` and `superedge` respectively, as shown in the following pictures:
 <p align="center">
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/92d1848062337784c31f9711135cb9c49bf71b4f/documentation/images/supernodes.png" width="400" />
 </p>

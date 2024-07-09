@@ -186,7 +186,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
 
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
-    folder_path: Path = Path("data/")
+    input_path: Path = Path("data/")
     # Keep the same name for code consistency and usability: this are the MGA iterations
     scenarios: dict[str, Any] = {"": {}}
     immutable_system_elements: dict = {
@@ -205,6 +205,15 @@ class ModelingToGenerateAlternatives(Subscriptable):
     ]
 
 
+class BendersDecomposition(Subscriptable):
+    """
+    Class defining the Benders Decomposition method.
+    """
+
+    benders_decomposition: bool = False
+    input_path: Path = Path("data/")
+
+
 class Config(Subscriptable):
     # analysis: dict = Analysis().model_dump()
     analysis: Analysis = Analysis()
@@ -220,3 +229,6 @@ class Config(Subscriptable):
     # Modeling to Generate Alternatives
     mga: ModelingToGenerateAlternatives = ModelingToGenerateAlternatives()
     objective_variables: str = ""
+
+    # Benders Decomposition
+    benders: BendersDecomposition = BendersDecomposition()
