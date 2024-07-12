@@ -58,6 +58,7 @@ class BendersDecomposition:
         self.design_constraints, self.operational_constraints = self.separate_design_operational_constraints()
         self.design_variables, self.operational_variables = self.separate_design_operational_variables()
 
+        logging.info("Creating the master problem.")
         self.master_model = MasterProblem(
             config=self.monolithic_problem.config,
             analysis=self.analysis,
@@ -71,6 +72,7 @@ class BendersDecomposition:
             design_constraints=self.design_constraints,
             operational_constraints=self.operational_constraints,
         )
+        logging.info("Creating the subproblems.")
         self.subproblem_models = Subproblem(
             config=self.monolithic_problem.config,
             analysis=self.analysis,
@@ -84,6 +86,8 @@ class BendersDecomposition:
             design_constraints=self.design_constraints,
             operational_constraints=self.operational_constraints,
         )
+
+        self.solve_master_problem()
 
     def separate_design_operational_constraints(self) -> list:
         """
@@ -147,3 +151,75 @@ class BendersDecomposition:
             )
 
         return design_variables, operational_variables
+
+    def solve_master_problem(self):
+        """
+        Solve the master problem.
+        """
+        self.master_model.solve()
+
+    def fix_subproblem_design_variables(self):
+        """
+        Fix the design variables of the subproblems to the optimal solution of the master problem.
+        This function takes the solution of the master problem and fixes the values of the design variables in the
+        subproblems by adding the corresponding constraints.
+        """
+        # Find the solution of the master problem, this include all the design variables we need  into Data variables
+        solution_master = self.master_model.model.solution[self.design_variables]
+        # We need to retrieve the design variables of the subproblems
+        design_variables_subproblems = self.subproblem_models.model.variables[self.design_variables]
+        for design_variable in self.design_variables:
+            lhs = design_variables_subproblems[design_variable]
+            rhs = solution_master[design_variable]
+            constraint = lhs == rhs
+            self.subproblem_models.constraints.add_constraint(
+                f"constraint_design_variable_{design_variable}", constraint
+            )
+
+    def optimality_cuts(self):
+        """
+        Generate the optimality cuts.
+        When the subproblem is feasible but we do not have the optimal solution, we need to add the optimality cuts
+        to the master problem.
+        This function generates the optimality cuts based on the solution of the subproblems as follow:
+
+
+        """
+        pass
+
+    def feasibility_cuts(self):
+        """
+        Generate the feasibility cuts.
+        When the subproblem is infeasible, we need to add the feasibility cuts to the master problem.
+        This function generates the feasibility cuts based on the solution of the subproblems as follow:
+
+
+        """
+        pass
+
+    # def benders_decomposition(self):
+    #     """
+    #     Run the Benders Decomposition method.
+    #     """
+    #     ABSOLUTE_OPTIMALITY_GAP = 1e-6
+    #     for k in range(self.config_benders["maximum_iterations"]):
+    #         self.master_model.solve()
+    #         lower_bound = self.master_model
+    #         self.fix_subproblem_design_variables()
+    #         self.subproblem_models.solve()
+    #         if self.subproblem_models.model.status == "infeasible":
+    #             self.feasibility_cuts()
+    #         elif self.subproblem_models.model.status == "optimal":
+    #             self.optimality_cuts()
+    #             upper_bound = self.subproblem_models + self.master_model
+    #             gap = (upper_bound - lower_bound) / upper_bound
+    #             logging.info(f"{k+1:9} {lower_bound:12.4e} {upper_bound:12.4e} {gap:12.4e}")
+
+    #         if gap < ABSOLUTE_OPTIMALITY_GAP:
+    #             logging.info("Terminating with the optimal solution")
+    #             break
+
+    #     self.master_model.solve()
+    #     objective_optimal = self.master_model
+
+    #     return objective_optimal

@@ -76,12 +76,12 @@ class MasterProblem(OptimizationSetup):
 
         self.create_master_problem()
 
-    def add_dummy__constant_variable(self, model, name="dummy_variable"):
+    def add_theta_variable(self, model, name):
         """
-        Add a dummy variable to the master problem.
+        Add a the outer approximation of the subproblem objective function to the master problem.
         """
-        dummy_variable = model.add_variables(lower=1, upper=1, name=name, integer=True)
-        return dummy_variable
+        theta = model.add_variables(lower=0, name=name)
+        return theta
 
     def create_master_problem(self):
         """
@@ -100,8 +100,11 @@ class MasterProblem(OptimizationSetup):
         self.construct_optimization_problem()
         mga = "modeling_to_generate_alternatives"
         if mga in self.config and self.config[mga]:
-            self.model.constraints.add(
-                self.monolithic_problem.model.constraints["constraint_optimal_cost_total_deviation"]
+            self.model.add_constraints(
+                lhs=self.model.variables.net_present_cost.sum(dim="set_time_steps_yearly"),
+                sign="<=",
+                rhs=self.monolithic_problem.model.constraints.constraint_optimal_cost_total_deviation.rhs,
+                name="constraint_optimal_cost_total_deviation",
             )
 
         # Define the objective function
@@ -110,8 +113,9 @@ class MasterProblem(OptimizationSetup):
                 self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
             # If the objective function optimizes for operational variables, we use a dummy objective in the master
             elif "flow_import" in str(self.monolithic_problem.model.objective):
-                dummy_variable = self.add_dummy__constant_variable(self.model, name="dummy_master_variable")
-                self.model.add_objective(1 * dummy_variable, overwrite=True)
+                theta = self.add_theta_variable(self.model, name="theta_approximation_subproblem_objective")
+                self.model.add_objective(1 * theta, overwrite=True)
+                self.model.add_constraints(lhs=theta, sign="<=", rhs=1e6, name="theta_limit")
             else:
                 raise AssertionError("Objective function not recognized for MGA.")
         else:

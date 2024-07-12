@@ -6,7 +6,7 @@
 
     Class to define the subproblems of the Benders Decomposition method.
     This class is a child class of the OptimizationSetup class and inherits all the methods and attributes of the
-    parent class. 
+    parent class.
     A subproblem is defined as the operational problem under specific parametric uncertainties and includes only the
     operational variables and constraints.
 """
@@ -21,7 +21,7 @@ class Subproblem(OptimizationSetup):
     Class defining the Subproblem of the Benders Decomposition method.
     """
 
-    label = "MasterProblem"
+    label = "Subproblem"
 
     def __init__(
         self,
@@ -117,3 +117,7 @@ class Subproblem(OptimizationSetup):
                 "Objective function %s not supported for Benders Decomposition at the moment.",
                 self.config.analysis["objective"],
             )
+
+        # Remove the design constraints from the subproblem
+        logging.info("Removing design constraints from the subproblem.")
+        self.model.remove_constraints(self.design_constraints)

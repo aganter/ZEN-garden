@@ -294,13 +294,6 @@ class ModelingToGenerateAlternatives:
             self.mga_solution.overwrite_time_indices(step)
             self.mga_solution.construct_optimization_problem()
             self.add_cost_constraint()
-            benders_decomposition = BendersDecomposition(
-                config=self.config,
-                analysis=self.config_mga.analysis,
-                config_benders=self.config.benders,
-                monolithic_problem=self.mga_solution,
-            )
-
             self.mga_solution.solve()
 
             if not self.mga_solution.optimality:
@@ -318,4 +311,10 @@ class ModelingToGenerateAlternatives:
                 subfolder=subfolder,
                 scenario_name=scenario_name,
                 param_map=param_map,
+            )
+            benders_decomposition = BendersDecomposition(
+                config=self.config,
+                analysis=self.config_mga.analysis,
+                config_benders=self.config.benders,
+                monolithic_problem=self.mga_solution,
             )
