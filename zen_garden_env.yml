@@ -1,4 +1,4 @@
-name: data_visualization
+name: zen-garden
 #zen-garden
 channels:
   - conda-forge
