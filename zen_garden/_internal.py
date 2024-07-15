@@ -12,7 +12,6 @@ import os
 import sys
 import logging
 import importlib.util
-import pkg_resources
 
 from shutil import rmtree
 
@@ -39,8 +38,8 @@ def main(config, dataset_path=None, base_scenarios=None, oos_scenario=None):
     logging.getLogger().addHandler(handler)
 
     # print the version
-    version = pkg_resources.require("zen_garden")[0].version
-    logging.info(f"Running ZEN-Garden version: {version}")
+    # version = pkg_resources.require("zen_garden")[0].version
+    # logging.info(f"Running ZEN-Garden version: {version}")
 
     # prevent double printing
     logging.propagate = False
