@@ -74,6 +74,8 @@ class MasterProblem(OptimizationSetup):
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
 
+        self.master_model_gurobi = None
+
         self.create_master_problem()
 
     def add_theta_variable(self, model, name):
@@ -82,6 +84,14 @@ class MasterProblem(OptimizationSetup):
         """
         theta = model.add_variables(lower=0, name=name)
         return theta
+
+    def save_master_model_to_gurobi(self):
+        """
+        Save the master problem to a .lp file.
+        """
+        self.master_model_gurobi = self.model.to_gurobipy()
+        self.master_model_gurobi.write("gurobi_master_model.lp")
+        logging.info("Master problem saved to Gurobi file.")
 
     def create_master_problem(self):
         """
@@ -130,3 +140,6 @@ class MasterProblem(OptimizationSetup):
         logging.info("Removing operational variables from the master problem.")
         for operational_variable in self.operational_variables:
             self.model.remove_variables(operational_variable)
+
+        # Save the master problem to a gurobi file
+        self.save_master_model_to_gurobi()

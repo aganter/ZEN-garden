@@ -12,7 +12,6 @@
 """
 
 import logging
-
 from zen_garden.model.optimization_setup import OptimizationSetup
 
 
@@ -34,6 +33,7 @@ class Subproblem(OptimizationSetup):
         input_data_checks,
         design_variables,
         operational_variables,
+        not_coupling_variables,
         design_constraints,
         operational_constraints,
     ):
@@ -68,18 +68,22 @@ class Subproblem(OptimizationSetup):
         self.design_variables = design_variables
         self.design_constraints = design_constraints
         self.operational_variables = operational_variables
+        self.not_coupling_variables = not_coupling_variables
         self.operational_constraints = operational_constraints
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
 
+        self.subproblem_model_gurobi = None
+
         self.create_subproblem()
 
-    def add_dummy__constant_variable(self, model, name="dummy_variable"):
+    def save_subproblem_model_to_gurobi(self):
         """
-        Add a dummy variable to the subproblem problem.
+        Save the subproblem problem to a .lp file.
         """
-        dummy_variable = model.add_variables(lower=1, upper=1, name=name, integer=True)
-        return dummy_variable
+        self.subproblem_model_gurobi = self.model.to_gurobipy()
+        self.subproblem_model_gurobi.write("gurobi_subproblem_model.lp")
+        logging.info("Master problem saved to Gurobi file.")
 
     def create_subproblem(self):
         """
@@ -98,16 +102,19 @@ class Subproblem(OptimizationSetup):
         self.construct_optimization_problem()
         mga = "modeling_to_generate_alternatives"
         if mga in self.config and self.config[mga]:
-            self.model.constraints.add(
-                self.monolithic_problem.model.constraints["constraint_optimal_cost_total_deviation"]
+            self.model.add_constraints(
+                lhs=self.model.variables.net_present_cost.sum(dim="set_time_steps_yearly"),
+                sign="<=",
+                rhs=self.monolithic_problem.model.constraints.constraint_optimal_cost_total_deviation.rhs,
+                name="constraint_optimal_cost_total_deviation",
             )
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
             # If the objective function optimizes for design variables, we use a dummy objective in the subproblem
             if "capacity" in str(self.monolithic_problem.model.objective):
-                dummy_variable = self.add_dummy__constant_variable(self.model, name="dummy_subproblem_variable")
-                self.model.add_objective(1 * dummy_variable, overwrite=True)
+                dummy_variable = self.model.add_variables(name="dummy_objective_subproblem_variable", lower=0, upper=0)
+                self.model.add_objective(dummy_variable.to_linexpr(), overwrite=True)
             elif "flow_import" in str(self.monolithic_problem.model.objective):
                 self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
             else:
@@ -121,3 +128,9 @@ class Subproblem(OptimizationSetup):
         # Remove the design constraints from the subproblem
         logging.info("Removing design constraints from the subproblem.")
         self.model.remove_constraints(self.design_constraints)
+        logging.info("Removing not useful design variables from the subproblem.")
+        for not_coupling_variable in self.not_coupling_variables:
+            self.model.remove_variables(not_coupling_variable)
+
+        # Save the subproblem problem to a gurobi file
+        self.save_subproblem_model_to_gurobi()
