@@ -817,9 +817,9 @@ class OptimizationSetup(object):
             cons_str = f"{abs(cons_series['rhs'])} in {cons_str}"
         return cons_str
 
-    def fit_and_save(self):
+    def fit(self):
         """
-        Run optimization for a single scenario.
+        Fit the optimization for a single scenario.
         """
         # get rolling horizon years
         steps_horizon = self.get_optimization_horizon()

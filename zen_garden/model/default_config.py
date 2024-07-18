@@ -183,6 +183,8 @@ class BendersDecomposition(Subscriptable):
     input_path: Path = Path("data/")
     folder_output: Path = Path("outputs/")
 
+    scenarios: dict[str, Any] = {"": {}}
+
 
 class ModelingToGenerateAlternatives(Subscriptable):
     """

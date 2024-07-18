@@ -281,7 +281,7 @@ class ModelingToGenerateAlternatives:
 
         model_constraints.add_constraint("constraint_optimal_cost_total_deviation", self.cost_constraint)
 
-    def run(self):
+    def fit(self):
         """
         Solve the optimization problem and postprocess the results
         """

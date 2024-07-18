@@ -71,7 +71,7 @@ def main(config, dataset_path=None, job_index=None):
             input_data_checks=input_data_checks,
         )
         # Fit the optimization problem for every steps defined in the config and save the results
-        optimization_setup.fit_and_save()
+        optimization_setup.fit()
         logging.info("--- Original Optimization finished ---")
         logging.info("")
 
@@ -104,7 +104,7 @@ def main(config, dataset_path=None, job_index=None):
                     scenario_name=scenario,
                     scenario_dict=scenario_dict,
                 )
-                mga_iterations.run()
+                mga_iterations.fit()
 
             logging.info("--- MGA run finished ---")
 
