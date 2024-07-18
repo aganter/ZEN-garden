@@ -42,7 +42,7 @@ class ModelingToGenerateAlternatives:
 
     def __init__(
         self,
-        config_mga: dict,
+        config: dict,
         optimized_setup: OptimizationSetup,
         scenario_name: str,
         scenario_dict: dict,
@@ -50,14 +50,14 @@ class ModelingToGenerateAlternatives:
         """
         Initialize the Modeling to Generate Alternatives object.
 
-        :param config_mga: Configuration dictionary for the MGA method
+        :param config: Configuration dictionary
         :param optimized_setup: OptimizationSetup object of the optimized original problem
         :param scenario_name: Name of the scenario
         :param scenario_dict: Dictionary of the scenario
         """
         self.name = "ModelingToGenerateAlternatives"
-        self.config = config_mga
-        self.config_mga = config_mga.mga
+        self.config = config
+        self.config_mga = config.mga
         self.optimized_setup = optimized_setup
         self.scenario_name = scenario_name
         self.scenario_dict = scenario_dict
@@ -312,11 +312,11 @@ class ModelingToGenerateAlternatives:
                 scenario_name=scenario_name,
                 param_map=param_map,
             )
-            benders_decomposition = BendersDecomposition(
-                config=self.config,
-                analysis=self.config_mga.analysis,
-                config_benders=self.config.benders,
-                monolithic_problem=self.mga_solution,
-                save_first_problems=True,
-            )
-            benders_decomposition.fit()
+            if self.config_mga.benders.benders_decomposition:
+                benders_decomposition = BendersDecomposition(
+                    config=self.config_mga,
+                    analysis=self.config_mga.analysis,
+                    monolithic_problem=self.mga_solution,
+                    save_first_problems=True,
+                )
+                benders_decomposition.fit()

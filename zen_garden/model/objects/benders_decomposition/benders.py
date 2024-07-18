@@ -17,6 +17,8 @@ from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.master_problem import MasterProblem
 from zen_garden.model.objects.benders_decomposition.subproblems import Subproblem
 
+from zen_garden.postprocess.postprocess import Postprocess
+
 
 class BendersDecomposition:
     """
@@ -37,19 +39,25 @@ class BendersDecomposition:
         self,
         config: dict,
         analysis: dict,
-        config_benders: dict,
         monolithic_problem: OptimizationSetup,
         save_first_problems: bool = False,
     ):
+        """
+        Initialize the BendersDecomposition object.
+
+        :param config: dictionary containing the configuration of the optimization problem
+        :param analysis: dictionary containing the analysis configuration
+        :param config_benders: dictionary containing the configuration of the Benders Decomposition method
+        :param monolithic_problem: OptimizationSetup object of the monolithic problem
+        """
 
         self.name = "BendersDecomposition"
         self.config = config
         self.analysis = analysis
-        self.config_benders = config_benders
         self.monolithic_problem = monolithic_problem
         self.save_first_problems = save_first_problems
 
-        self.input_path = getattr(config_benders, "input_path")
+        self.input_path = getattr(self.config.benders, "input_path")
         self.energy_system = monolithic_problem.energy_system
         self.data_input = DataInput(
             element=self,
@@ -59,14 +67,6 @@ class BendersDecomposition:
             energy_system=self.energy_system,
             unit_handling=None,
         )
-        """
-        Initialize the BendersDecomposition object.
-
-        :param config: dictionary containing the configuration of the optimization problem
-        :param analysis: dictionary containing the analysis configuration
-        :param config_benders: dictionary containing the configuration of the Benders Decomposition method
-        :param monolithic_problem: OptimizationSetup object of the monolithic problem
-        """
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
         self.monolithic_variables = self.monolithic_problem.model.variables
@@ -82,10 +82,11 @@ class BendersDecomposition:
         self.save_monolithic_problem_in_gurobi_format_map_vars_constrs()
 
         logging.info("")
-        logging.info("Creating the master problem.")
+        logging.info("--- Creating the master problem ---")
         if self.save_first_problems:
             self.master_model = MasterProblem(
                 config=self.monolithic_problem.config,
+                config_benders=self.config.benders,
                 analysis=self.analysis,
                 monolithic_problem=self.monolithic_problem,
                 model_name=self.monolithic_problem.model_name,
@@ -99,9 +100,10 @@ class BendersDecomposition:
             )
 
             logging.info("")
-            logging.info("Creating the subproblems.")
+            logging.info("--- Creating the subproblems ---")
             self.subproblem_models = Subproblem(
                 config=self.monolithic_problem.config,
+                config_benders=self.config.benders,
                 analysis=self.analysis,
                 monolithic_problem=self.monolithic_problem,
                 model_name=self.monolithic_problem.model_name,
@@ -175,7 +177,7 @@ class BendersDecomposition:
                 else:
                     raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
             else:
-                logging.warning("Constraint %s is not in the monolithic problem.", constraint["constraint_name"])
+                logging.warning("Constraint %s is not in the monolithic problem", constraint["constraint_name"])
 
         # At the end we need to ensure we have added all the constraints of the monolithic problem
         if len(design_constraints) + len(operational_constraints) != len(self.monolithic_constraints):
@@ -338,10 +340,35 @@ class BendersDecomposition:
 
             # Check if subproblem is optimal
             if self.subproblem_models.model.termination_condition == "optimal":
+                # If the subproblem is optimal, we can terminate the iterations and save the results
                 logging.info("--- Subproblem is optimal. Terminating iterations ---")
+                scenario_name_master, subfolder_master, param_map_master = self.master_model.generate_output_paths(
+                    config_system=self.config.system, step=1, steps_horizon=[1]
+                )
+                Postprocess(
+                    model=self.master_model,
+                    scenarios=self.config.scenarios,
+                    model_name=self.master_model.model_name,
+                    subfolder=subfolder_master,
+                    scenario_name=scenario_name_master,
+                    param_map=param_map_master,
+                )
+                scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = (
+                    self.subproblem_models.generate_output_paths(
+                        config_system=self.config.system, step=1, steps_horizon=[1]
+                    )
+                )
+                Postprocess(
+                    model=self.subproblem_models,
+                    scenarios=self.config.scenarios,
+                    model_name=self.subproblem_models.model_name,
+                    subfolder=subfolder_subproblem,
+                    scenario_name=scenario_name_subproblem,
+                    param_map=param_map_subproblem,
+                )
                 break
 
-            logging.info("--- Iteration %s: Subproblem is infeasible ---", iteration)
+            logging.info("--- Subproblem is infeasible ---")
             subproblem_model_fixed_design_variable_gurobi, infeasibilities = self.subproblem_to_gurobi(
                 subproblem_solved, iteration
             )

@@ -174,6 +174,16 @@ class Analysis(Subscriptable):
     earliest_year_of_data: int = 1900
 
 
+class BendersDecomposition(Subscriptable):
+    """
+    Class defining the Benders Decomposition method.
+    """
+
+    benders_decomposition: bool = False
+    input_path: Path = Path("data/")
+    folder_output: Path = Path("outputs/")
+
+
 class ModelingToGenerateAlternatives(Subscriptable):
     """
     This class is used to model the behavior of the system to generate alternatives.
@@ -183,6 +193,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()
+    benders: BendersDecomposition = BendersDecomposition()
 
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
@@ -203,15 +214,6 @@ class ModelingToGenerateAlternatives(Subscriptable):
         "set_supernodes",
         "set_superlocation",
     ]
-
-
-class BendersDecomposition(Subscriptable):
-    """
-    Class defining the Benders Decomposition method.
-    """
-
-    benders_decomposition: bool = False
-    input_path: Path = Path("data/")
 
 
 class Config(Subscriptable):

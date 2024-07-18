@@ -12,6 +12,8 @@
 """
 
 import logging
+import os
+
 from zen_garden.model.optimization_setup import OptimizationSetup
 
 
@@ -25,6 +27,7 @@ class Subproblem(OptimizationSetup):
     def __init__(
         self,
         config: dict,
+        config_benders: dict,
         analysis: dict,
         monolithic_problem: OptimizationSetup,
         model_name: str,
@@ -41,6 +44,7 @@ class Subproblem(OptimizationSetup):
         Initialize the Subproblem object.
 
         :param config: dictionary containing the configuration of the optimization problem
+        :param config_benders: dictionary containing the configuration of the Benders Decomposition method
         :param analysis: dictionary containing the analysis configuration
         :param monolithic_problem: OptimizationSetup object of the monolithic problem
         :param model_name: name of the model
@@ -63,6 +67,7 @@ class Subproblem(OptimizationSetup):
 
         self.name = "Subproblem"
         self.config = config
+        self.config_benders = config_benders
         self.analysis = analysis
         self.monolithic_problem = monolithic_problem
         self.design_variables = design_variables
@@ -76,6 +81,9 @@ class Subproblem(OptimizationSetup):
         self.subproblem_model_gurobi = None
 
         self.create_subproblem()
+
+        self.folder_output = os.path.abspath(self.config_benders["folder_output"] / "master_problem")
+        self.optimized_time_steps = [0]
 
     def save_subproblem_model_to_gurobi(self):
         """
@@ -113,8 +121,23 @@ class Subproblem(OptimizationSetup):
         if self.analysis["objective"] == "mga":
             # If the objective function optimizes for design variables, we use a dummy objective in the subproblem
             if "capacity" in str(self.monolithic_problem.model.objective):
-                dummy_variable = self.model.add_variables(name="dummy_objective_subproblem_variable", lower=0, upper=0)
-                self.model.add_objective(dummy_variable.to_linexpr(), overwrite=True)
+                self.variables.add_variable(
+                    self.model,
+                    name="mock_objective_subproblem",
+                    index_sets=self.sets["set_time_steps_yearly"],
+                    doc="mock variables for the objective of the subproblems",
+                    unit_category={"time": -1},
+                    bounds=(0, 0),
+                )
+                self.model.add_objective(
+                    sum(
+                        [
+                            self.model.variables["mock_objective_subproblem"][year]
+                            for year in self.energy_system.set_time_steps_yearly
+                        ]
+                    ).to_linexpr(),
+                    overwrite=True,
+                )
             elif "flow_import" in str(self.monolithic_problem.model.objective):
                 self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
             else:

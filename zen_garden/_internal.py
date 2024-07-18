@@ -99,7 +99,7 @@ def main(config, dataset_path=None, job_index=None):
                 logging.info("--- Iteration %s ---", iteration + 1)
                 logging.info("")
                 mga_iterations = ModelingToGenerateAlternatives(
-                    config_mga=config,
+                    config=config,
                     optimized_setup=optimization_setup,
                     scenario_name=scenario,
                     scenario_dict=scenario_dict,

@@ -51,6 +51,7 @@ class OptimizationSetup(object):
         :param scenario_dict: dictionary defining the scenario
         :param input_data_checks: input data checks object
         """
+        self.name = "ConcreteProblem"
         self.config = config
         self.model_name = model_name
         self.analysis = config.analysis

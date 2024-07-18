@@ -236,8 +236,11 @@ class DataInput:
             )
         else:
             if (
-                self.element.config.mga["modeling_to_generate_alternatives"]
-                or self.element.config.benders["benders_decomposition"]
+                getattr(self.element.config, "mga", None)
+                and getattr(self.element.config.mga, "modeling_to_generate_alternatives", False)
+            ) or (
+                getattr(self.element.config, "benders", None)
+                and getattr(self.element.config.benders, "benders_decomposition", False)
             ):
                 logging.warning(
                     "WARNING: Attributes file does not exist, because this is expected for %s.", self.element.name
