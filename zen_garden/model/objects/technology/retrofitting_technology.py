@@ -140,21 +140,3 @@ class RetrofittingTechnologyRules(GenericRule):
         constraints = lhs <= rhs
 
         self.constraints.add_constraint("retrofit_flow_coupling", constraints)
-
-        # retrofit_tech = "carbon_conversion"
-        # if retrofit_tech in retrofit_base_technologies.index:
-        #     base_tech = retrofit_base_technologies.loc["carbon_conversion"]
-        #     #rc = pd.concat([rc_in_series,rc_out_series]).loc[base_tech]
-        #     #rc = rc[rc].index
-        #     rc = "carbon_methanol"
-        #     base_tech_in = self.variables["flow_conversion_input"].loc[base_tech,rc]
-        #     techs = [tech for tech in self.sets["set_conversion_technologies"] if not tech==retrofit_tech]
-        #     carbon_methanol_out = self.variables["flow_conversion_output"].loc[techs,rc].sum("set_conversion_technologies")
-        #     carbon_methanol_out_retrofit = self.variables["flow_conversion_output"].loc[retrofit_tech,rc]
-        #     lhs = base_tech_in - (carbon_methanol_out + carbon_methanol_out_retrofit)
-        #     rhs = 0
-        #     constraints = lhs >= rhs
-        #     self.constraints.add_constraint("constraint_retrofit_flow_coupling_methanol", constraints)
-
-
-
