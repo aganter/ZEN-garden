@@ -178,7 +178,9 @@ class ModelingToGenerateAlternatives:
 
         :return: Random direction_search_vector for each of the decision variables (type: dict)
         """
-        self.direction_search_vector = {tuple(component): truncnorm.rvs(0, 1) for component in self.decision_variables}
+        self.direction_search_vector = {
+            tuple(component): 1 for component in self.decision_variables
+        }  # truncnorm.rvs(-1, 1) for component in self.decision_variables}
 
         return self.direction_search_vector
 
@@ -218,7 +220,7 @@ class ModelingToGenerateAlternatives:
             if np.isnan(value):
                 characteristic_value = np.nan
             elif value > 1e-3:
-                characteristic_value = value
+                characteristic_value = 1  # value
             else:
                 characteristic_value, _ = self.mga_data_input.extract_attribute_value(
                     attribute_name=coords[f"{self.mga_objective_obj}"],

@@ -246,20 +246,19 @@ class BendersDecomposition:
                 self.subproblem_models.model.variables[variable_name].lower = variable_solution
                 self.subproblem_models.model.variables[variable_name].upper = variable_solution
 
-    def subproblem_to_gurobi(self, subproblem_solved, iteration):
+    def subproblem_to_gurobi(self, subproblem_solved):
         """
         Convert the subproblem model to gurobi, set the parameter InfUnbdInfo to 1 and do the mapping of variables and
         constraints.
         """
         subproblem_model_fixed_design_variable_gurobi = subproblem_solved.to_gurobipy()
-        subproblem_model_fixed_design_variable_gurobi.write(
-            f"gurobi_subproblem_model_fixed_design_variable_{iteration}.lp"
-        )
+        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.FeasibilityTol, 1e-9)
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.InfUnbdInfo, 1)
 
         # Optimize gurobi model, compute IIS and save infeasible constraints
         subproblem_model_fixed_design_variable_gurobi.optimize()
         subproblem_model_fixed_design_variable_gurobi.computeIIS()
+
         infeasibilities = [
             constr
             for constr, infeas in zip(
@@ -278,7 +277,7 @@ class BendersDecomposition:
         farkas_multipliers = [
             (constraint_name, multiplier)
             for constraint_name, multiplier, infeas in zip(
-                [constr_name.ConstrName for constr_name in subproblem_model_fixed_design_variable_gurobi.getConstrs()],
+                [constr_name for constr_name in subproblem_model_fixed_design_variable_gurobi.getConstrs()],
                 subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.FarkasDual),
                 subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.IISConstr),
             )
@@ -286,41 +285,24 @@ class BendersDecomposition:
         ]
 
         # Create the feasibility cut
-        feasibility_cut = 0
-        rhs = []
-        for gurobi_constr_name, farkas in farkas_multipliers:
-            lp_constraint_subproblem_name = self.map_constraints_monolithic_gurobi[gurobi_constr_name][
-                "constraint_name"
-            ]
-            lp_constraint_coords = self.map_constraints_monolithic_gurobi[gurobi_constr_name]["constraint_coords"]
-            rhs_constant = (
-                self.subproblem_models.model.constraints[lp_constraint_subproblem_name]
-                .sel(lp_constraint_coords)
-                .rhs.item()
-                * farkas
-            )
-            rhs.append(rhs_constant)
-            lhs_subproblem_constraint = (
-                self.subproblem_models.model.constraints[lp_constraint_subproblem_name].sel(lp_constraint_coords).lhs
-            )
-            for i, var in enumerate(lhs_subproblem_constraint.vars):
-                if var.values.item() != -1:
-                    var_value = var.values.item()
-                    mapped_variable = self.map_variables_monolithic_gurobi[f"x{var_value}"]
+        feasibility_cut_lhs = 0
+        feasibility_cut_rhs = 0
+        for gurobi_constr, farkas in farkas_multipliers:
+            rhs = gurobi_constr.RHS
+            feasibility_cut_rhs += farkas * rhs
 
-                    if mapped_variable["variable_name"] in self.master_model.model.variables:
-                        master_variable_name = mapped_variable["variable_name"]
-                        master_variable_coords = mapped_variable["variable_coords"]
-                        master_variable = self.master_model.model.variables[master_variable_name].sel(
-                            master_variable_coords
-                        )
-                        feasibility_cut += -farkas * (master_variable * lhs_subproblem_constraint.coeffs[i].item())
+            lhs = subproblem_model_fixed_design_variable_gurobi.getRow(gurobi_constr)
+            for i in range(lhs.size()):
+                var = lhs.getVar(i)
+                subproblem_var = self.map_variables_monolithic_gurobi[var.VarName]
+                subproblem_var_name = subproblem_var["variable_name"]
+                subproblem_var_coords = subproblem_var["variable_coords"]
+                coeff = lhs.getCoeff(i)
+                if subproblem_var_name in self.master_model.model.variables:
+                    master_variable = self.master_model.model.variables[subproblem_var_name].sel(subproblem_var_coords)
+                    feasibility_cut_lhs += farkas * (master_variable * coeff)
 
-        for i, rhs_value in enumerate(rhs):
-            if rhs_value != 0:
-                feasibility_cut += rhs_value
-
-        return feasibility_cut
+        return feasibility_cut_lhs, feasibility_cut_rhs
 
     def fit(self):
         """
@@ -336,7 +318,6 @@ class BendersDecomposition:
 
             logging.info("--- Iteration %s: Solving subproblem model ---", iteration)
             self.subproblem_models.model.solve()
-            subproblem_solved = self.subproblem_models.model
 
             # Check if subproblem is optimal
             if self.subproblem_models.model.termination_condition == "optimal":
@@ -370,7 +351,7 @@ class BendersDecomposition:
 
             logging.info("--- Subproblem is infeasible ---")
             subproblem_model_fixed_design_variable_gurobi, infeasibilities = self.subproblem_to_gurobi(
-                subproblem_solved, iteration
+                self.subproblem_models.model
             )
             # Log the name of the infeasible constraints using the monolithic problem names
             infeasible_constraint_names_gurobi = [constr.ConstrName for constr in infeasibilities]
@@ -380,11 +361,16 @@ class BendersDecomposition:
             ]
             logging.info("--- Infeasible constraints: %s", infeasible_constraint_names_monolithic)
             logging.info("--- Generating feasibility cut")
-            feasibility_cut = self.generate_feasibility_cut(subproblem_model_fixed_design_variable_gurobi)
+            feasibility_cut_lhs, feasibility_cut_rhs = self.generate_feasibility_cut(
+                subproblem_model_fixed_design_variable_gurobi
+            )
 
             logging.info("--- Adding feasibility cut to master model")
             self.master_model.model.add_constraints(
-                lhs=feasibility_cut, sign=">=", rhs=0, name=f"feasibility_cut_iteration_{iteration}"
+                lhs=feasibility_cut_lhs,
+                sign="<=",
+                rhs=feasibility_cut_rhs,
+                name=f"feasibility_cut_iteration_{iteration}",
             )
 
             iteration += 1
