@@ -257,7 +257,7 @@ class BendersDecomposition:
         Solve the master problem.
         """
         self.master_model.model.solve()
-        optimality_gap = self.monolithic_problem.model.objective_value - self.master_model.model.objective_value
+        optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
         new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
         self.optimality_gap_df = pd.concat([self.optimality_gap_df, new_row], ignore_index=True)
 
@@ -425,6 +425,7 @@ class BendersDecomposition:
         Fit the Benders Decomposition model.
         """
         logger = logging.getLogger("gurobipy")
+        logging.getLogger("gurobipy").setLevel(logging.ERROR)
         logger.propagate = False
 
         iteration = 1

@@ -73,8 +73,6 @@ class MasterProblem(OptimizationSetup):
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
 
-        self.master_model_gurobi = None
-
         self.create_master_problem()
 
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
@@ -102,8 +100,10 @@ class MasterProblem(OptimizationSetup):
         dummy constant objective function
         """
         self.construct_optimization_problem()
-        mga = "modeling_to_generate_alternatives"
-        if mga in self.config and self.config[mga]:
+        if (
+            str("modeling_to_generate_alternatives") in self.config
+            and self.config[str("modeling_to_generate_alternatives")]
+        ):
             self.model.add_constraints(
                 lhs=self.model.variables.net_present_cost.sum(dim="set_time_steps_yearly"),
                 sign="<=",
