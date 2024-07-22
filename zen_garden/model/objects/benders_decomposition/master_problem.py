@@ -36,10 +36,9 @@ class MasterProblem(OptimizationSetup):
         scenario_name: str,
         scenario_dict: dict,
         input_data_checks,
-        design_variables,
         operational_variables,
-        design_constraints,
         operational_constraints,
+        benders_output_folder,
     ):
         """
         Initialize the MasterProblem object.
@@ -52,9 +51,7 @@ class MasterProblem(OptimizationSetup):
         :param scenario_name: name of the scenario
         :param scenario_dict: dictionary containing the scenario data
         :param input_data_checks: dictionary containing the input data checks
-        :param design_variables: list of design variables
         :param operational_variables: list of operational variables
-        :param design_constraints: list of design constraints
         :param operational_constraints: list of operational constraints
         """
 
@@ -71,8 +68,6 @@ class MasterProblem(OptimizationSetup):
         self.config_benders = config_benders
         self.analysis = analysis
         self.monolithic_problem = monolithic_problem
-        self.design_variables = design_variables
-        self.design_constraints = design_constraints
         self.operational_variables = operational_variables
         self.operational_constraints = operational_constraints
         self.mga_weights = self.monolithic_problem.mga_weights
@@ -82,7 +77,7 @@ class MasterProblem(OptimizationSetup):
 
         self.create_master_problem()
 
-        self.folder_output = os.path.abspath(self.config_benders["folder_output"] / "master_problem")
+        self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
 
     def add_theta_variable(self, model, name):
@@ -91,14 +86,6 @@ class MasterProblem(OptimizationSetup):
         """
         theta = model.add_variables(lower=0, name=name)
         return theta
-
-    def save_master_model_to_gurobi(self):
-        """
-        Save the master problem to a .lp file.
-        """
-        self.master_model_gurobi = self.model.to_gurobipy()
-        self.master_model_gurobi.write("gurobi_master_model.lp")
-        logging.info("Master problem saved to Gurobi file.")
 
     def create_master_problem(self):
         """
@@ -147,6 +134,3 @@ class MasterProblem(OptimizationSetup):
         logging.info("Removing operational variables from the master problem.")
         for operational_variable in self.operational_variables:
             self.model.remove_variables(operational_variable)
-
-        # Save the master problem to a gurobi file
-        self.save_master_model_to_gurobi()

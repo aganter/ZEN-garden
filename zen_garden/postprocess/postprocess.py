@@ -73,9 +73,7 @@ class Postprocess:
         # get name or directory
         self.model_name = model_name
         if model.config.benders.benders_decomposition and model.name != "ConcreteProblem":
-            self.name_dir = (
-                Path(self.analysis["folder_output"]).joinpath(self.model_name).joinpath("benders").joinpath(model.name)
-            )
+            self.name_dir = Path(model.folder_output)
         else:
             self.name_dir = Path(self.analysis["folder_output"]).joinpath(self.model_name)
 

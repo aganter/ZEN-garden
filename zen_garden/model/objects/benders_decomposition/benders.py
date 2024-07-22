@@ -10,12 +10,15 @@
 """
 
 import logging
+import os
+from pathlib import Path
 from gurobipy import GRB
 
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.master_problem import MasterProblem
 from zen_garden.model.objects.benders_decomposition.subproblems import Subproblem
+from zen_garden.utils import StringUtils, ScenarioUtils
 
 from zen_garden.postprocess.postprocess import Postprocess
 
@@ -23,14 +26,6 @@ from zen_garden.postprocess.postprocess import Postprocess
 class BendersDecomposition:
     """
     Class defining the Benders Decomposition method.
-    Solve the MILPs by decomposing the problem into a master problem and a set of subproblems and utilizing the
-    cutting-plane method to solve the problem.
-
-    min f(x,y)
-    s.t. A*x + B*y <= b (m constraints)
-         D*y >= d       (n constraints)
-         x >= 0         (Nx-dimensional vector of operational variables)
-         y >= 0         (Ny-dimensional vector of design variables)
     """
 
     label = "BendersDecomposition"
@@ -40,22 +35,21 @@ class BendersDecomposition:
         config: dict,
         analysis: dict,
         monolithic_problem: OptimizationSetup,
-        save_first_problems: bool = False,
+        scenario_name: str = None,
     ):
         """
         Initialize the BendersDecomposition object.
 
         :param config: dictionary containing the configuration of the optimization problem
         :param analysis: dictionary containing the analysis configuration
-        :param config_benders: dictionary containing the configuration of the Benders Decomposition method
         :param monolithic_problem: OptimizationSetup object of the monolithic problem
+        :param scenario_name: name of the scenario
         """
 
         self.name = "BendersDecomposition"
         self.config = config
         self.analysis = analysis
         self.monolithic_problem = monolithic_problem
-        self.save_first_problems = save_first_problems
 
         self.input_path = getattr(self.config.benders, "input_path")
         self.energy_system = monolithic_problem.energy_system
@@ -67,6 +61,21 @@ class BendersDecomposition:
             energy_system=self.energy_system,
             unit_handling=None,
         )
+        self.config.benders.system.update(self.config.system)
+        self.config.benders.system.update(self.config.benders.immutable_system_elements)
+        self.config.benders.analysis["dataset"] = os.path.abspath(self.config.benders.analysis["dataset"])
+        benders_output_folder = StringUtils.get_output_folder(
+            analysis=self.config.benders.analysis,
+            system=self.config.benders.system,
+            folder_output=self.config.benders.analysis.folder_output,
+        )
+        benders_output_folder = os.path.abspath(benders_output_folder) + "/" + scenario_name
+        self.config.benders.analysis["folder_output"] = os.path.abspath(benders_output_folder)
+
+        scenarios, elements = ScenarioUtils.get_scenarios(
+            config=self.config.benders, scenario_script_name="benders_scenarios.py", job_index=None
+        )
+        ScenarioUtils.clean_scenario_folder(self.config.benders, benders_output_folder)
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
         self.monolithic_variables = self.monolithic_problem.model.variables
@@ -83,46 +92,44 @@ class BendersDecomposition:
 
         logging.info("")
         logging.info("--- Creating the master problem ---")
-        if self.save_first_problems:
-            self.master_model = MasterProblem(
-                config=self.monolithic_problem.config,
-                config_benders=self.config.benders,
-                analysis=self.analysis,
-                monolithic_problem=self.monolithic_problem,
-                model_name=self.monolithic_problem.model_name,
-                scenario_name=self.monolithic_problem.scenario_name,
-                scenario_dict=self.monolithic_problem.scenario_dict,
-                input_data_checks=self.monolithic_problem.input_data_checks,
-                design_variables=self.design_variables,
-                operational_variables=self.operational_variables,
-                design_constraints=self.design_constraints,
-                operational_constraints=self.operational_constraints,
-            )
+        self.master_model = MasterProblem(
+            config=self.monolithic_problem.config,
+            config_benders=self.config.benders,
+            analysis=self.analysis,
+            monolithic_problem=self.monolithic_problem,
+            model_name=self.monolithic_problem.model_name,
+            scenario_name=self.monolithic_problem.scenario_name,
+            scenario_dict=self.monolithic_problem.scenario_dict,
+            input_data_checks=self.monolithic_problem.input_data_checks,
+            operational_variables=self.operational_variables,
+            operational_constraints=self.operational_constraints,
+            benders_output_folder=benders_output_folder,
+        )
 
-            logging.info("")
-            logging.info("--- Creating the subproblems ---")
-            self.subproblem_models = Subproblem(
+        logging.info("")
+        logging.info("--- Creating the subproblems ---")
+        self.subproblem_models = []
+        for scenario, scenario_dict in zip(scenarios, elements):
+            subproblem = Subproblem(
                 config=self.monolithic_problem.config,
                 config_benders=self.config.benders,
                 analysis=self.analysis,
                 monolithic_problem=self.monolithic_problem,
                 model_name=self.monolithic_problem.model_name,
-                scenario_name=self.monolithic_problem.scenario_name,
-                scenario_dict=self.monolithic_problem.scenario_dict,
+                scenario_name=scenario,
+                scenario_dict=scenario_dict,
                 input_data_checks=self.monolithic_problem.input_data_checks,
-                design_variables=self.design_variables,
-                operational_variables=self.operational_variables,
                 not_coupling_variables=self.not_coupling_variables,
                 design_constraints=self.design_constraints,
-                operational_constraints=self.operational_constraints,
+                benders_output_folder=benders_output_folder,
             )
+            self.subproblem_models.append(subproblem)
 
     def save_monolithic_problem_in_gurobi_format_map_vars_constrs(self):
         """
         Save the monolithic problem in the gurobi format.
         """
         self.monolithic_model_gurobi = self.monolithic_problem.model.to_gurobipy()
-        self.monolithic_model_gurobi.write("gurobi_monolithic_model.lp")
 
         # Map variables name in the monolithic problem to gurobi variables name
         # The map will be a dictionary with key the name of the variable in the gurobi modle and three values:
@@ -176,8 +183,6 @@ class BendersDecomposition:
                     operational_constraints.append(constraint["constraint_name"])
                 else:
                     raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
-            else:
-                logging.warning("Constraint %s is not in the monolithic problem", constraint["constraint_name"])
 
         # At the end we need to ensure we have added all the constraints of the monolithic problem
         if len(design_constraints) + len(operational_constraints) != len(self.monolithic_constraints):
@@ -209,8 +214,6 @@ class BendersDecomposition:
                     operational_variables.append(variable["variable_name"])
                 else:
                     raise AssertionError(f"Constraint {variable['variable_name']} has an invalid type.")
-            else:
-                logging.warning("Constraint %s is not in the monolithic problem.", variable["variable_name"])
 
         # At the end we need to ensure we have added all the variables of the monolithic problem
         if len(design_variables) + len(operational_variables) != len(self.monolithic_variables):
@@ -234,41 +237,42 @@ class BendersDecomposition:
         """
         self.master_model.model.solve()
 
+    def solve_subproblems(self):
+        """
+        Solve the subproblems given in the list self.subproblem_models.
+        """
+        for subproblem in self.subproblem_models:
+            subproblem.model.solve()
+
     def fix_design_variables_in_subproblem_model(self):
         """
         Fix the design variables of the subproblems to the optimal solution of the master problem.
         This function takes the solution of the master problem and fixes the values of the design variables in the
         subproblems by adding the corresponding upper and lower bounds to the variables.
         """
+
         for variable_name in self.master_model.model.variables:
-            if variable_name in self.subproblem_models.model.variables:
-                variable_solution = self.master_model.model.solution[variable_name]
-                self.subproblem_models.model.variables[variable_name].lower = variable_solution
-                self.subproblem_models.model.variables[variable_name].upper = variable_solution
+            for subproblem in self.subproblem_models:
+                if variable_name in subproblem.model.variables:
+                    variable_solution = self.master_model.model.solution[variable_name]
+                    subproblem.model.variables[variable_name].lower = variable_solution
+                    subproblem.model.variables[variable_name].upper = variable_solution
 
     def subproblem_to_gurobi(self, subproblem_solved):
         """
-        Convert the subproblem model to gurobi, set the parameter InfUnbdInfo to 1 and do the mapping of variables and
-        constraints.
+        Convert the subproblem model to gurobi, necessary to generate the feasibility cut.
         """
         subproblem_model_fixed_design_variable_gurobi = subproblem_solved.to_gurobipy()
+        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.OutputFlag, 0)
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.FeasibilityTol, 1e-9)
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.InfUnbdInfo, 1)
+        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.NumericFocus, 3)
 
         # Optimize gurobi model, compute IIS and save infeasible constraints
         subproblem_model_fixed_design_variable_gurobi.optimize()
         subproblem_model_fixed_design_variable_gurobi.computeIIS()
 
-        infeasibilities = [
-            constr
-            for constr, infeas in zip(
-                subproblem_model_fixed_design_variable_gurobi.getConstrs(),
-                subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.IISConstr),
-            )
-            if infeas
-        ]
-
-        return subproblem_model_fixed_design_variable_gurobi, infeasibilities
+        return subproblem_model_fixed_design_variable_gurobi
 
     def generate_feasibility_cut(self, subproblem_model_fixed_design_variable_gurobi):
         """
@@ -304,73 +308,94 @@ class BendersDecomposition:
 
         return feasibility_cut_lhs, feasibility_cut_rhs
 
-    def fit(self):
+    def define_list_of_feasibility_cuts(self):
         """
-        Fit the Benders Decomposition model.
+        Define the list of feasibility cuts when dealing with multiple subproblems.
+
+        :return: list of feasibility cuts as tuples with the following structure:
+            - subproblem_name: name of the subproblem (if the scenario name is not defined, it is set to "default")
+            - feasibility_cut_lhs: left-hand side of the feasibility cut
+            - feasibility_cut_rhs: right-hand side of the feasibility cut
         """
-        iteration = 1
-        while True:
-            logging.info("--- Iteration %s: Solving master problem ---", iteration)
-            self.solve_master_problem()
+        logging.info("--- Generating feasibility cut ---")
+        feasibility_cuts = []
+        infeasible_subproblems = []
+        for subproblem in self.subproblem_models:
+            if subproblem.model.termination_condition == "infeasible":
+                infeasible_subproblems.append(subproblem)
+        for subproblem in infeasible_subproblems:
+            subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
 
-            logging.info("--- Iteration %s: Fixing design variables in subproblem model ---", iteration)
-            self.fix_design_variables_in_subproblem_model()
-
-            logging.info("--- Iteration %s: Solving subproblem model ---", iteration)
-            self.subproblem_models.model.solve()
-
-            # Check if subproblem is optimal
-            if self.subproblem_models.model.termination_condition == "optimal":
-                # If the subproblem is optimal, we can terminate the iterations and save the results
-                logging.info("--- Subproblem is optimal. Terminating iterations ---")
-                scenario_name_master, subfolder_master, param_map_master = self.master_model.generate_output_paths(
-                    config_system=self.config.system, step=1, steps_horizon=[1]
-                )
-                Postprocess(
-                    model=self.master_model,
-                    scenarios=self.config.scenarios,
-                    model_name=self.master_model.model_name,
-                    subfolder=subfolder_master,
-                    scenario_name=scenario_name_master,
-                    param_map=param_map_master,
-                )
-                scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = (
-                    self.subproblem_models.generate_output_paths(
-                        config_system=self.config.system, step=1, steps_horizon=[1]
-                    )
-                )
-                Postprocess(
-                    model=self.subproblem_models,
-                    scenarios=self.config.scenarios,
-                    model_name=self.subproblem_models.model_name,
-                    subfolder=subfolder_subproblem,
-                    scenario_name=scenario_name_subproblem,
-                    param_map=param_map_subproblem,
-                )
-                break
-
-            logging.info("--- Subproblem is infeasible ---")
-            subproblem_model_fixed_design_variable_gurobi, infeasibilities = self.subproblem_to_gurobi(
-                self.subproblem_models.model
-            )
-            # Log the name of the infeasible constraints using the monolithic problem names
-            infeasible_constraint_names_gurobi = [constr.ConstrName for constr in infeasibilities]
-            infeasible_constraint_names_monolithic = [
-                self.map_constraints_monolithic_gurobi[constr_name]["constraint_name"]
-                for constr_name in infeasible_constraint_names_gurobi
-            ]
-            logging.info("--- Infeasible constraints: %s", infeasible_constraint_names_monolithic)
-            logging.info("--- Generating feasibility cut")
             feasibility_cut_lhs, feasibility_cut_rhs = self.generate_feasibility_cut(
                 subproblem_model_fixed_design_variable_gurobi
             )
+            name = subproblem.scenario_name if not subproblem.scenario_name == "" else "default"
+            feasibility_cuts.append([name, feasibility_cut_lhs, feasibility_cut_rhs])
 
-            logging.info("--- Adding feasibility cut to master model")
+        return feasibility_cuts
+
+    def add_feasibility_cuts_to_master(self, feasibility_cuts, iteration):
+        """
+        Add the feasibility cuts to the master model.
+
+        :param feasibility_cuts: list of feasibility cuts as tuples with the following structure:
+            - subproblem_name: name of the subproblem
+            - feasibility_cut_lhs: left-hand side of the feasibility cut
+            - feasibility_cut_rhs: right-hand side of the feasibility cut
+        :param iteration: current iteration of the Benders Decomposition method
+        """
+        logging.info("--- Adding feasibility cut to master model")
+        for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
             self.master_model.model.add_constraints(
                 lhs=feasibility_cut_lhs,
                 sign="<=",
                 rhs=feasibility_cut_rhs,
-                name=f"feasibility_cut_iteration_{iteration}",
+                name=f"feasibility_cuts_{subproblem_name}_iteration_{iteration}",
             )
+
+    def save_master_and_subproblems(self):
+        """
+        Save the master model and the subproblem models in respective output folders.
+        """
+        logging.info("--- All the subproblem are optimal. Terminating iterations ---")
+        Postprocess(model=self.master_model, scenarios="", model_name=self.master_model.model_name, subfolder=Path(""))
+
+        for subproblem in self.subproblem_models:
+            scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = subproblem.generate_output_paths(
+                config_system=self.config.benders.system, step=1, steps_horizon=[1]
+            )
+            Postprocess(
+                model=subproblem,
+                scenarios=self.config.benders.scenarios,
+                model_name=subproblem.model_name,
+                subfolder=subfolder_subproblem,
+                scenario_name=scenario_name_subproblem,
+                param_map=param_map_subproblem,
+            )
+
+    def fit(self):
+        """
+        Fit the Benders Decomposition model.
+        """
+        logger = logging.getLogger("gurobipy")
+        logger.propagate = False
+
+        iteration = 1
+        while True:
+            logging.info("")
+            logging.info("")
+            logging.info("--- Iteration %s ---", iteration)
+            logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
+            self.solve_master_problem()
+            self.fix_design_variables_in_subproblem_model()
+            self.solve_subproblems()
+
+            if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
+                self.save_master_and_subproblems()
+                break
+
+            logging.info("--- Subproblems are infeasible ---")
+            feasibility_cuts = self.define_list_of_feasibility_cuts()
+            self.add_feasibility_cuts_to_master(feasibility_cuts, iteration)
 
             iteration += 1

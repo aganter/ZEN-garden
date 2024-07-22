@@ -1422,21 +1422,22 @@ class StringUtils:
         :return: output folder
         """
         model_name = os.path.basename(analysis["dataset"])
-        out_folder = StringUtils.get_output_folder(analysis, system)
+        out_folder = StringUtils.get_output_folder(analysis, system, analysis["folder_output"])
         return model_name, out_folder
 
     @staticmethod
-    def get_output_folder(analysis, system):
+    def get_output_folder(analysis, system, folder_output):
         """
         return model name while conducting some tests
         :param analysis: analysis of optimization
         :param system: system of optimization
+        :param folder_output: output folder
         :return: output folder
         """
         model_name = os.path.basename(analysis["dataset"])
-        if not os.path.exists(analysis["folder_output"]):
-            os.mkdir(analysis["folder_output"])
-        if not os.path.exists(out_folder := os.path.join(analysis["folder_output"], model_name)):
+        if not os.path.exists(folder_output):
+            os.mkdir(folder_output)
+        if not os.path.exists(out_folder := os.path.join(folder_output, model_name)):
             os.mkdir(out_folder)
         else:
             logging.warning(f"The output folder '{out_folder}' already exists")

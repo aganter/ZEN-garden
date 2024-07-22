@@ -178,9 +178,7 @@ class ModelingToGenerateAlternatives:
 
         :return: Random direction_search_vector for each of the decision variables (type: dict)
         """
-        self.direction_search_vector = {
-            tuple(component): 1 for component in self.decision_variables
-        }  # truncnorm.rvs(-1, 1) for component in self.decision_variables}
+        self.direction_search_vector = {tuple(component): truncnorm.rvs(-1, 1) for component in self.decision_variables}
 
         return self.direction_search_vector
 
@@ -319,6 +317,6 @@ class ModelingToGenerateAlternatives:
                     config=self.config_mga,
                     analysis=self.config_mga.analysis,
                     monolithic_problem=self.mga_solution,
-                    save_first_problems=True,
+                    scenario_name=scenario_name,
                 )
                 benders_decomposition.fit()

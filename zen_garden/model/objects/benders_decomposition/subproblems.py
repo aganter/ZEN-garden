@@ -34,11 +34,9 @@ class Subproblem(OptimizationSetup):
         scenario_name: str,
         scenario_dict: dict,
         input_data_checks,
-        design_variables,
-        operational_variables,
         not_coupling_variables,
         design_constraints,
-        operational_constraints,
+        benders_output_folder,
     ):
         """
         Initialize the Subproblem object.
@@ -51,10 +49,8 @@ class Subproblem(OptimizationSetup):
         :param scenario_name: name of the scenario
         :param scenario_dict: dictionary containing the scenario data
         :param input_data_checks: dictionary containing the input data checks
-        :param design_variables: list of design variables
-        :param operational_variables: list of operational variables
         :param design_constraints: list of design constraints
-        :param operational_constraints: list of operational constraints
+        :param not_coupling_variables: list of variables that are not coupling variables
         """
 
         super().__init__(
@@ -70,11 +66,8 @@ class Subproblem(OptimizationSetup):
         self.config_benders = config_benders
         self.analysis = analysis
         self.monolithic_problem = monolithic_problem
-        self.design_variables = design_variables
         self.design_constraints = design_constraints
-        self.operational_variables = operational_variables
         self.not_coupling_variables = not_coupling_variables
-        self.operational_constraints = operational_constraints
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
 
@@ -82,16 +75,8 @@ class Subproblem(OptimizationSetup):
 
         self.create_subproblem()
 
-        self.folder_output = os.path.abspath(self.config_benders["folder_output"] / "master_problem")
+        self.folder_output = os.path.abspath(benders_output_folder + "/" + "subproblems" + "/" + scenario_name)
         self.optimized_time_steps = [0]
-
-    def save_subproblem_model_to_gurobi(self):
-        """
-        Save the subproblem problem to a .lp file.
-        """
-        self.subproblem_model_gurobi = self.model.to_gurobipy()
-        self.subproblem_model_gurobi.write("gurobi_subproblem_model.lp")
-        logging.info("Master problem saved to Gurobi file.")
 
     def create_subproblem(self):
         """
@@ -154,6 +139,3 @@ class Subproblem(OptimizationSetup):
         logging.info("Removing not useful design variables from the subproblem.")
         for not_coupling_variable in self.not_coupling_variables:
             self.model.remove_variables(not_coupling_variable)
-
-        # Save the subproblem problem to a gurobi file
-        self.save_subproblem_model_to_gurobi()

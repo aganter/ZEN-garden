@@ -180,10 +180,14 @@ class BendersDecomposition(Subscriptable):
     """
 
     benders_decomposition: bool = False
+    analysis: Analysis = Analysis()
+    system: System = System()
     input_path: Path = Path("data/")
-    folder_output: Path = Path("outputs/")
-
     scenarios: dict[str, Any] = {"": {}}
+    immutable_system_elements: dict = {
+        "conduct_scenario_analysis": True,
+        "run_default_scenario": True,
+    }
 
 
 class ModelingToGenerateAlternatives(Subscriptable):

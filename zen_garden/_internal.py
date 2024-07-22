@@ -80,7 +80,11 @@ def main(config, dataset_path=None, job_index=None):
             logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
             config.mga.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
             config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
-            mga_output_folder = StringUtils.get_output_folder(analysis=config.mga.analysis, system=config.mga["system"])
+            mga_output_folder = StringUtils.get_output_folder(
+                analysis=config.mga.analysis,
+                system=config.mga["system"],
+                folder_output=config.mga.analysis["folder_output"],
+            )
             config.mga.system.update(config.system)
             config.mga.system.update(config.mga.immutable_system_elements)
 

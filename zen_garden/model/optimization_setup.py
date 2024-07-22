@@ -471,7 +471,8 @@ class OptimizationSetup(object):
         # define and construct components of self.model
         Element.construct_model_components(self)
         # find smallest and largest coefficient and RHS
-        self.analyze_numerics()
+        if not self.config.benders.benders_decomposition:
+            self.analyze_numerics()
 
     def get_optimization_horizon(self):
         """returns list of optimization horizon steps"""
@@ -595,7 +596,7 @@ class OptimizationSetup(object):
         """write an ILP file to print the IIS if infeasible. Only possible for gurobi"""
         if self.model.termination_condition == "infeasible" and self.solver["name"] == "gurobi":
 
-            output_folder = StringUtils.get_output_folder(self.analysis, self.system)
+            output_folder = StringUtils.get_output_folder(self.analysis, self.system, self.analysis['folder_output'])
             ilp_file = os.path.join(output_folder, "infeasible_model_IIS.ilp")
             logging.info(f"Writing parsed IIS to {ilp_file}")
             parser = IISConstraintParser(ilp_file, self.model)
