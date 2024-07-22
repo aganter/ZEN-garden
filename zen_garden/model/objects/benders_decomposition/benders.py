@@ -64,18 +64,17 @@ class BendersDecomposition:
         self.config.benders.system.update(self.config.system)
         self.config.benders.system.update(self.config.benders.immutable_system_elements)
         self.config.benders.analysis["dataset"] = os.path.abspath(self.config.benders.analysis["dataset"])
-        benders_output_folder = StringUtils.get_output_folder(
+        self.benders_output_folder = StringUtils.get_output_folder(
             analysis=self.config.benders.analysis,
             system=self.config.benders.system,
             folder_output=self.config.benders.analysis.folder_output,
         )
-        benders_output_folder = os.path.abspath(benders_output_folder) + "/" + scenario_name
-        self.config.benders.analysis["folder_output"] = os.path.abspath(benders_output_folder)
+        self.benders_output_folder = os.path.abspath(self.benders_output_folder) + "/" + scenario_name
 
         scenarios, elements = ScenarioUtils.get_scenarios(
             config=self.config.benders, scenario_script_name="benders_scenarios.py", job_index=None
         )
-        ScenarioUtils.clean_scenario_folder(self.config.benders, benders_output_folder)
+        ScenarioUtils.clean_scenario_folder(self.config.benders, self.benders_output_folder)
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
         self.monolithic_variables = self.monolithic_problem.model.variables
@@ -103,7 +102,7 @@ class BendersDecomposition:
             input_data_checks=self.monolithic_problem.input_data_checks,
             operational_variables=self.operational_variables,
             operational_constraints=self.operational_constraints,
-            benders_output_folder=benders_output_folder,
+            benders_output_folder=self.benders_output_folder,
         )
 
         logging.info("")
@@ -121,7 +120,7 @@ class BendersDecomposition:
                 input_data_checks=self.monolithic_problem.input_data_checks,
                 not_coupling_variables=self.not_coupling_variables,
                 design_constraints=self.design_constraints,
-                benders_output_folder=benders_output_folder,
+                benders_output_folder=self.benders_output_folder,
             )
             self.subproblem_models.append(subproblem)
 

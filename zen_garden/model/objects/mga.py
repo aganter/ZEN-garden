@@ -317,6 +317,6 @@ class ModelingToGenerateAlternatives:
                     config=self.config_mga,
                     analysis=self.config_mga.analysis,
                     monolithic_problem=self.mga_solution,
-                    scenario_name=scenario_name,
+                    scenario_name=str(subfolder),
                 )
                 benders_decomposition.fit()

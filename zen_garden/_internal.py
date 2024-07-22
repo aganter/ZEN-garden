@@ -91,6 +91,7 @@ def main(config, dataset_path=None, job_index=None):
             scenarios, elements = ScenarioUtils.get_scenarios(
                 config=config.mga, scenario_script_name="mga_iterations.py", job_index=job_index
             )
+
             ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
 
             # The scenario will create a double level folder structure: the first to be the different MGA objectives
