@@ -11,7 +11,10 @@
 
 import logging
 import os
+import time
+import pandas as pd
 from pathlib import Path
+import psutil
 from gurobipy import GRB
 
 from zen_garden.preprocess.extract_input_data import DataInput
@@ -89,6 +92,15 @@ class BendersDecomposition:
 
         self.save_monolithic_problem_in_gurobi_format_map_vars_constrs()
 
+        # DataFrames to store information about the building and solving of the subproblems
+        columns = ["subproblem", "build_time_sec", "build_memory_MB"]
+        self.building_subproblem = pd.DataFrame(columns=columns)
+        columns = ["subproblem", "iteration", "solve_time_sec", "solve_memory_MB"]
+        self.solving_subproblem = pd.DataFrame(columns=columns)
+        # DataFrames to store information about the building and solving of the master problem
+        columns = ["iteration", "optimality_gap"]
+        self.optimality_gap_df = pd.DataFrame(columns=columns)
+
         logging.info("")
         logging.info("--- Creating the master problem ---")
         self.master_model = MasterProblem(
@@ -109,6 +121,8 @@ class BendersDecomposition:
         logging.info("--- Creating the subproblems ---")
         self.subproblem_models = []
         for scenario, scenario_dict in zip(scenarios, elements):
+            start_time = time.time()
+            pid = os.getpid()
             subproblem = Subproblem(
                 config=self.monolithic_problem.config,
                 config_benders=self.config.benders,
@@ -123,6 +137,14 @@ class BendersDecomposition:
                 benders_output_folder=self.benders_output_folder,
             )
             self.subproblem_models.append(subproblem)
+            build_time = time.time() - start_time
+            build_memory = psutil.Process(pid).memory_info().rss / 1024**2
+            if scenario == "":
+                scenario = "default"
+            new_row = pd.DataFrame(
+                {"subproblem": [scenario], "build_time_sec": [build_time], "build_memory_MB": [build_memory]}
+            )
+            self.building_subproblem = pd.concat([self.building_subproblem, new_row], ignore_index=True)
 
     def save_monolithic_problem_in_gurobi_format_map_vars_constrs(self):
         """
@@ -230,18 +252,40 @@ class BendersDecomposition:
 
         return design_variables, operational_variables, not_coupling_variables
 
-    def solve_master_problem(self):
+    def solve_master_problem(self, iteration):
         """
         Solve the master problem.
         """
         self.master_model.model.solve()
+        optimality_gap = self.monolithic_problem.model.objective_value - self.master_model.model.objective_value
+        new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
+        self.optimality_gap_df = pd.concat([self.optimality_gap_df, new_row], ignore_index=True)
 
-    def solve_subproblems(self):
+    def solve_subproblems(self, iteration):
         """
         Solve the subproblems given in the list self.subproblem_models.
         """
         for subproblem in self.subproblem_models:
+            start_time = time.time()
+            pid = os.getpid()
+
             subproblem.model.solve()
+
+            solve_time = time.time() - start_time
+            solve_memory = psutil.Process(pid).memory_info().rss / 1024**2
+            subproblem_name = subproblem.scenario_name
+            if subproblem_name == "":
+                subproblem_name = "default"
+
+            new_row = pd.DataFrame(
+                {
+                    "subproblem": [subproblem_name],
+                    "iteration": [iteration],
+                    "solve_time_sec": [solve_time],
+                    "solve_memory_MB": [solve_memory],
+                }
+            )
+            self.solving_subproblem = pd.concat([self.solving_subproblem, new_row], ignore_index=True)
 
     def fix_design_variables_in_subproblem_model(self):
         """
@@ -372,6 +416,10 @@ class BendersDecomposition:
                 param_map=param_map_subproblem,
             )
 
+        self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
+        self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
+        self.optimality_gap_df.to_csv(os.path.join(self.benders_output_folder, "optimality_gap.csv"))
+
     def fit(self):
         """
         Fit the Benders Decomposition model.
@@ -385,9 +433,9 @@ class BendersDecomposition:
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
-            self.solve_master_problem()
+            self.solve_master_problem(iteration)
             self.fix_design_variables_in_subproblem_model()
-            self.solve_subproblems()
+            self.solve_subproblems(iteration)
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
                 self.save_master_and_subproblems()
