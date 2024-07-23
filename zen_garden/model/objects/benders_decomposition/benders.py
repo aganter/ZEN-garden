@@ -327,14 +327,14 @@ class BendersDecomposition:
         """
         Generate the feasibility cut.
         """
+        farkas_multipliers = []
         farkas_multipliers = [
             (constraint_name, multiplier)
-            for constraint_name, multiplier, infeas in zip(
+            for constraint_name, multiplier in zip(
                 [constr_name for constr_name in subproblem_model_fixed_design_variable_gurobi.getConstrs()],
                 subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.FarkasDual),
-                subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.IISConstr),
             )
-            if infeas
+            if multiplier != 0
         ]
 
         # Create the feasibility cut
