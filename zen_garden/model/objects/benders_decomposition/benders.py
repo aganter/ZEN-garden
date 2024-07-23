@@ -39,6 +39,7 @@ class BendersDecomposition:
         analysis: dict,
         monolithic_problem: OptimizationSetup,
         scenario_name: str = None,
+        use_monolithic_solution: bool = False,
     ):
         """
         Initialize the BendersDecomposition object.
@@ -53,6 +54,7 @@ class BendersDecomposition:
         self.config = config
         self.analysis = analysis
         self.monolithic_problem = monolithic_problem
+        self.use_monolithic_solution = use_monolithic_solution
 
         self.input_path = getattr(self.config.benders, "input_path")
         self.energy_system = monolithic_problem.energy_system
@@ -287,17 +289,21 @@ class BendersDecomposition:
             )
             self.solving_subproblem = pd.concat([self.solving_subproblem, new_row], ignore_index=True)
 
-    def fix_design_variables_in_subproblem_model(self):
+    def fix_design_variables_in_subproblem_model(self, iteration):
         """
         Fix the design variables of the subproblems to the optimal solution of the master problem.
         This function takes the solution of the master problem and fixes the values of the design variables in the
         subproblems by adding the corresponding upper and lower bounds to the variables.
         """
+        if self.use_monolithic_solution and iteration == 1:
+            master_solution = self.monolithic_problem.model.solution
+        else:
+            master_solution = self.master_model.model.solution
 
         for variable_name in self.master_model.model.variables:
             for subproblem in self.subproblem_models:
                 if variable_name in subproblem.model.variables:
-                    variable_solution = self.master_model.model.solution[variable_name]
+                    variable_solution = master_solution[variable_name]
                     subproblem.model.variables[variable_name].lower = variable_solution
                     subproblem.model.variables[variable_name].upper = variable_solution
 
@@ -434,8 +440,9 @@ class BendersDecomposition:
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
-            self.solve_master_problem(iteration)
-            self.fix_design_variables_in_subproblem_model()
+            if not (self.use_monolithic_solution and iteration == 1):
+                self.solve_master_problem(iteration)
+            self.fix_design_variables_in_subproblem_model(iteration)
             self.solve_subproblems(iteration)
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):

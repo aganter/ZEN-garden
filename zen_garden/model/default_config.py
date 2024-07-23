@@ -188,6 +188,7 @@ class BendersDecomposition(Subscriptable):
         "conduct_scenario_analysis": True,
         "run_default_scenario": True,
     }
+    use_monolithic_solution: bool = False
 
 
 class ModelingToGenerateAlternatives(Subscriptable):

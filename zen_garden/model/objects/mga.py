@@ -318,5 +318,6 @@ class ModelingToGenerateAlternatives:
                     analysis=self.config_mga.analysis,
                     monolithic_problem=self.mga_solution,
                     scenario_name=str(subfolder),
+                    use_monolithic_solution=self.config_mga.benders.use_monolithic_solution,
                 )
                 benders_decomposition.fit()
