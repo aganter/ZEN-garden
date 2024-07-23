@@ -12,8 +12,8 @@
 import logging
 import os
 import time
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 import psutil
 from gurobipy import GRB
 
@@ -90,7 +90,7 @@ class BendersDecomposition:
 
         self.monolithic_model_gurobi = None
         self.map_variables_monolithic_gurobi = {}
-        self.map_constraints_monolithic_gurobi = {}
+        # self.map_constraints_monolithic_gurobi = {}
 
         self.save_monolithic_problem_in_gurobi_format_map_vars_constrs()
 
@@ -175,16 +175,17 @@ class BendersDecomposition:
         # 1. constraint_name: the constraint name in the monolithic problem
         # 2. constraint_coords: the coordinates of the constraint in the monolithic problem
         # 3. constraint_gurobi: the constraint in the gurobi model
-        for i in range(self.monolithic_model_gurobi.NumConstrs):
-            constraint_gurobi = self.monolithic_model_gurobi.getConstrs()[i]
-            key = constraint_gurobi.ConstrName
-            constraint_name = self.monolithic_problem.model.constraints.get_label_position(int(key[1:]))[0]
-            constraint_coords = self.monolithic_problem.model.constraints.get_label_position(int(key[1:]))[1]
-            self.map_constraints_monolithic_gurobi[key] = {
-                "constraint_name": constraint_name,
-                "constraint_coords": constraint_coords,
-                "constraint_gurobi": constraint_gurobi,
-            }
+
+        # for i in range(self.monolithic_model_gurobi.NumConstrs):
+        #     constraint_gurobi = self.monolithic_model_gurobi.getConstrs()[i]
+        #     key = constraint_gurobi.ConstrName
+        #     constraint_name = self.monolithic_problem.model.constraints.get_label_position(int(key[1:]))[0]
+        #     constraint_coords = self.monolithic_problem.model.constraints.get_label_position(int(key[1:]))[1]
+        #     self.map_constraints_monolithic_gurobi[key] = {
+        #         "constraint_name": constraint_name,
+        #         "constraint_coords": constraint_coords,
+        #         "constraint_gurobi": constraint_gurobi,
+        #     }
 
     def separate_design_operational_constraints(self) -> list:
         """
@@ -236,7 +237,7 @@ class BendersDecomposition:
                 elif variable["variable_type"] == "operational":
                     operational_variables.append(variable["variable_name"])
                 else:
-                    raise AssertionError(f"Constraint {variable['variable_name']} has an invalid type.")
+                    raise AssertionError(f"Variable {variable['variable_name']} has an invalid type.")
 
         # At the end we need to ensure we have added all the variables of the monolithic problem
         if len(design_variables) + len(operational_variables) != len(self.monolithic_variables):
