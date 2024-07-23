@@ -191,7 +191,7 @@ class ModelingToGenerateAlternatives:
         """
         logging.info(
             "Generating characteristic scales: in case where the variable is zero, the characteristic scale is"
-            "estimated to roughly match its expected magnitude in the near-optimal space.",
+            " estimated to roughly match its expected magnitude in the near-optimal space.",
         )
         # Extract the array named as the type of variables that we want to set as objective variables from
         # the original optimized solution (e.g. capacity)
