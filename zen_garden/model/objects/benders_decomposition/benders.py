@@ -395,7 +395,7 @@ class BendersDecomposition:
         infeasible_subproblems = []
         for subproblem in self.subproblem_models:
             if subproblem.model.termination_condition == "infeasible":
-                subproblem.model.print_infeasibility()
+                subproblem.model.print_infeasibilities()
                 infeasible_subproblems.append(subproblem)
         for subproblem in infeasible_subproblems:
             subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
