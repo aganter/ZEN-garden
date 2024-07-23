@@ -99,9 +99,20 @@ class BendersDecomposition:
         self.building_subproblem = pd.DataFrame(columns=columns)
         columns = ["subproblem", "iteration", "solve_time_sec", "solve_memory_MB"]
         self.solving_subproblem = pd.DataFrame(columns=columns)
-        # DataFrames to store information about the building and solving of the master problem
+        # DataFrame to store information about the building and solving of the master problem
         columns = ["iteration", "optimality_gap"]
         self.optimality_gap_df = pd.DataFrame(columns=columns)
+        # Dataframe to store the capex and the total cost of subproblems and monolithic problem
+        columns = [
+            "iteration",
+            "subproblem",
+            "cost_capex_total_subproblem",
+            "cost_capex_total_master",
+            "cost_capex_total_monolithic",
+            "cost_total_subproblem",
+            "cost_total_monolithic",
+        ]
+        self.cost_subproblem_monolithic = pd.DataFrame(columns=columns)
 
         logging.info("")
         logging.info("--- Creating the master problem ---")
@@ -263,6 +274,18 @@ class BendersDecomposition:
         optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
         new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
         self.optimality_gap_df = pd.concat([self.optimality_gap_df, new_row], ignore_index=True)
+        new_row = pd.DataFrame(
+            {
+                "iteration": [iteration],
+                "subproblem": None,
+                "cost_capex_total_subproblem": None,
+                "cost_capex_total_master": [self.master_model.model.solution.cost_capex_total.values],
+                "cost_capex_total_monolithic": [self.monolithic_problem.model.solution.cost_capex_total.values],
+                "cost_total_subproblem": None,
+                "cost_total_monolithic": [self.monolithic_problem.model.solution.cost_total.values],
+            }
+        )
+        self.cost_subproblem_monolithic = pd.concat([self.cost_subproblem_monolithic, new_row], ignore_index=True)
 
     def solve_subproblems(self, iteration):
         """
@@ -372,6 +395,7 @@ class BendersDecomposition:
         infeasible_subproblems = []
         for subproblem in self.subproblem_models:
             if subproblem.model.termination_condition == "infeasible":
+                subproblem.model.print_infeasibility()
                 infeasible_subproblems.append(subproblem)
         for subproblem in infeasible_subproblems:
             subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
@@ -426,6 +450,9 @@ class BendersDecomposition:
         self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
         self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
         self.optimality_gap_df.to_csv(os.path.join(self.benders_output_folder, "optimality_gap.csv"))
+        self.cost_subproblem_monolithic.to_csv(
+            os.path.join(self.benders_output_folder, "cost_subproblem_monolithic.csv")
+        )
 
     def fit(self):
         """
@@ -447,11 +474,33 @@ class BendersDecomposition:
             self.solve_subproblems(iteration)
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
+                for subproblem in self.subproblem_models:
+                    name = subproblem.scenario_name
+                    if subproblem.scenario_name == "":
+                        name = "default"
+                    new_row = pd.DataFrame(
+                        {
+                            "iteration": [iteration],
+                            "subproblem": [name],
+                            "cost_capex_total_subproblem": [subproblem.model.solution.cost_capex_total.values],
+                            "cost_capex_total_master": [self.master_model.model.solution.cost_capex_total.values],
+                            "cost_capex_total_monolithic": [
+                                self.monolithic_problem.model.solution.cost_capex_total.values
+                            ],
+                            "cost_total_subproblem": [subproblem.model.solution.cost_total.values],
+                            "cost_total_monolithic": [self.monolithic_problem.model.solution.cost_total.values],
+                        }
+                    )
+                    self.cost_subproblem_monolithic = pd.concat(
+                        [self.cost_subproblem_monolithic, new_row], ignore_index=True
+                    )
                 self.save_master_and_subproblems()
                 break
-
             logging.info("--- Subproblems are infeasible ---")
             feasibility_cuts = self.define_list_of_feasibility_cuts()
             self.add_feasibility_cuts_to_master(feasibility_cuts, iteration)
+            self.cost_subproblem_monolithic.to_csv(
+                os.path.join(self.benders_output_folder, f"cost_subproblem_monolithic_iteration_{iteration}.csv")
+            )
 
             iteration += 1
