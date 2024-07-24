@@ -189,6 +189,7 @@ class BendersDecomposition(Subscriptable):
         "run_default_scenario": True,
     }
     use_monolithic_solution: bool = False
+    absolute_optimality_gap: int = 1e-6
 
 
 class ModelingToGenerateAlternatives(Subscriptable):

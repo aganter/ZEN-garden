@@ -48,6 +48,7 @@ class BendersDecomposition:
         :param analysis: dictionary containing the analysis configuration
         :param monolithic_problem: OptimizationSetup object of the monolithic problem
         :param scenario_name: name of the scenario
+        :param use_monolithic_solution: boolean to use the solution of the monolithic problem as initial solution
         """
 
         self.name = "BendersDecomposition"
@@ -90,9 +91,8 @@ class BendersDecomposition:
 
         self.monolithic_model_gurobi = None
         self.map_variables_monolithic_gurobi = {}
-        # self.map_constraints_monolithic_gurobi = {}
 
-        self.save_monolithic_problem_in_gurobi_format_map_vars_constrs()
+        self.save_monolithic_problem_in_gurobi_format_map_variables()
 
         # DataFrames to store information about the building and solving of the subproblems
         columns = ["subproblem", "build_time_sec", "build_memory_MB"]
@@ -154,17 +154,18 @@ class BendersDecomposition:
             )
             self.building_subproblem = pd.concat([self.building_subproblem, new_row], ignore_index=True)
 
-    def save_monolithic_problem_in_gurobi_format_map_vars_constrs(self):
+    def save_monolithic_problem_in_gurobi_format_map_variables(self):
         """
-        Save the monolithic problem in the gurobi format.
+        Save the monolithic problem in the gurobi format. This is necessary to map the variables of the monolithic
+        problem to the gurobi variables. The mapping is a dictionary with key the name of the variable in the gurobi
+        model and following three values:
+            1. variable_name: the variable name in the monolithic problem
+            2. variable_coords: the coordinates of the variable in the monolithic problem
+            3. variable_gurobi: the variable in the gurobi model
+
         """
         self.monolithic_model_gurobi = self.monolithic_problem.model.to_gurobipy()
 
-        # Map variables name in the monolithic problem to gurobi variables name
-        # The map will be a dictionary with key the name of the variable in the gurobi modle and three values:
-        # 1. variable_name: the variable name in the monolithic problem
-        # 2. variable_coords: the coordinates of the variable in the monolithic problem
-        # 3. variable_gurobi: the variable in the gurobi model
         for i in range(self.monolithic_model_gurobi.NumVars):
             variable_gurobi = self.monolithic_model_gurobi.getVars()[i]
             key = variable_gurobi.VarName
@@ -175,23 +176,6 @@ class BendersDecomposition:
                 "variable_coords": variable_coords,
                 "variable_gurobi": variable_gurobi,
             }
-
-        # Map constraints name in the monolithic problem to gurobi constraints name
-        # The map will be a dictionary with key the name of the constraint in the gurobi model and three values:
-        # 1. constraint_name: the constraint name in the monolithic problem
-        # 2. constraint_coords: the coordinates of the constraint in the monolithic problem
-        # 3. constraint_gurobi: the constraint in the gurobi model
-
-        # for i in range(self.monolithic_model_gurobi.NumConstrs):
-        #     constraint_gurobi = self.monolithic_model_gurobi.getConstrs()[i]
-        #     key = constraint_gurobi.ConstrName
-        #     constraint_name = self.monolithic_problem.model.constraints.get_label_position(int(key[1:]))[0]
-        #     constraint_coords = self.monolithic_problem.model.constraints.get_label_position(int(key[1:]))[1]
-        #     self.map_constraints_monolithic_gurobi[key] = {
-        #         "constraint_name": constraint_name,
-        #         "constraint_coords": constraint_coords,
-        #         "constraint_gurobi": constraint_gurobi,
-        #     }
 
     def separate_design_operational_constraints(self) -> list:
         """
@@ -273,6 +257,8 @@ class BendersDecomposition:
     def solve_subproblems(self, iteration):
         """
         Solve the subproblems given in the list self.subproblem_models.
+
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         for subproblem in self.subproblem_models:
             start_time = time.time()
@@ -301,6 +287,8 @@ class BendersDecomposition:
         Fix the design variables of the subproblems to the optimal solution of the master problem.
         This function takes the solution of the master problem and fixes the values of the design variables in the
         subproblems by adding the corresponding upper and lower bounds to the variables.
+
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         if self.use_monolithic_solution and iteration == 1:
             master_solution = self.monolithic_problem.model.solution
@@ -317,6 +305,8 @@ class BendersDecomposition:
     def subproblem_to_gurobi(self, subproblem_solved):
         """
         Convert the subproblem model to gurobi, necessary to generate the feasibility cut.
+
+        :param subproblem_solved: subproblem model to be converted to gurobi (type: Model)
         """
         subproblem_model_fixed_design_variable_gurobi = subproblem_solved.to_gurobipy()
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.OutputFlag, 0)
@@ -332,9 +322,15 @@ class BendersDecomposition:
 
         return subproblem_model_fixed_design_variable_gurobi
 
-    def generate_feasibility_cut(self, subproblem_model_fixed_design_variable_gurobi):
+    def generate_feasibility_cut(self, subproblem_model_fixed_design_variable_gurobi) -> tuple:
         """
-        Generate the feasibility cut.
+        Generate the feasibility cut. The feasibility cut is generated by the Farkas multipliers of the subproblem
+        model.
+
+        :param subproblem_model_fixed_design_variable_gurobi: subproblem model in gurobi format (type: Model)
+
+        :return: feasibility_cut_lhs: left-hand side of the feasibility cut (type: LinExpr)
+        :return: feasibility_cut_rhs: right-hand side of the feasibility cut (type: float)
         """
         farkas_multipliers = []
         farkas_multipliers = [
@@ -366,7 +362,7 @@ class BendersDecomposition:
 
         return feasibility_cut_lhs, feasibility_cut_rhs
 
-    def define_list_of_feasibility_cuts(self):
+    def define_list_of_feasibility_cuts(self) -> list:
         """
         Define the list of feasibility cuts when dealing with multiple subproblems.
 
@@ -403,7 +399,7 @@ class BendersDecomposition:
             - subproblem_name: name of the subproblem
             - feasibility_cut_lhs: left-hand side of the feasibility cut
             - feasibility_cut_rhs: right-hand side of the feasibility cut
-        :param iteration: current iteration of the Benders Decomposition method
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         logging.info("--- Adding feasibility cut to master model")
         for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
@@ -414,9 +410,14 @@ class BendersDecomposition:
                 name=f"feasibility_cuts_{subproblem_name}_iteration_{iteration}",
             )
 
-    def generate_optimality_cut(self, subproblem_model_fixed_design_variable_gurobi):
+    def generate_optimality_cut(self, subproblem_model_fixed_design_variable_gurobi) -> tuple:
         """
-        Generate the optimality cut.
+        Generate the optimality cut. The optimality cut is generated by the dual multipliers of the subproblem model.
+
+        :param subproblem_model_fixed_design_variable_gurobi: subproblem model in gurobi format (type: Model)
+
+        :return: optimality_cut_lhs: left-hand side of the optimality cut (type: LinExpr)
+        :return: optimality_cut_rhs: right-hand side of the optimality cut (type: float)
         """
         duals_multiplier = []
         duals_multiplier = [
@@ -448,7 +449,7 @@ class BendersDecomposition:
 
         return optimality_cut_lhs, optimality_cut_rhs
 
-    def define_list_of_optimality_cuts(self):
+    def define_list_of_optimality_cuts(self) -> list:
         """
         Define the list of optimality cuts when dealing with multiple subproblems.
 
@@ -477,7 +478,7 @@ class BendersDecomposition:
             - subproblem_name: name of the subproblem
             - optimality_cut_lhs: left-hand side of the optimality cut
             - optimality_cut_rhs: right-hand side of the optimality cut
-        :param iteration: current iteration of the Benders Decomposition method
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         logging.info("--- Adding optimality cut to master model")
         for subproblem_name, optimality_cut_lhs, optimality_cut_rhs in optimality_cuts:
@@ -489,15 +490,19 @@ class BendersDecomposition:
                 name=f"optimality_cuts_{subproblem_name}_iteration_{iteration}",
             )
 
-    def termination_condition(self):
+    def check_termination_criteria(self) -> list:
         """
         Check the termination condition of the Benders Decomposition method.
         The outer approximation variable is the variable that is added to the master problem when the objective function
         does not include the design variables.
         The function compute the lower and upper bounds of the objective function
-        and check if the termination condition is satisfied.
+        and check if the termination criteria is satisfied.
+
+        :return: termination_criteria: list of tuples with the following structure:
+            - subproblem_name: name of the subproblem
+            - termination_criteria: boolean value indicating if the termination criteria is satisfied
         """
-        termination_condition = []
+        termination_criteria = []
         self.upper_bound = []
         self.lower_bound = self.master_model.model.objective.value
         for subproblem in self.subproblem_models:
@@ -508,15 +513,17 @@ class BendersDecomposition:
             logging.info("--- Subproblem: %s ---", name)
             logging.info("--- Lower bound: %s ---", self.lower_bound)
             logging.info("--- Upper bound: %s ---", upper_bound)
-            if (upper_bound - self.lower_bound) / upper_bound < 1e-6:
-                termination_condition += [(name, True)]
+            if (upper_bound - self.lower_bound) / upper_bound <= self.config.benders["absolute_optimality_gap"]:
+                termination_criteria += [(name, True)]
             else:
-                termination_condition += [(name, False)]
-        return termination_condition
+                termination_criteria += [(name, False)]
+        return termination_criteria
 
     def save_master_and_subproblems(self, iteration):
         """
         Save the master model and the subproblem models in respective output folders.
+
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         logging.info("--- All the subproblem are optimal. Terminating iterations ---")
         if self.use_monolithic_solution and iteration == 1:
@@ -584,8 +591,8 @@ class BendersDecomposition:
                 else:
                     optimality_cuts = self.define_list_of_optimality_cuts()
                     self.add_optimality_cuts_to_master(optimality_cuts, iteration)
-                    termination_condition = self.termination_condition()
-                    if all(value for _, value in termination_condition):
+                    termination_criteria = self.check_termination_criteria()
+                    if all(value for _, value in termination_criteria):
                         continue_iterations = False
 
             if continue_iterations is False:

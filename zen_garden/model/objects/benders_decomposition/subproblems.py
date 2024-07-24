@@ -49,8 +49,9 @@ class Subproblem(OptimizationSetup):
         :param scenario_name: name of the scenario
         :param scenario_dict: dictionary containing the scenario data
         :param input_data_checks: dictionary containing the input data checks
+        :param not_coupling_variables: list of not coupling variables
         :param design_constraints: list of design constraints
-        :param not_coupling_variables: list of variables that are not coupling variables
+        :param benders_output_folder: path to the Benders Decomposition output
         """
 
         super().__init__(
@@ -62,12 +63,15 @@ class Subproblem(OptimizationSetup):
         )
 
         self.name = "Subproblem"
+
         self.config = config
         self.config_benders = config_benders
         self.analysis = analysis
+
         self.monolithic_problem = monolithic_problem
         self.design_constraints = design_constraints
         self.not_coupling_variables = not_coupling_variables
+
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
 

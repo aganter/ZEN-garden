@@ -54,6 +54,7 @@ class MasterProblem(OptimizationSetup):
         :param input_data_checks: dictionary containing the input data checks
         :param operational_variables: list of operational variables
         :param operational_constraints: list of operational constraints
+        :param benders_output_folder: path to the Benders Decomposition output
         """
 
         super().__init__(
@@ -65,21 +66,24 @@ class MasterProblem(OptimizationSetup):
         )
 
         self.name = "MasterProblem"
+
         self.config = config
         self.config_benders = config_benders
         self.analysis = analysis
+
         self.monolithic_problem = monolithic_problem
         self.operational_variables = operational_variables
         self.operational_constraints = operational_constraints
+
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
+
+        self.only_feasibility_checks = False
 
         self.create_master_problem()
 
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
-
-        self.only_feasibility_checks = False
 
     def theta_objective_master(self):
         """
