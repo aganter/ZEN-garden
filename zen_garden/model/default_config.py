@@ -197,6 +197,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
     """
 
     modeling_to_generate_alternatives: bool = False
+    run_monolithic_optimization: bool = True
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()
