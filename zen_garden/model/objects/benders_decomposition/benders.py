@@ -100,8 +100,9 @@ class BendersDecomposition:
         columns = ["subproblem", "iteration", "solve_time_sec", "solve_memory_MB"]
         self.solving_subproblem = pd.DataFrame(columns=columns)
         # DataFrame to store information about the building and solving of the master problem
-        # columns = ["iteration", "optimality_gap"]
-        # self.optimality_gap_df = pd.DataFrame(columns=columns)
+        columns = ["iteration", "optimality_gap"]
+        self.optimality_gap_df_infeasibility = pd.DataFrame(columns=columns)
+        self.optimality_gap_df_optimal = pd.DataFrame(columns=columns)
 
         self.subproblems_gurobi = []
 
@@ -250,9 +251,12 @@ class BendersDecomposition:
         Solve the master problem.
         """
         self.master_model.model.solve()
-        # optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
-        # new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
-        # self.optimality_gap_df = pd.concat([self.optimality_gap_df, new_row], ignore_index=True)
+        if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
+            optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
+            new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
+            self.optimality_gap_df_infeasibility = pd.concat(
+                [self.optimality_gap_df_infeasibility, new_row], ignore_index=True
+            )
 
     def solve_subproblems(self, iteration):
         """
@@ -490,13 +494,15 @@ class BendersDecomposition:
                 name=f"optimality_cuts_{subproblem_name}_iteration_{iteration}",
             )
 
-    def check_termination_criteria(self) -> list:
+    def check_termination_criteria(self, iteration) -> list:
         """
         Check the termination condition of the Benders Decomposition method.
         The outer approximation variable is the variable that is added to the master problem when the objective function
         does not include the design variables.
         The function compute the lower and upper bounds of the objective function
         and check if the termination criteria is satisfied.
+
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
 
         :return: termination_criteria: list of tuples with the following structure:
             - subproblem_name: name of the subproblem
@@ -517,6 +523,8 @@ class BendersDecomposition:
                 termination_criteria += [(name, True)]
             else:
                 termination_criteria += [(name, False)]
+            new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [(upper_bound - self.lower_bound)]})
+            self.optimality_gap_df_optimal = pd.concat([self.optimality_gap_df_optimal, new_row], ignore_index=True)
         return termination_criteria
 
     def save_master_and_subproblems(self, iteration):
@@ -553,7 +561,10 @@ class BendersDecomposition:
 
         self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
         self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
-        # self.optimality_gap_df.to_csv(os.path.join(self.benders_output_folder, "optimality_gap.csv"))
+        self.optimality_gap_df_infeasibility.to_csv(
+            os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
+        )
+        self.optimality_gap_df_optimal.to_csv(os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv"))
 
     def fit(self):
         """
@@ -591,7 +602,7 @@ class BendersDecomposition:
                 else:
                     optimality_cuts = self.define_list_of_optimality_cuts()
                     self.add_optimality_cuts_to_master(optimality_cuts, iteration)
-                    termination_criteria = self.check_termination_criteria()
+                    termination_criteria = self.check_termination_criteria(iteration)
                     if all(value for _, value in termination_criteria):
                         continue_iterations = False
 
