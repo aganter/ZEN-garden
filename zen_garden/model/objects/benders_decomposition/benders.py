@@ -575,9 +575,10 @@ class BendersDecomposition:
         logger.propagate = False
 
         iteration = 1
+        max_number_of_iterations = self.config.benders["max_number_of_iterations"]
         continue_iterations = True
 
-        while continue_iterations:
+        while continue_iterations and iteration <= max_number_of_iterations:
             logging.info("")
             logging.info("")
 
@@ -608,5 +609,17 @@ class BendersDecomposition:
 
             if continue_iterations is False:
                 self.save_master_and_subproblems(iteration)
+
+            if iteration == max_number_of_iterations:
+                logging.info("--- Maximum number of iterations reached ---")
+                logging.info("--- Saving possible results ---")
+                self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
+                self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
+                self.optimality_gap_df_infeasibility.to_csv(
+                    os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
+                )
+                self.optimality_gap_df_optimal.to_csv(
+                    os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv")
+                )
 
             iteration += 1
