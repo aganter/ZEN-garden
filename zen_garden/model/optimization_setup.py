@@ -830,24 +830,26 @@ class OptimizationSetup(object):
             StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step, self.config.system)
             self.overwrite_time_indices(step)
             self.construct_optimization_problem()
-            self.solve()
+            if self.config["run_monolithic_optimization"]:
+                self.solve()
 
-            if not self.optimality:
-                self.write_IIS()
-                break
+                if not self.optimality:
+                    self.write_IIS()
+                    break
 
-            self.add_results_of_optimization_step(step)
-            scenario_name, subfolder, param_map = self.generate_output_paths(
-                config_system=self.system, step=step, steps_horizon=steps_horizon
-            )
-            Postprocess(
-                model=self,
-                scenarios=self.scenarios_config,
-                model_name=self.model_name,
-                subfolder=subfolder,
-                scenario_name=scenario_name,
-                param_map=param_map,
-            )
+                self.add_results_of_optimization_step(step)
+                scenario_name, subfolder, param_map = self.generate_output_paths(
+                    config_system=self.system, step=step, steps_horizon=steps_horizon
+                )
+                Postprocess(
+                    model=self,
+                    scenarios=self.scenarios_config,
+                    model_name=self.model_name,
+                    subfolder=subfolder,
+                    scenario_name=scenario_name,
+                    param_map=param_map,
+                )
+                logging.info("--- Original Optimization finished ---")
 
     def generate_output_paths(self, config_system, step, steps_horizon):
         """

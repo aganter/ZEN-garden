@@ -13,6 +13,7 @@ import os
 import importlib
 
 from zen_garden.model.optimization_setup import OptimizationSetup
+from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
 from zen_garden.model.objects.mga import ModelingToGenerateAlternatives
 from zen_garden.utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
 
@@ -72,8 +73,19 @@ def main(config, dataset_path=None, job_index=None):
         )
         # Fit the optimization problem for every steps defined in the config and save the results
         optimization_setup.fit()
-        logging.info("--- Original Optimization finished ---")
         logging.info("")
+
+        # BENDERS DECOMPOSITION
+        if config.benders.benders_decomposition:
+            logging.info("--- Benders Decomposition accessed to solve large-scale problems ---")
+            benders_decomposition = BendersDecomposition(
+                config=config,
+                analysis=config.analysis,
+                monolithic_problem=optimization_setup,
+                scenario_name=scenario,
+                use_monolithic_solution=config.benders.use_monolithic_solution,
+            )
+            benders_decomposition.fit()
 
         # MODELING TO GENERATE ALTERNATIVES
         if config.mga["modeling_to_generate_alternatives"]:

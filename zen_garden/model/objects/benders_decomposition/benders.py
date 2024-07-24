@@ -100,19 +100,14 @@ class BendersDecomposition:
         columns = ["subproblem", "iteration", "solve_time_sec", "solve_memory_MB"]
         self.solving_subproblem = pd.DataFrame(columns=columns)
         # DataFrame to store information about the building and solving of the master problem
-        columns = ["iteration", "optimality_gap"]
-        self.optimality_gap_df = pd.DataFrame(columns=columns)
-        # Dataframe to store the capex and the total cost of subproblems and monolithic problem
-        columns = [
-            "iteration",
-            "subproblem",
-            "cost_capex_total_subproblem",
-            "cost_capex_total_master",
-            "cost_capex_total_monolithic",
-            "cost_total_subproblem",
-            "cost_total_monolithic",
-        ]
-        self.cost_subproblem_monolithic = pd.DataFrame(columns=columns)
+        # columns = ["iteration", "optimality_gap"]
+        # self.optimality_gap_df = pd.DataFrame(columns=columns)
+
+        self.subproblems_gurobi = []
+
+        # Define lower and upper bounds of the objective
+        self.lower_bound = None
+        self.upper_bound = None
 
         logging.info("")
         logging.info("--- Creating the master problem ---")
@@ -271,21 +266,9 @@ class BendersDecomposition:
         Solve the master problem.
         """
         self.master_model.model.solve()
-        optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
-        new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
-        self.optimality_gap_df = pd.concat([self.optimality_gap_df, new_row], ignore_index=True)
-        new_row = pd.DataFrame(
-            {
-                "iteration": [iteration],
-                "subproblem": None,
-                "cost_capex_total_subproblem": None,
-                "cost_capex_total_master": [self.master_model.model.solution.cost_capex_total.values],
-                "cost_capex_total_monolithic": [self.monolithic_problem.model.solution.cost_capex_total.values],
-                "cost_total_subproblem": None,
-                "cost_total_monolithic": [self.monolithic_problem.model.solution.cost_total.values],
-            }
-        )
-        self.cost_subproblem_monolithic = pd.concat([self.cost_subproblem_monolithic, new_row], ignore_index=True)
+        # optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
+        # new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
+        # self.optimality_gap_df = pd.concat([self.optimality_gap_df, new_row], ignore_index=True)
 
     def solve_subproblems(self, iteration):
         """
@@ -337,13 +320,15 @@ class BendersDecomposition:
         """
         subproblem_model_fixed_design_variable_gurobi = subproblem_solved.to_gurobipy()
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.OutputFlag, 0)
+        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.LogToConsole, 0)
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.FeasibilityTol, 1e-9)
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.InfUnbdInfo, 1)
         subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.NumericFocus, 3)
 
-        # Optimize gurobi model, compute IIS and save infeasible constraints
+        # Optimize gurobi model, compute IIS if the model is not optimal
         subproblem_model_fixed_design_variable_gurobi.optimize()
-        subproblem_model_fixed_design_variable_gurobi.computeIIS()
+        if subproblem_model_fixed_design_variable_gurobi.status != GRB.Status.OPTIMAL:
+            subproblem_model_fixed_design_variable_gurobi.computeIIS()
 
         return subproblem_model_fixed_design_variable_gurobi
 
@@ -394,8 +379,10 @@ class BendersDecomposition:
         feasibility_cuts = []
         infeasible_subproblems = []
         for subproblem in self.subproblem_models:
-            if subproblem.model.termination_condition == "infeasible":
-                subproblem.model.print_infeasibilities()
+            if (
+                subproblem.model.termination_condition == "infeasible"
+                or subproblem.model.termination_condition == "infeasible_or_unbounded"
+            ):
                 infeasible_subproblems.append(subproblem)
         for subproblem in infeasible_subproblems:
             subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
@@ -427,12 +414,122 @@ class BendersDecomposition:
                 name=f"feasibility_cuts_{subproblem_name}_iteration_{iteration}",
             )
 
-    def save_master_and_subproblems(self):
+    def generate_optimality_cut(self, subproblem_model_fixed_design_variable_gurobi):
+        """
+        Generate the optimality cut.
+        """
+        duals_multiplier = []
+        duals_multiplier = [
+            (constraint_name, multiplier)
+            for constraint_name, multiplier in zip(
+                [constr_name for constr_name in subproblem_model_fixed_design_variable_gurobi.getConstrs()],
+                subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.Pi),
+            )
+            if multiplier != 0
+        ]
+
+        # Create the optimality cut
+        optimality_cut_lhs = 0
+        optimality_cut_rhs = 0
+        for gurobi_constr, dual in duals_multiplier:
+            rhs = gurobi_constr.RHS
+            optimality_cut_rhs += dual * rhs
+
+            lhs = subproblem_model_fixed_design_variable_gurobi.getRow(gurobi_constr)
+            for i in range(lhs.size()):
+                var = lhs.getVar(i)
+                subproblem_var = self.map_variables_monolithic_gurobi[var.VarName]
+                subproblem_var_name = subproblem_var["variable_name"]
+                subproblem_var_coords = subproblem_var["variable_coords"]
+                coeff = lhs.getCoeff(i)
+                if subproblem_var_name in self.master_model.model.variables:
+                    master_variable = self.master_model.model.variables[subproblem_var_name].sel(subproblem_var_coords)
+                    optimality_cut_lhs += dual * (master_variable * coeff)
+
+        return optimality_cut_lhs, optimality_cut_rhs
+
+    def define_list_of_optimality_cuts(self):
+        """
+        Define the list of optimality cuts when dealing with multiple subproblems.
+
+        :return: list of optimality cuts as tuples with the following structure:
+            - subproblem_name: name of the subproblem (if the scenario name is not defined, it is set to "default")
+            - optimality_cut_lhs: left-hand side of the optimality cut
+            - optimality_cut_rhs: right-hand side of the optimality cut
+        """
+        logging.info("--- Generating optimality cut ---")
+        optimality_cuts = []
+        for subproblem in self.subproblem_models:
+            subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
+            optimality_cut_lhs, optimality_cut_rhs = self.generate_optimality_cut(
+                subproblem_model_fixed_design_variable_gurobi
+            )
+            name = subproblem.scenario_name if not subproblem.scenario_name == "" else "default"
+            optimality_cuts.append([name, optimality_cut_lhs, optimality_cut_rhs])
+
+        return optimality_cuts
+
+    def add_optimality_cuts_to_master(self, optimality_cuts, iteration):
+        """
+        Add the optimality cuts to the master model.
+
+        :param optimality_cuts: list of optimality cuts as tuples with the following structure:
+            - subproblem_name: name of the subproblem
+            - optimality_cut_lhs: left-hand side of the optimality cut
+            - optimality_cut_rhs: right-hand side of the optimality cut
+        :param iteration: current iteration of the Benders Decomposition method
+        """
+        logging.info("--- Adding optimality cut to master model")
+        for subproblem_name, optimality_cut_lhs, optimality_cut_rhs in optimality_cuts:
+            lhs = optimality_cut_lhs + self.master_model.model.variables["outer_approximation"]
+            self.master_model.model.add_constraints(
+                lhs=lhs,
+                sign=">=",
+                rhs=optimality_cut_rhs,
+                name=f"optimality_cuts_{subproblem_name}_iteration_{iteration}",
+            )
+
+    def termination_condition(self):
+        """
+        Check the termination condition of the Benders Decomposition method.
+        The outer approximation variable is the variable that is added to the master problem when the objective function
+        does not include the design variables.
+        The function compute the lower and upper bounds of the objective function
+        and check if the termination condition is satisfied.
+        """
+        termination_condition = []
+        self.upper_bound = []
+        self.lower_bound = self.master_model.model.objective.value
+        for subproblem in self.subproblem_models:
+            name = subproblem.scenario_name if not subproblem.scenario_name == "" else "default"
+            self.upper_bound += [(name, subproblem.model.objective.value)]
+
+        for name, upper_bound in self.upper_bound:
+            logging.info("--- Subproblem: %s ---", name)
+            logging.info("--- Lower bound: %s ---", self.lower_bound)
+            logging.info("--- Upper bound: %s ---", upper_bound)
+            if (upper_bound - self.lower_bound) / upper_bound < 1e-6:
+                termination_condition += [(name, True)]
+            else:
+                termination_condition += [(name, False)]
+        return termination_condition
+
+    def save_master_and_subproblems(self, iteration):
         """
         Save the master model and the subproblem models in respective output folders.
         """
         logging.info("--- All the subproblem are optimal. Terminating iterations ---")
-        Postprocess(model=self.master_model, scenarios="", model_name=self.master_model.model_name, subfolder=Path(""))
+        if self.use_monolithic_solution and iteration == 1:
+            Postprocess(
+                model=self.monolithic_problem,
+                scenarios="",
+                model_name=self.monolithic_problem.model_name,
+                subfolder=Path(""),
+            )
+        else:
+            Postprocess(
+                model=self.master_model, scenarios="", model_name=self.master_model.model_name, subfolder=Path("")
+            )
 
         for subproblem in self.subproblem_models:
             scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = subproblem.generate_output_paths(
@@ -449,10 +546,7 @@ class BendersDecomposition:
 
         self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
         self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
-        self.optimality_gap_df.to_csv(os.path.join(self.benders_output_folder, "optimality_gap.csv"))
-        self.cost_subproblem_monolithic.to_csv(
-            os.path.join(self.benders_output_folder, "cost_subproblem_monolithic.csv")
-        )
+        # self.optimality_gap_df.to_csv(os.path.join(self.benders_output_folder, "optimality_gap.csv"))
 
     def fit(self):
         """
@@ -463,44 +557,38 @@ class BendersDecomposition:
         logger.propagate = False
 
         iteration = 1
-        while True:
+        continue_iterations = True
+
+        while continue_iterations:
             logging.info("")
             logging.info("")
+
             logging.info("--- Iteration %s ---", iteration)
+
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
             if not (self.use_monolithic_solution and iteration == 1):
                 self.solve_master_problem(iteration)
             self.fix_design_variables_in_subproblem_model(iteration)
+
             self.solve_subproblems(iteration)
 
+            if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
+                logging.info("--- Subproblems are infeasible ---")
+                feasibility_cuts = self.define_list_of_feasibility_cuts()
+                self.add_feasibility_cuts_to_master(feasibility_cuts, iteration)
+
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
-                for subproblem in self.subproblem_models:
-                    name = subproblem.scenario_name
-                    if subproblem.scenario_name == "":
-                        name = "default"
-                    new_row = pd.DataFrame(
-                        {
-                            "iteration": [iteration],
-                            "subproblem": [name],
-                            "cost_capex_total_subproblem": [subproblem.model.solution.cost_capex_total.values],
-                            "cost_capex_total_master": [self.master_model.model.solution.cost_capex_total.values],
-                            "cost_capex_total_monolithic": [
-                                self.monolithic_problem.model.solution.cost_capex_total.values
-                            ],
-                            "cost_total_subproblem": [subproblem.model.solution.cost_total.values],
-                            "cost_total_monolithic": [self.monolithic_problem.model.solution.cost_total.values],
-                        }
-                    )
-                    self.cost_subproblem_monolithic = pd.concat(
-                        [self.cost_subproblem_monolithic, new_row], ignore_index=True
-                    )
-                self.save_master_and_subproblems()
-                break
-            logging.info("--- Subproblems are infeasible ---")
-            feasibility_cuts = self.define_list_of_feasibility_cuts()
-            self.add_feasibility_cuts_to_master(feasibility_cuts, iteration)
-            self.cost_subproblem_monolithic.to_csv(
-                os.path.join(self.benders_output_folder, f"cost_subproblem_monolithic_iteration_{iteration}.csv")
-            )
+                logging.info("--- All the subproblems are optimal ---")
+                if self.master_model.only_feasibility_checks:
+                    continue_iterations = False
+                else:
+                    optimality_cuts = self.define_list_of_optimality_cuts()
+                    self.add_optimality_cuts_to_master(optimality_cuts, iteration)
+                    termination_condition = self.termination_condition()
+                    if all(value for _, value in termination_condition):
+                        continue_iterations = False
+
+            if continue_iterations is False:
+                self.save_master_and_subproblems(iteration)
 
             iteration += 1

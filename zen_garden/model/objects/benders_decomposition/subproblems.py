@@ -83,12 +83,8 @@ class Subproblem(OptimizationSetup):
         - If the objective function is "mga", we check whether we optimize for design or operational variables:
             - If design, the objective function of the subproblem is a dummy constant objective function
             - If operational, the objective function of the subproblem is the same as the one of the monolithic problem
-        TODO: Add the possibility to use Benders also when optimize for "total_cost" and "total_carbon_emissions", in
-        the future also for "risk"
-        - If the objective function is "total_cost", this is splitted into design and operational costs and the
-        objective function of the subproblem includes only the operational costs (opex and emissions costs).
-        - If the obejctive function is "total_carbon_emissions", the objective function of the subproblem the same as
-        the one of the monolithic problem.
+            - If the objective function is "total_cost", or is "total_carbon_emissions", the objective function of the
+            subproblem the same as the one of the monolithic problem.
         """
         self.construct_optimization_problem()
         if (
@@ -127,6 +123,8 @@ class Subproblem(OptimizationSetup):
                 self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
             else:
                 raise AssertionError("Objective function not recognized for MGA.")
+        elif self.analysis["objective"] == "total_cost" or self.analysis["objective"] == "total_carbon_emissions":
+            self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
         else:
             logging.error(
                 "Objective function %s not supported for Benders Decomposition at the moment.",

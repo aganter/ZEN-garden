@@ -14,6 +14,7 @@
 
 import logging
 import os
+import numpy as np
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 
@@ -78,12 +79,25 @@ class MasterProblem(OptimizationSetup):
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
 
-    def add_theta_variable(self, model, name):
+        self.only_feasibility_checks = False
+
+    def theta_objective_master(self):
         """
-        Add a the outer approximation of the subproblem objective function to the master problem.
+        When the objective function do not include the design variables, we add the outer approximation of the
+        subproblem objective function to the master problem.
         """
-        theta = model.add_variables(lower=0, name=name)
-        return theta
+        self.variables.add_variable(
+            self.model,
+            name="outer_approximation",
+            index_sets=([0], "theta_range"),
+            doc="theta variable for the outer approximation of the subproblem objective function",
+            unit_category={"time": -1},
+            bounds=(0, np.inf),
+        )
+        self.model.add_objective(
+            self.model.variables.outer_approximation.sum(),
+            overwrite=True,
+        )
 
     def create_master_problem(self):
         """
@@ -92,12 +106,8 @@ class MasterProblem(OptimizationSetup):
         - If the objective function is "mga", we check whether we optimize for design or operational variables:
             - If design, the objective function of the master problem is the same as the one of the monolithic problem
             - If operational, the objective function of the master problem is a dummy constant objective function
-         TODO: Add the possibility to use Benders also when optimize for "total_cost" and "total_carbon_emissions", in
-        the future also for "risk"
-        - If the objective function is "total_cost", this is splitted into design and operational costs and the
-        objective function of the master problem includes only the design costs (capex).
-        - If the obejctive function is "total_carbon_emissions", the objective function of the master problem is a
-        dummy constant objective function
+            - If the objective function is "total_cost", or is "total_carbon_emissions", the objective function of the
+            master problem is a mock constant objective function
         """
         self.construct_optimization_problem()
         if (
@@ -115,13 +125,13 @@ class MasterProblem(OptimizationSetup):
         if self.analysis["objective"] == "mga":
             if "capacity" in str(self.monolithic_problem.model.objective):
                 self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
-            # If the objective function optimizes for operational variables, we use a dummy objective in the master
+                self.only_feasibility_checks = True
             elif "flow_import" in str(self.monolithic_problem.model.objective):
-                theta = self.add_theta_variable(self.model, name="theta_approximation_subproblem_objective")
-                self.model.add_objective(1 * theta, overwrite=True)
-                self.model.add_constraints(lhs=theta, sign="<=", rhs=1e6, name="theta_limit")
+                self.theta_objective_master()
             else:
                 raise AssertionError("Objective function not recognized for MGA.")
+        elif self.analysis["objective"] == "total_cost" or self.analysis["objective"] == "total_carbon_emissions":
+            self.theta_objective_master()
         else:
             logging.error(
                 "Objective function %s not supported for Benders Decomposition at the moment.",

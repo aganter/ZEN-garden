@@ -224,6 +224,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
 
 
 class Config(Subscriptable):
+    run_monolithic_optimization: bool = True
     # analysis: dict = Analysis().model_dump()
     analysis: Analysis = Analysis()
 
