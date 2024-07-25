@@ -14,7 +14,6 @@ import os
 import time
 from pathlib import Path
 import pandas as pd
-import pickle
 import psutil
 from gurobipy import GRB
 
@@ -619,7 +618,6 @@ class BendersDecomposition:
         iteration = 1
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
         continue_iterations = True
-        last_solution = None
 
         while continue_iterations and iteration <= max_number_of_iterations:
             logging.info("")
@@ -646,8 +644,6 @@ class BendersDecomposition:
                 else:
                     optimality_cuts = self.define_list_of_optimality_cuts()
                     self.add_optimality_cuts_to_master(optimality_cuts, iteration)
-                    for subproblem in self.subproblem_models:
-                        last_solution = subproblem.model.solution
                     termination_criteria = self.check_termination_criteria(iteration)
                     if all(value for _, value in termination_criteria):
                         continue_iterations = False
@@ -674,10 +670,5 @@ class BendersDecomposition:
                     }
                 )
                 self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
-                with open(os.path.join(self.benders_output_folder, "last_sub_solution.pkl"), "wb") as file:
-                    pickle.dump(last_solution, file)
-                solution_master = self.master_model.model.solution
-                with open(os.path.join(self.benders_output_folder, "last_master_solution.pkl"), "wb") as file:
-                    pickle.dump(solution_master, file)
 
             iteration += 1
