@@ -1492,15 +1492,16 @@ class ScenarioUtils:
         :return: elements in scenario
         """
         if config.system["conduct_scenario_analysis"]:
-            scenarios_path = os.path.abspath(os.path.join(config.analysis["dataset"], "scenarios.json"))
+            scenarios_path = os.path.abspath(os.path.join(config.analysis["dataset"], f"{scenario_script_name}.json"))
             if os.path.exists(scenarios_path):
                 with open(scenarios_path, "r") as file:
                     scenarios = json.load(file)
             else:
-                scenarios_path = os.path.abspath(os.path.join(config.analysis["dataset"], "scenarios.py"))
+                scenarios_path = os.path.abspath(os.path.join(config.analysis["dataset"], f"{scenario_script_name}.py"))
                 if not os.path.exists(scenarios_path):
                     raise FileNotFoundError(
-                        f"Neither scenarios.json nor scenarios.py not found in dataset: {config.analysis['dataset']}"
+                        f"Neither {scenario_script_name}.json nor {scenario_script_name}.py not found in dataset:"
+                        f" {config.analysis['dataset']}"
                     )
                 spec = importlib.util.spec_from_file_location("module", scenarios_path)
                 module = importlib.util.module_from_spec(spec)

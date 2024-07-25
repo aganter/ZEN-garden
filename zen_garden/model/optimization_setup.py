@@ -80,6 +80,7 @@ class OptimizationSetup(object):
         # Add these parameters for the MGA iterations, so default is none
         self.mga_weights = None
         self.mga_objective_coords: list = []
+        self.cost_optimal_mga = 0
 
         # sorted list of class names
         element_classes = self.dict_element_classes.keys()
@@ -856,7 +857,7 @@ class OptimizationSetup(object):
                 # Create scenario name, subfolder and param_map for postprocessing
                 scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
                     config=self.config,
-                    scenario=self.scenario,
+                    scenario=self.scenario_name,
                     scenario_dict=self.scenario_dict,
                     steps_horizon=steps_horizon,
                     step=step,

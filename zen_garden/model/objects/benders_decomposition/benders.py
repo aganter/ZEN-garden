@@ -80,7 +80,7 @@ class BendersDecomposition:
         self.benders_output_folder = os.path.abspath(self.benders_output_folder) + "/" + scenario_name
 
         scenarios, elements = ScenarioUtils.get_scenarios(
-            config=self.config.benders, scenario_script_name="benders_scenarios.py", job_index=None
+            config=self.config.benders, scenario_script_name="benders_scenarios", job_index=None
         )
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
@@ -92,6 +92,10 @@ class BendersDecomposition:
 
         self.monolithic_model_gurobi = None
         self.map_variables_monolithic_gurobi = {}
+
+        logger = logging.getLogger("gurobipy")
+        logging.getLogger("gurobipy").setLevel(logging.ERROR)
+        logger.propagate = False
 
         self.save_monolithic_problem_in_gurobi_format_map_variables()
 
@@ -537,6 +541,18 @@ class BendersDecomposition:
             self.optimality_gap_df_optimal = pd.concat([self.optimality_gap_df_optimal, new_row], ignore_index=True)
         return termination_criteria
 
+    def remove_mock_variables(self):
+        """
+        Remove the mock variables from the subproblems or the theta variable from the master problem if they exist.
+        This is done in order to retrieve the same problem configuration as before than the scaling process.
+        Consequently, the user is able to save the solution of the problem in the output folder.
+        """
+        if "outer_approximation" in self.master_model.model.variables:
+            self.master_model.model.variables.remove("outer_approximation")
+        for subproblem in self.subproblem_models:
+            if "mock_objective_subproblem" in subproblem.model.variables:
+                subproblem.model.variables.remove("mock_objective_subproblem")
+
     def save_master_and_subproblems(self, iteration):
         """
         Save the master model and the subproblem models in respective output folders.
@@ -544,6 +560,14 @@ class BendersDecomposition:
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         logging.info("--- All the subproblem are optimal. Terminating iterations ---")
+        # Re-scale the variables if scaling is used
+        self.remove_mock_variables()
+        if self.config.solver["use_scaling"]:
+            self.master_model.scaling.re_scale()
+            for subproblem in self.subproblem_models:
+                subproblem.scaling.re_scale()
+
+        # Write the results
         if self.use_monolithic_solution and iteration == 1:
             Postprocess(
                 model=self.monolithic_problem,
@@ -557,8 +581,12 @@ class BendersDecomposition:
             )
 
         for subproblem in self.subproblem_models:
-            scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = subproblem.generate_output_paths(
-                config_system=self.config.benders.system, step=1, steps_horizon=[1]
+            scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = StringUtils.generate_folder_path(
+                config=self.config.benders,
+                scenario=subproblem.scenario_name,
+                scenario_dict=subproblem.scenario_dict,
+                steps_horizon=[1],
+                step=1,
             )
             Postprocess(
                 model=subproblem,
@@ -588,10 +616,6 @@ class BendersDecomposition:
         """
         Fit the Benders Decomposition model.
         """
-        logger = logging.getLogger("gurobipy")
-        logging.getLogger("gurobipy").setLevel(logging.ERROR)
-        logger.propagate = False
-
         iteration = 1
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
         continue_iterations = True

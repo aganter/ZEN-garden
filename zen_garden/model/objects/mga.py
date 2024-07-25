@@ -16,21 +16,17 @@
     - Solve the optimization problem and write the results
 """
 
-import os
 import logging
-import time
+import math
 import numpy as np
 import xarray as xr
-import psutil
-import math
 from scipy.stats import truncnorm
 
+from zen_garden.utils import InputDataChecks, StringUtils, OptimizationError
 from zen_garden.preprocess.extract_input_data import DataInputMGA
 from zen_garden.model.optimization_setup import OptimizationSetup
-from zen_garden.utils import InputDataChecks
-from zen_garden.utils import StringUtils
-from zen_garden.postprocess.postprocess import Postprocess
 from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
+from zen_garden.postprocess.postprocess import Postprocess
 
 
 class ModelingToGenerateAlternatives:
@@ -72,6 +68,7 @@ class ModelingToGenerateAlternatives:
             scenario_dict=self.scenario_dict,
             input_data_checks=self.input_data_checks,
         )
+        self.mga_solution.cost_optimal_mga = self.optimized_setup.model.objective.value
         self.mga_objective_obj = None
         self.mga_objective_loc = None
 
@@ -94,9 +91,6 @@ class ModelingToGenerateAlternatives:
         self.direction_search_vector = {}
         self.sanity_checks_characteristic_scales_file()
         self.characteristic_scales = None
-
-        self.cost_constraint = None
-        self.cost_slack_variables = self.config_mga["cost_slack_variables"]
 
     def sanity_checks_mga_iteration_scenario(self):
         """
@@ -257,30 +251,6 @@ class ModelingToGenerateAlternatives:
 
         self.mga_solution.mga_weights = weights.rename("weights")
 
-    def add_cost_constraint(self):
-        """
-        Add a cost deviation constraint to the optimization problem
-        """
-        logging.info("Construct pe.Constraint for the Total Cost Deviation allowed")
-        pid = os.getpid()
-        t_start = time.perf_counter()
-        constraints = self.mga_solution.constraints
-        self.constraint_cost_total_deviation(model_constraints=constraints)
-        t_end = time.perf_counter()
-        logging.info("Time to construct pe.Sets: %.4f seconds", t_end - t_start)
-        logging.info("Memory usage: %s MB", psutil.Process(pid).memory_info().rss / 1024**2)
-
-    def constraint_cost_total_deviation(self, model_constraints):
-        """
-        Limit on the total cost objective of the energy system based on the optimized total cost of the energy system
-        and a chosen deviation indicated by the cost_slack_variables.
-        """
-        lhs = self.mga_solution.model.variables["net_present_cost"].sum(dim="set_time_steps_yearly")
-        rhs = (1 + self.cost_slack_variables) * self.optimized_setup.model.objective.value
-        self.cost_constraint = lhs <= rhs
-
-        model_constraints.add_constraint("constraint_optimal_cost_total_deviation", self.cost_constraint)
-
     def fit(self):
         """
         Solve the optimization problem and postprocess the results
@@ -289,22 +259,42 @@ class ModelingToGenerateAlternatives:
         steps_horizon = self.mga_solution.get_optimization_horizon()
         self.generate_weights()
 
+        # Just for completeness, iterate through horizon steps. It is not tested yet MGA class
+        # with multiple steps
         for step in steps_horizon:
             StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step, self.config_mga.system)
+            # Overwrite time indices
             self.mga_solution.overwrite_time_indices(step)
+            # Create optimization problem
             self.mga_solution.construct_optimization_problem()
-            self.add_cost_constraint()
+            if self.config_mga.solver["use_scaling"]:
+                self.mga_solution.scaling.run_scaling()
+            else:
+                self.mga_solution.scaling.analyze_numerics()
             if self.config_mga["run_monolithic_optimization"]:
+                # Solve the optimization problem
                 self.mga_solution.solve()
 
+                # Break if infeasible
                 if not self.mga_solution.optimality:
                     self.mga_solution.write_IIS()
-                    break
+                    raise OptimizationError(self.mga_solution.model.termination_condition)
 
+                if self.config_mga.solver["use_scaling"]:
+                    self.mga_solution.scaling.re_scale()
+
+                # Save new capacity additions and cumulative carbon emissions for next time step
                 self.mga_solution.add_results_of_optimization_step(step)
-                scenario_name, subfolder, param_map = self.mga_solution.generate_output_paths(
-                    config_system=self.config_mga.system, step=step, steps_horizon=steps_horizon
+                # Evaluate results
+                # Create scenario name, subfolder and param_map for postprocessing
+                scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
+                    config=self.config_mga,
+                    scenario=self.scenario_name,
+                    scenario_dict=self.scenario_dict,
+                    steps_horizon=steps_horizon,
+                    step=step,
                 )
+                # Write results
                 Postprocess(
                     model=self.mga_solution,
                     scenarios=self.config_mga.scenarios,
@@ -313,7 +303,10 @@ class ModelingToGenerateAlternatives:
                     scenario_name=scenario_name,
                     param_map=param_map,
                 )
+            # Benders Decomposition
             if self.config_mga.benders.benders_decomposition:
+                logging.info("--- Benders Decomposition accessed to solve large-scale problems ---")
+                logging.info("")
                 benders_decomposition = BendersDecomposition(
                     config=self.config_mga,
                     analysis=self.config_mga.analysis,

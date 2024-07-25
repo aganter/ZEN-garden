@@ -8,11 +8,9 @@
 Compilation  of the optimization problem.
 """
 
-import cProfile
-import importlib.util
+import importlib
 import logging
 import os
-import importlib
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
@@ -57,7 +55,7 @@ def main(config, dataset_path=None, job_index=None):
     input_data_checks.check_year_definitions()
     # Overwrite default system and scenario dictionaries
     scenarios, elements = ScenarioUtils.get_scenarios(
-        config=config, scenario_script_name="scenarios.py", job_index=job_index
+        config=config, scenario_script_name="scenarios", job_index=job_index
     )
     # Get the name of the dataset
     model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
@@ -103,7 +101,7 @@ def main(config, dataset_path=None, job_index=None):
             config.mga.system.update(config.mga.immutable_system_elements)
 
             scenarios, elements = ScenarioUtils.get_scenarios(
-                config=config.mga, scenario_script_name="mga_iterations.py", job_index=job_index
+                config=config.mga, scenario_script_name="mga_iterations", job_index=job_index
             )
 
             ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)

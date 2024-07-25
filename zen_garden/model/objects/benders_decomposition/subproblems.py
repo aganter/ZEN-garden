@@ -74,6 +74,7 @@ class Subproblem(OptimizationSetup):
 
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
+        self.cost_optimal_mga = self.monolithic_problem.cost_optimal_mga
 
         self.create_subproblem()
 
@@ -91,13 +92,12 @@ class Subproblem(OptimizationSetup):
             subproblem the same as the one of the monolithic problem.
         """
         self.construct_optimization_problem()
-        if "constraint_optimal_cost_total_deviation" in self.monolithic_problem.model.constraints:
-            self.model.add_constraints(
-                lhs=self.model.variables.net_present_cost.sum(dim="set_time_steps_yearly"),
-                sign="<=",
-                rhs=self.monolithic_problem.model.constraints.constraint_optimal_cost_total_deviation.rhs,
-                name="constraint_optimal_cost_total_deviation",
-            )
+        # The monolithic problem, if it is scaled, it remains scaled so before adding constraints and changing the
+        # objective function, we need to scale the whole subproblem problem
+        if self.config.solver["use_scaling"]:
+            self.scaling.run_scaling()
+        else:
+            self.scaling.analyze_numerics()
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
@@ -133,8 +133,9 @@ class Subproblem(OptimizationSetup):
             )
 
         # Remove the design constraints from the subproblem
-        logging.info("Removing design constraints from the subproblem.")
-        self.model.remove_constraints(self.design_constraints)
-        logging.info("Removing not useful design variables from the subproblem.")
+        logging.info("--- Removing design constraints from the subproblem ---")
+        for design_constraint in self.design_constraints:
+            self.model.constraints.remove(design_constraint)
+        logging.info("--- Removing not coupling design variables from the subproblem ---")
         for not_coupling_variable in self.not_coupling_variables:
-            self.model.remove_variables(not_coupling_variable)
+            self.model.variables.remove(not_coupling_variable)

@@ -514,6 +514,10 @@ class EnergySystem:
         # disable annual carbon emissions overshoot
         self.rules.constraint_carbon_emissions_annual_overshoot()
 
+        if self.optimization_setup.analysis["objective"] == "mga":
+            logging.info("--- Adding Constraint for the Total Cost Deviation allowed ---")
+            self.rules.constraint_cost_total_deviation()
+
     def construct_objective(self):
         """constructs the pe.Objective of the class <EnergySystem>"""
         logging.info("Construct pe.Objective")
@@ -765,6 +769,21 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_cost_total", constraints)
 
+    def constraint_cost_total_deviation(self):
+        """
+        Limit on the total cost objective of the energy system based on the optimized total cost of the energy system
+        and a chosen deviation indicated by the cost_slack_variables.
+
+        .. math::
+            NPC = \sum_{y\in\mathcal{Y}} NPC_y \leq (1 + \lambda) NPC_{\mathrm{opt}}
+
+        """
+        lhs = self.variables["net_present_cost"].sum(dim="set_time_steps_yearly")
+        rhs = (1 + self.optimization_setup.config["cost_slack_variables"]) * self.optimization_setup.cost_optimal_mga
+        cost_constraint = lhs <= rhs
+
+        self.constraints.add_constraint("constraint_optimal_cost_total_deviation", cost_constraint)
+
     # Objective rules
     # ---------------
 
@@ -777,7 +796,7 @@ class EnergySystemRules(GenericRule):
         :param model: optimization model
         :return: net present cost objective function
         """
-        return sum([model.variables["net_present_cost"][year] for year in self.energy_system.set_time_steps_yearly])
+        return sum([model.variables.net_present_cost.at[year] for year in self.energy_system.set_time_steps_yearly])
 
     def objective_total_carbon_emissions(self, model):
         """objective function to minimize total emissions
@@ -789,7 +808,7 @@ class EnergySystemRules(GenericRule):
         :return: total carbon emissions objective function
         """
         sets = self.sets
-        return sum(model.variables["carbon_emissions_annual"][year] for year in sets["set_time_steps_yearly"])
+        return sum(model.variables.carbon_emissions_annual.at[year] for year in sets["set_time_steps_yearly"])
 
     def objective_risk(self, model):
         """objective function to minimize total risk
@@ -828,6 +847,6 @@ class EnergySystemRules(GenericRule):
                 # The weight is the same for all time steps
                 model_variables = model.variables[self.optimization_setup.config["objective_variables"]]
                 time_dim = next(dim for dim in model_variables.dims if dim.startswith("set_time_steps"))
-                objective_variable = sum(model_variables.sel(coords)[year] for year in self.sets[time_dim])
+                objective_variable = sum(model_variables.sel(coords).at[year] for year in self.sets[time_dim])
                 total += weight * objective_variable
         return total

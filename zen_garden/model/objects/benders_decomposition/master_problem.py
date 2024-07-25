@@ -77,6 +77,7 @@ class MasterProblem(OptimizationSetup):
 
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
+        self.cost_optimal_mga = self.monolithic_problem.cost_optimal_mga
 
         self.only_feasibility_checks = False
 
@@ -114,13 +115,12 @@ class MasterProblem(OptimizationSetup):
             master problem is a mock constant objective function
         """
         self.construct_optimization_problem()
-        if "constraint_optimal_cost_total_deviation" in self.monolithic_problem.model.constraints:
-            self.model.add_constraints(
-                lhs=self.model.variables.net_present_cost.sum(dim="set_time_steps_yearly"),
-                sign="<=",
-                rhs=self.monolithic_problem.model.constraints.constraint_optimal_cost_total_deviation.rhs,
-                name="constraint_optimal_cost_total_deviation",
-            )
+        # The monolithic problem, if it is scaled, it remains scaled so before adding constraints and changing the
+        # objective function, we need to scale the whole master problem
+        if self.config.solver["use_scaling"]:
+            self.scaling.run_scaling()
+        else:
+            self.scaling.analyze_numerics()
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
@@ -140,8 +140,9 @@ class MasterProblem(OptimizationSetup):
             )
 
         # Remove the operational variables and constraints from the master problem
-        logging.info("Removing operational constraints from the master problem.")
-        self.model.remove_constraints(self.operational_constraints)
-        logging.info("Removing operational variables from the master problem.")
+        logging.info("--- Removing operational constraints from the master problem ---")
+        for operational_constraint in self.operational_constraints:
+            self.model.constraints.remove(operational_constraint)
+        logging.info("--- Removing operational variables from the master problem ---")
         for operational_variable in self.operational_variables:
-            self.model.remove_variables(operational_variable)
+            self.model.variables.remove(operational_variable)
