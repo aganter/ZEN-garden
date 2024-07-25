@@ -11,6 +11,7 @@ Default configuration. Changes from the default values are specified in config.p
 from pathlib import Path
 from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict
+from typing import Any, Optional, Union
 
 
 class Subscriptable(BaseModel, extra="allow"):
@@ -142,6 +143,9 @@ class Solver(Subscriptable):
     round_parameters: bool = True
     rounding_decimal_points_capacity: int = 4
     analyze_numerics: bool = True
+    use_scaling: bool = True
+    scaling_include_rhs: bool = False
+    scaling_algorithm: Union[list[str], str] = ["geom", "geom", "geom"]
 
 
 class TimeSeriesAggregation(Subscriptable):
@@ -230,12 +234,8 @@ class Config(Subscriptable):
     run_monolithic_optimization: bool = True
     # analysis: dict = Analysis().model_dump()
     analysis: Analysis = Analysis()
-
-    # solver: dict = Solver().model_dump()
     solver: Solver = Solver()
-
     system: System = System()
-    # system: System = System()
 
     scenarios: dict[str, Any] = {"": {}}
 

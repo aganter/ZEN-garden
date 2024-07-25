@@ -8,6 +8,8 @@
 Compilation  of the optimization problem.
 """
 
+import cProfile
+import importlib.util
 import logging
 import os
 import importlib

@@ -39,7 +39,7 @@ def run_module(args=None):
         add_help=True,
         usage="usage: python -m zen_garden [-h] [--config CONFIG] [--dataset DATASET]",
     )
-
+    # TODO make json config default
     parser.add_argument(
         "--config",
         required=False,
@@ -60,8 +60,7 @@ def run_module(args=None):
         required=False,
         type=str,
         default=None,
-        help="A comma separated list (no spaces) of indices of the scenarios to run, if None, all scenarios are run in"
-        "sequence",
+        help="A comma separated list (no spaces) of indices of the scenarios to run, if None, all scenarios are run in sequence",
     )
     parser.add_argument(
         "--job_index_var",
