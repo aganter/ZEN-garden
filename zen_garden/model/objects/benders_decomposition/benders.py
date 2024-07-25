@@ -103,6 +103,11 @@ class BendersDecomposition:
         columns = ["iteration", "optimality_gap"]
         self.optimality_gap_df_infeasibility = pd.DataFrame(columns=columns)
         self.optimality_gap_df_optimal = pd.DataFrame(columns=columns)
+        # Counters for feasibility and optimality cuts
+        self.feasibility_cuts_counter = 0
+        self.optimality_cuts_counter = 0
+        columns = ["number_of_monolithic_constraints", "number_of_feasibility_cuts", "number_of_optimality_cuts"]
+        self.cuts_counter_df = pd.DataFrame(columns=columns)
 
         self.subproblems_gurobi = []
 
@@ -407,6 +412,7 @@ class BendersDecomposition:
         """
         logging.info("--- Adding feasibility cut to master model")
         for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
+            self.feasibility_cuts_counter += 1
             self.master_model.model.add_constraints(
                 lhs=feasibility_cut_lhs,
                 sign="<=",
@@ -486,6 +492,7 @@ class BendersDecomposition:
         """
         logging.info("--- Adding optimality cut to master model")
         for subproblem_name, optimality_cut_lhs, optimality_cut_rhs in optimality_cuts:
+            self.optimality_cuts_counter += 1
             lhs = optimality_cut_lhs + self.master_model.model.variables["outer_approximation"]
             self.master_model.model.add_constraints(
                 lhs=lhs,
@@ -519,7 +526,9 @@ class BendersDecomposition:
             logging.info("--- Subproblem: %s ---", name)
             logging.info("--- Lower bound: %s ---", self.lower_bound)
             logging.info("--- Upper bound: %s ---", upper_bound)
-            if (upper_bound - self.lower_bound) / upper_bound <= self.config.benders["absolute_optimality_gap"]:
+            if (abs(upper_bound - self.lower_bound) / abs(upper_bound)) <= self.config.benders[
+                "absolute_optimality_gap"
+            ]:
                 termination_criteria += [(name, True)]
             else:
                 termination_criteria += [(name, False)]
@@ -565,6 +574,13 @@ class BendersDecomposition:
             os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
         )
         self.optimality_gap_df_optimal.to_csv(os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv"))
+        self.cuts_counter_df = pd.DataFrame(
+            {
+                "number_of_monolithic_constraints": [self.monolithic_problem.model.constraints.ncons],
+                "number_of_feasibility_cuts": [self.feasibility_cuts_counter],
+                "number_of_optimality_cuts": [self.optimality_cuts_counter],
+            }
+        )
 
     def fit(self):
         """
@@ -603,6 +619,9 @@ class BendersDecomposition:
                 else:
                     optimality_cuts = self.define_list_of_optimality_cuts()
                     self.add_optimality_cuts_to_master(optimality_cuts, iteration)
+                    last_solution = []
+                    for subproblem in self.subproblem_models:
+                        last_solution += subproblem.model.solution
                     termination_criteria = self.check_termination_criteria(iteration)
                     if all(value for _, value in termination_criteria):
                         continue_iterations = False
@@ -620,6 +639,13 @@ class BendersDecomposition:
                 )
                 self.optimality_gap_df_optimal.to_csv(
                     os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv")
+                )
+                self.cuts_counter_df = pd.DataFrame(
+                    {
+                        "number_of_monolithic_constraints": [self.monolithic_problem.model.constraints.ncons],
+                        "number_of_feasibility_cuts": [self.feasibility_cuts_counter],
+                        "number_of_optimality_cuts": [self.optimality_cuts_counter],
+                    }
                 )
 
             iteration += 1
