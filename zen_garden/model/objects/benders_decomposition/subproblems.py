@@ -91,10 +91,7 @@ class Subproblem(OptimizationSetup):
             subproblem the same as the one of the monolithic problem.
         """
         self.construct_optimization_problem()
-        if (
-            str("modeling_to_generate_alternatives") in self.config
-            and self.config[str("modeling_to_generate_alternatives")]
-        ):
+        if "constraint_optimal_cost_total_deviation" in self.monolithic_problem.model.constraints:
             self.model.add_constraints(
                 lhs=self.model.variables.net_present_cost.sum(dim="set_time_steps_yearly"),
                 sign="<=",

@@ -585,7 +585,7 @@ class Technology(Element):
                 )
                 return 0, bound_capacity
             else:
-                return 0, 1e10
+                return 0, 1e4
 
         # bounds only needed for Big-M formulation, thus if any technology is modeled with on-off behavior
         techs_on_off = cls.create_custom_set(["set_technologies", "set_on_off"], optimization_setup)[0]

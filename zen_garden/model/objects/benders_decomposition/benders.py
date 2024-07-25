@@ -76,12 +76,12 @@ class BendersDecomposition:
             system=self.config.benders.system,
             folder_output=self.config.benders.analysis.folder_output,
         )
+
         self.benders_output_folder = os.path.abspath(self.benders_output_folder) + "/" + scenario_name
 
         scenarios, elements = ScenarioUtils.get_scenarios(
             config=self.config.benders, scenario_script_name="benders_scenarios.py", job_index=None
         )
-        ScenarioUtils.clean_scenario_folder(self.config.benders, self.benders_output_folder)
 
         self.monolithic_constraints = self.monolithic_problem.model.constraints
         self.monolithic_variables = self.monolithic_problem.model.variables
@@ -582,6 +582,7 @@ class BendersDecomposition:
                 "number_of_optimality_cuts": [self.optimality_cuts_counter],
             }
         )
+        self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
 
     def fit(self):
         """
@@ -648,6 +649,7 @@ class BendersDecomposition:
                         "number_of_optimality_cuts": [self.optimality_cuts_counter],
                     }
                 )
+                self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
                 with open(os.path.join(self.benders_output_folder, "last_sub_solution.pkl"), "wb") as file:
                     pickle.dump(last_solution, file)
                 solution_master = self.master_model.model.solution

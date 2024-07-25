@@ -471,8 +471,7 @@ class OptimizationSetup(object):
         # define and construct components of self.model
         Element.construct_model_components(self)
         # find smallest and largest coefficient and RHS
-        if not self.config.benders.benders_decomposition:
-            self.analyze_numerics()
+        self.analyze_numerics()
 
     def get_optimization_horizon(self):
         """returns list of optimization horizon steps"""
