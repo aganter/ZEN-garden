@@ -22,15 +22,14 @@ import numpy as np
 import pandas as pd
 
 from zen_garden.preprocess.time_series_aggregation import TimeSeriesAggregation
+from zen_garden.preprocess.unit_handling import Scaling
 from zen_garden.postprocess.postprocess import Postprocess
 from .objects.component import Parameter, Variable, Constraint, IndexSet
 from .objects.element import Element
 from .objects.energy_system import EnergySystem
 from .objects.technology.technology import Technology
-from zen_garden.preprocess.time_series_aggregation import TimeSeriesAggregation
-from zen_garden.preprocess.unit_handling import Scaling
 
-from ..utils import ScenarioDict, IISConstraintParser, StringUtils
+from ..utils import ScenarioDict, IISConstraintParser, StringUtils, OptimizationError
 
 
 class OptimizationSetup(object):
@@ -831,19 +830,38 @@ class OptimizationSetup(object):
         # iterate through horizon steps
         for step in steps_horizon:
             StringUtils.print_optimization_progress(self.scenario_name, steps_horizon, step, self.config.system)
+            # Overwrite time indices
             self.overwrite_time_indices(step)
+            # Create optimization problem
             self.construct_optimization_problem()
+            if self.config.solver["use_scaling"]:
+                self.scaling.run_scaling()
+            else:
+                self.scaling.analyze_numerics()
             if self.config["run_monolithic_optimization"]:
+                # Solve the optimization problem
                 self.solve()
 
+                # Break if infeasible
                 if not self.optimality:
                     self.write_IIS()
-                    break
+                    raise OptimizationError(self.model.termination_condition)
 
+                if self.config.solver["use_scaling"]:
+                    self.scaling.re_scale()
+
+                # Save new capacity additions and cumulative carbon emissions for next time step
                 self.add_results_of_optimization_step(step)
-                scenario_name, subfolder, param_map = self.generate_output_paths(
-                    config_system=self.system, step=step, steps_horizon=steps_horizon
+                # Evaluate results
+                # Create scenario name, subfolder and param_map for postprocessing
+                scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
+                    config=self.config,
+                    scenario=self.scenario,
+                    scenario_dict=self.scenario_dict,
+                    steps_horizon=steps_horizon,
+                    step=step,
                 )
+                # Write results
                 Postprocess(
                     model=self,
                     scenarios=self.scenarios_config,
@@ -853,24 +871,3 @@ class OptimizationSetup(object):
                     param_map=param_map,
                 )
                 logging.info("--- Original Optimization finished ---")
-
-    def generate_output_paths(self, config_system, step, steps_horizon):
-        """
-        This method creates a dictionary with the paths of the data split
-
-        :param config: configuration of the energy system
-        :param step: step of the rolling horizon
-        :param step_horizon: steps of the rolling horizon
-
-        :return scenario_name: name of the scenario
-        :return subfolder: subfolder of the scenario
-        :return param_map: dictionary with the paths of the data split
-        """
-        scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
-            config_system=config_system,
-            scenario=self.scenario_name,
-            scenario_dict=self.scenario_dict,
-            steps_horizon=steps_horizon,
-            step=step,
-        )
-        return scenario_name, subfolder, param_map

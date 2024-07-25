@@ -1351,9 +1351,9 @@ class StringUtils:
             )
 
     @classmethod
-    def generate_folder_path(cls, config_system, scenario, scenario_dict, steps_horizon, step):
+    def generate_folder_path(cls, config, scenario, scenario_dict, steps_horizon, step):
         """generates the folder path for the results
-        :param config_system: config.system of optimization
+        :param config: config of optimization
         :param scenario: name of scenario
         :param scenario_dict: current scenario dict
         :param steps_horizon: all steps of horizon
@@ -1365,7 +1365,7 @@ class StringUtils:
         subfolder = Path("")
         scenario_name = None
         param_map = None
-        if config_system["conduct_scenario_analysis"]:
+        if config.system["conduct_scenario_analysis"]:
             # handle scenarios
             scenario_name = f"scenario_{scenario}"
             subfolder = Path(f"scenario_{scenario_dict['base_scenario']}")
@@ -1383,7 +1383,7 @@ class StringUtils:
         if len(steps_horizon) > 1:
             mf_f_string = f"MF_{step}"
             # handle combination of MF and scenario analysis
-            if config_system["conduct_scenario_analysis"]:
+            if config.system["conduct_scenario_analysis"]:
                 subfolder = Path(subfolder), Path(mf_f_string)
             else:
                 subfolder = Path(mf_f_string)
