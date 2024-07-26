@@ -20,6 +20,7 @@ dependencies:
   - gurobi
   - pytables
   - pydantic
+  - tabulate
   - pip:
       - tsam
       - h5py

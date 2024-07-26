@@ -13,8 +13,11 @@ import logging
 import os
 import time
 from pathlib import Path
+import warnings
 import pandas as pd
+import xarray as xr
 import psutil
+from tabulate import tabulate
 from gurobipy import GRB
 
 from zen_garden.preprocess.extract_input_data import DataInput
@@ -24,6 +27,8 @@ from zen_garden.model.objects.benders_decomposition.subproblems import Subproble
 from zen_garden.utils import StringUtils, ScenarioUtils
 
 from zen_garden.postprocess.postprocess import Postprocess
+
+warnings.filterwarnings("ignore")
 
 
 class BendersDecomposition:
@@ -89,7 +94,7 @@ class BendersDecomposition:
             self.separate_design_operational_variables()
         )
 
-        self.monolithic_model_gurobi = None
+        self.monolithic_gurobi = None
         self.map_variables_monolithic_gurobi = {}
 
         logger = logging.getLogger("gurobipy")
@@ -174,10 +179,10 @@ class BendersDecomposition:
             3. variable_gurobi: the variable in the gurobi model
 
         """
-        self.monolithic_model_gurobi = self.monolithic_problem.model.to_gurobipy()
+        self.monolithic_gurobi = getattr(self.monolithic_problem.model, "solver_model")
 
-        for i in range(self.monolithic_model_gurobi.NumVars):
-            variable_gurobi = self.monolithic_model_gurobi.getVars()[i]
+        for i in range(self.monolithic_gurobi.NumVars):
+            variable_gurobi = self.monolithic_gurobi.getVars()[i]
             key = variable_gurobi.VarName
             variable_name = self.monolithic_problem.model.variables.get_label_position(int(key[1:]))[0]
             variable_coords = self.monolithic_problem.model.variables.get_label_position(int(key[1:]))[1]
@@ -259,7 +264,7 @@ class BendersDecomposition:
         """
         Solve the master problem.
         """
-        self.master_model.model.solve()
+        self.master_model.solve()
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_problem.model.objective.value - self.master_model.model.objective.value
             new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
@@ -277,7 +282,7 @@ class BendersDecomposition:
             start_time = time.time()
             pid = os.getpid()
 
-            subproblem.model.solve()
+            subproblem.solve()
 
             solve_time = time.time() - start_time
             solve_memory = psutil.Process(pid).memory_info().rss / 1024**2
@@ -294,6 +299,17 @@ class BendersDecomposition:
                 }
             )
             self.solving_subproblem = pd.concat([self.solving_subproblem, new_row], ignore_index=True)
+
+    def check_variables_tolereance(self, variable_solution):
+        """
+        Check if the variable solution elements are higher that a tolerance: if not, set the variable to 0.
+
+        :param variable_solution: solution of the variable (type: xr.DataArray)
+
+        :return: rescaled_variable_solution: rescaled solution of the variable (type: xr.DataArray)
+        """
+        rescaled_variable_solution = xr.where(abs(variable_solution) < 1e-4, 0, variable_solution)
+        return rescaled_variable_solution
 
     def fix_design_variables_in_subproblem_model(self, iteration):
         """
@@ -312,35 +328,29 @@ class BendersDecomposition:
             for subproblem in self.subproblem_models:
                 if variable_name in subproblem.model.variables:
                     variable_solution = master_solution[variable_name]
-                    subproblem.model.variables[variable_name].lower = variable_solution
-                    subproblem.model.variables[variable_name].upper = variable_solution
+                    rescaled_variable_solution = self.check_variables_tolereance(variable_solution)
+                    subproblem.model.variables[variable_name].lower = rescaled_variable_solution
+                    subproblem.model.variables[variable_name].upper = rescaled_variable_solution
 
     def subproblem_to_gurobi(self, subproblem_solved):
         """
-        Convert the subproblem model to gurobi, necessary to generate the feasibility cut.
+        Function to get the solver model (gurobi model solved) of the subproblem. Needed to extract the Farkas
+        multipliers for feasibility cuts and the dual multipliers for optimality cuts.
+        The function first checks if the subproblem is optimal, if not it writes the IIS, necessary to exploit the
+        Farkas lemma.
 
-        :param subproblem_solved: subproblem model to be converted to gurobi (type: Model)
+        :param subproblem_solved: subproblem model to be converted to gurobi (type: OptimizationSetup)
         """
-        subproblem_model_fixed_design_variable_gurobi = subproblem_solved.to_gurobipy()
-        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.OutputFlag, 0)
-        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.LogToConsole, 0)
-        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.FeasibilityTol, 1e-9)
-        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.InfUnbdInfo, 1)
-        subproblem_model_fixed_design_variable_gurobi.setParam(GRB.Param.NumericFocus, 3)
 
-        # Optimize gurobi model, compute IIS if the model is not optimal
-        subproblem_model_fixed_design_variable_gurobi.optimize()
-        if subproblem_model_fixed_design_variable_gurobi.status != GRB.Status.OPTIMAL:
-            subproblem_model_fixed_design_variable_gurobi.computeIIS()
+        gurobi_model = getattr(subproblem_solved.model, "solver_model")
+        return gurobi_model
 
-        return subproblem_model_fixed_design_variable_gurobi
-
-    def generate_feasibility_cut(self, subproblem_model_fixed_design_variable_gurobi) -> tuple:
+    def generate_feasibility_cut(self, gurobi_model) -> tuple:
         """
         Generate the feasibility cut. The feasibility cut is generated by the Farkas multipliers of the subproblem
         model.
 
-        :param subproblem_model_fixed_design_variable_gurobi: subproblem model in gurobi format (type: Model)
+        :param gurobi_model: subproblem model in gurobi format (type: Model)
 
         :return: feasibility_cut_lhs: left-hand side of the feasibility cut (type: LinExpr)
         :return: feasibility_cut_rhs: right-hand side of the feasibility cut (type: float)
@@ -349,12 +359,11 @@ class BendersDecomposition:
         farkas_multipliers = [
             (constraint_name, multiplier)
             for constraint_name, multiplier in zip(
-                [constr_name for constr_name in subproblem_model_fixed_design_variable_gurobi.getConstrs()],
-                subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.FarkasDual),
+                [constr for constr in gurobi_model.getConstrs()],
+                gurobi_model.getAttr(GRB.Attr.FarkasDual),
             )
             if multiplier != 0
         ]
-
         # Create the feasibility cut
         feasibility_cut_lhs = 0
         feasibility_cut_rhs = 0
@@ -362,7 +371,7 @@ class BendersDecomposition:
             rhs = gurobi_constr.RHS
             feasibility_cut_rhs += farkas * rhs
 
-            lhs = subproblem_model_fixed_design_variable_gurobi.getRow(gurobi_constr)
+            lhs = gurobi_model.getRow(gurobi_constr)
             for i in range(lhs.size()):
                 var = lhs.getVar(i)
                 subproblem_var = self.map_variables_monolithic_gurobi[var.VarName]
@@ -393,12 +402,10 @@ class BendersDecomposition:
                 or subproblem.model.termination_condition == "infeasible_or_unbounded"
             ):
                 infeasible_subproblems.append(subproblem)
+        logging.info("Number of infeasible subproblems: %s", len(infeasible_subproblems))
         for subproblem in infeasible_subproblems:
-            subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
-
-            feasibility_cut_lhs, feasibility_cut_rhs = self.generate_feasibility_cut(
-                subproblem_model_fixed_design_variable_gurobi
-            )
+            gurobi_model = self.subproblem_to_gurobi(subproblem)
+            feasibility_cut_lhs, feasibility_cut_rhs = self.generate_feasibility_cut(gurobi_model)
             name = subproblem.scenario_name if not subproblem.scenario_name == "" else "default"
             feasibility_cuts.append([name, feasibility_cut_lhs, feasibility_cut_rhs])
 
@@ -424,11 +431,11 @@ class BendersDecomposition:
                 name=f"feasibility_cuts_{subproblem_name}_iteration_{iteration}",
             )
 
-    def generate_optimality_cut(self, subproblem_model_fixed_design_variable_gurobi) -> tuple:
+    def generate_optimality_cut(self, gurobi_model) -> tuple:
         """
         Generate the optimality cut. The optimality cut is generated by the dual multipliers of the subproblem model.
 
-        :param subproblem_model_fixed_design_variable_gurobi: subproblem model in gurobi format (type: Model)
+        :param gurobi_model: subproblem model in gurobi format (type: Model)
 
         :return: optimality_cut_lhs: left-hand side of the optimality cut (type: LinExpr)
         :return: optimality_cut_rhs: right-hand side of the optimality cut (type: float)
@@ -437,8 +444,8 @@ class BendersDecomposition:
         duals_multiplier = [
             (constraint_name, multiplier)
             for constraint_name, multiplier in zip(
-                [constr_name for constr_name in subproblem_model_fixed_design_variable_gurobi.getConstrs()],
-                subproblem_model_fixed_design_variable_gurobi.getAttr(GRB.Attr.Pi),
+                [constr for constr in gurobi_model.getConstrs()],
+                gurobi_model.getAttr(GRB.Attr.Pi),
             )
             if multiplier != 0
         ]
@@ -450,7 +457,7 @@ class BendersDecomposition:
             rhs = gurobi_constr.RHS
             optimality_cut_rhs += dual * rhs
 
-            lhs = subproblem_model_fixed_design_variable_gurobi.getRow(gurobi_constr)
+            lhs = gurobi_model.getRow(gurobi_constr)
             for i in range(lhs.size()):
                 var = lhs.getVar(i)
                 subproblem_var = self.map_variables_monolithic_gurobi[var.VarName]
@@ -475,10 +482,8 @@ class BendersDecomposition:
         logging.info("--- Generating optimality cut ---")
         optimality_cuts = []
         for subproblem in self.subproblem_models:
-            subproblem_model_fixed_design_variable_gurobi = self.subproblem_to_gurobi(subproblem.model)
-            optimality_cut_lhs, optimality_cut_rhs = self.generate_optimality_cut(
-                subproblem_model_fixed_design_variable_gurobi
-            )
+            gurobi_model = self.subproblem_to_gurobi(subproblem)
+            optimality_cut_lhs, optimality_cut_rhs = self.generate_optimality_cut(gurobi_model)
             name = subproblem.scenario_name if not subproblem.scenario_name == "" else "default"
             optimality_cuts.append([name, optimality_cut_lhs, optimality_cut_rhs])
 
@@ -521,15 +526,16 @@ class BendersDecomposition:
         """
         termination_criteria = []
         self.upper_bound = []
+        table = []
+        headers = ["Subproblem", "Lower Bound", "Upper Bound"]
         self.lower_bound = self.master_model.model.objective.value
         for subproblem in self.subproblem_models:
             name = subproblem.scenario_name if not subproblem.scenario_name == "" else "default"
             self.upper_bound += [(name, subproblem.model.objective.value)]
 
         for name, upper_bound in self.upper_bound:
-            logging.info("--- Subproblem: %s ---", name)
-            logging.info("--- Lower bound: %s ---", self.lower_bound)
-            logging.info("--- Upper bound: %s ---", upper_bound)
+            table.append([name, self.lower_bound, upper_bound])
+
             if (abs(upper_bound - self.lower_bound) / abs(upper_bound)) <= self.config.benders[
                 "absolute_optimality_gap"
             ]:
@@ -538,6 +544,8 @@ class BendersDecomposition:
                 termination_criteria += [(name, False)]
             new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [(upper_bound - self.lower_bound)]})
             self.optimality_gap_df_optimal = pd.concat([self.optimality_gap_df_optimal, new_row], ignore_index=True)
+        if self.lower_bound != 0:
+            logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".4f"))
         return termination_criteria
 
     def remove_mock_variables(self):
@@ -562,9 +570,10 @@ class BendersDecomposition:
         # Re-scale the variables if scaling is used
         self.remove_mock_variables()
         if self.config.solver["use_scaling"]:
-            self.master_model.scaling.re_scale()
             for subproblem in self.subproblem_models:
                 subproblem.scaling.re_scale()
+            if not (self.use_monolithic_solution and iteration == 1):
+                self.master_model.scaling.re_scale()
 
         # Write the results
         if self.use_monolithic_solution and iteration == 1:

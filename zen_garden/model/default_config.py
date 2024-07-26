@@ -9,12 +9,15 @@ Default configuration. Changes from the default values are specified in config.p
 """
 
 from pathlib import Path
-from typing import Any, Optional
-from pydantic import BaseModel, ConfigDict
 from typing import Any, Optional, Union
+from pydantic import BaseModel, ConfigDict
 
 
 class Subscriptable(BaseModel, extra="allow"):
+    """
+    Subscriptable class to allow for subscriptable objects.
+    """
+
     def __getitem__(self, __name: str) -> Any:
         return getattr(self, __name)
 
@@ -119,7 +122,8 @@ class System(Subscriptable):
 
 
 class SolverOptions(Subscriptable):
-    pass
+    InfUnbdInfo: int = 1
+    NumericFocus: int = 2
 
 
 class Solver(Subscriptable):
@@ -193,7 +197,7 @@ class BendersDecomposition(Subscriptable):
         "run_default_scenario": True,
     }
     use_monolithic_solution: bool = False
-    absolute_optimality_gap: int = 1e-6
+    absolute_optimality_gap: int = 1e-4
     max_number_of_iterations: int = 1e4
 
 
@@ -231,6 +235,10 @@ class ModelingToGenerateAlternatives(Subscriptable):
 
 
 class Config(Subscriptable):
+    """
+    Class defining the configuration of the optimization problem as a whole.
+    """
+
     run_monolithic_optimization: bool = True
     # analysis: dict = Analysis().model_dump()
     analysis: Analysis = Analysis()
