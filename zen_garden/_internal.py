@@ -77,7 +77,7 @@ def main(config, dataset_path=None, job_index=None):
 
         # BENDERS DECOMPOSITION
         if config.benders.benders_decomposition:
-            logging.info("--- Benders Decomposition accessed to solve large-scale problems ---")
+            logging.info("--- Benders Decomposition accessed ---")
             benders_decomposition = BendersDecomposition(
                 config=config,
                 analysis=config.analysis,

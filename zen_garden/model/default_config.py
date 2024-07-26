@@ -123,7 +123,8 @@ class System(Subscriptable):
 
 class SolverOptions(Subscriptable):
     InfUnbdInfo: int = 1
-    NumericFocus: int = 2
+    NumericFocus: int = 1
+    FeasibilityTol: float = 1e-4
 
 
 class Solver(Subscriptable):

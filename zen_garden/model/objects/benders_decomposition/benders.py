@@ -15,7 +15,6 @@ import time
 from pathlib import Path
 import warnings
 import pandas as pd
-import xarray as xr
 import psutil
 from tabulate import tabulate
 from gurobipy import GRB
@@ -300,17 +299,6 @@ class BendersDecomposition:
             )
             self.solving_subproblem = pd.concat([self.solving_subproblem, new_row], ignore_index=True)
 
-    def check_variables_tolereance(self, variable_solution):
-        """
-        Check if the variable solution elements are higher that a tolerance: if not, set the variable to 0.
-
-        :param variable_solution: solution of the variable (type: xr.DataArray)
-
-        :return: rescaled_variable_solution: rescaled solution of the variable (type: xr.DataArray)
-        """
-        rescaled_variable_solution = xr.where(abs(variable_solution) < 1e-4, 0, variable_solution)
-        return rescaled_variable_solution
-
     def fix_design_variables_in_subproblem_model(self, iteration):
         """
         Fix the design variables of the subproblems to the optimal solution of the master problem.
@@ -328,9 +316,8 @@ class BendersDecomposition:
             for subproblem in self.subproblem_models:
                 if variable_name in subproblem.model.variables:
                     variable_solution = master_solution[variable_name]
-                    rescaled_variable_solution = self.check_variables_tolereance(variable_solution)
-                    subproblem.model.variables[variable_name].lower = rescaled_variable_solution
-                    subproblem.model.variables[variable_name].upper = rescaled_variable_solution
+                    subproblem.model.variables[variable_name].lower = variable_solution
+                    subproblem.model.variables[variable_name].upper = variable_solution
 
     def subproblem_to_gurobi(self, subproblem_solved):
         """
@@ -431,6 +418,48 @@ class BendersDecomposition:
                 name=f"feasibility_cuts_{subproblem_name}_iteration_{iteration}",
             )
 
+    def check_feasibility_cut_effectiveness(self, feasibility_iteration, current_feasibility_cuts):
+        """
+        Check the effectiveness of the feasibility cuts. The tolerance of the solution of the master model can lead to
+        oscillatory behavior of the Benders Decomposition method. The function checks if the last generated feasibility
+        cuts are identical to the previous ones. If they are, the function check the values of the master variables
+        appearing in the feasibility cuts. If the latters do not respect the bounds by a small amount allowed by the
+        solver Gurobi, the function add an "forcing_cut" to the master model. The forcing cut is a cut that forces the
+        master variables to respect the bounds (so adding/subtracting the to tolerance of the solver).
+        """
+        if feasibility_iteration == 1:
+            return
+
+        last_feasibility_iteration = str(feasibility_iteration - 1)
+        redundant_feasibility_cuts = []
+        master_variables_in_redundant_feasibility_cuts = []
+        for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in current_feasibility_cuts:
+            last_feasibility_cut_name = f"feasibility_cuts_{subproblem_name}_iteration_{last_feasibility_iteration}"
+            if last_feasibility_cut_name in self.master_model.model.constraints:
+                last_feasibility_cut_lhs = self.master_model.model.constraints[last_feasibility_cut_name].lhs
+                last_feasibility_cut_rhs = self.master_model.model.constraints[last_feasibility_cut_name].rhs
+                if last_feasibility_cut_lhs.equals(feasibility_cut_lhs) and last_feasibility_cut_rhs.equals(
+                    feasibility_cut_rhs
+                ):
+                    logging.info("--- Oscillatory Behavior Detected ---")
+                    redundant_feasibility_cuts.append([subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs])
+                    master_variables_in_redundant_feasibility_cuts += last_feasibility_cut_lhs.vars.data.tolist()
+
+        master_variables_in_redundant_feasibility_cuts = list(set(master_variables_in_redundant_feasibility_cuts))
+        for var in master_variables_in_redundant_feasibility_cuts:
+            counter = 1
+            name = self.master_model.model.variables.get_label_position(var)[0]
+            coords = self.master_model.model.variables.get_label_position(var)[1]
+            solution = self.master_model.model.solution[name].sel(coords)
+            if abs(solution) <= self.master_model.model.variables[name].sel(coords).lower + 1e-4:
+                self.master_model.model.add_constraints(
+                    lhs=self.master_model.model.variables[name].sel(coords),
+                    sign="=",
+                    rhs=self.master_model.model.variables[name].sel(coords).lower,
+                    name=f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}",
+                )
+                counter += 1
+
     def generate_optimality_cut(self, gurobi_model) -> tuple:
         """
         Generate the optimality cut. The optimality cut is generated by the dual multipliers of the subproblem model.
@@ -449,7 +478,6 @@ class BendersDecomposition:
             )
             if multiplier != 0
         ]
-
         # Create the optimality cut
         optimality_cut_lhs = 0
         optimality_cut_rhs = 0
@@ -566,7 +594,7 @@ class BendersDecomposition:
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
-        logging.info("--- All the subproblem are optimal. Terminating iterations ---")
+        logging.info("--- Optimal solution found. Terminating iterations ---")
         # Re-scale the variables if scaling is used
         self.remove_mock_variables()
         if self.config.solver["use_scaling"]:
@@ -625,6 +653,7 @@ class BendersDecomposition:
         Fit the Benders Decomposition model.
         """
         iteration = 1
+        feasibility_iteration = 1
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
         continue_iterations = True
 
@@ -644,6 +673,8 @@ class BendersDecomposition:
             if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- Subproblems are infeasible ---")
                 feasibility_cuts = self.define_list_of_feasibility_cuts()
+                self.check_feasibility_cut_effectiveness(feasibility_iteration, feasibility_cuts)
+                feasibility_iteration += 1
                 self.add_feasibility_cuts_to_master(feasibility_cuts, iteration)
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):

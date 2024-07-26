@@ -305,7 +305,7 @@ class ModelingToGenerateAlternatives:
                 )
             # Benders Decomposition
             if self.config_mga.benders.benders_decomposition:
-                logging.info("--- Benders Decomposition accessed to solve large-scale problems ---")
+                logging.info("--- Benders Decomposition accessed ---")
                 logging.info("")
                 benders_decomposition = BendersDecomposition(
                     config=self.config_mga,
