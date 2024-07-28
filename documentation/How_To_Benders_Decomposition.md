@@ -91,10 +91,14 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
 #### Generating Benders Cuts
 
 1. **Feasibility Cut:**
-   If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$ 
+   If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$:
 
     $$
-    f(x) = \sum_{i=1}^{N_d} \frac{d_i}{L_i} x_{i}
+    \begin{equation}
+    \begin{aligned}
+    & \sigma_s^T (b - B y) \leq 0 , \quad s \in S, \\
+    \end{aligned}
+    \end{equation}
     $$
 
    where $\sigma$ are the Farkas duals corresponding to the infeasible constraints.
