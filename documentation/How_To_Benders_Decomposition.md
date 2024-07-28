@@ -51,7 +51,7 @@ where:
 - $c$ and $d$ are cost vectors,
 - $A$ and $B$ are constraint matrices,
 - $b$, $h$, and $f$ are right-hand side vectors,
-- $g y \leq h$ represents constraints that depend only on $y$,
+- $G y \leq h$ represents constraints that depend only on $y$,
 - $E x \leq f$ represents constraints that depend only on $x$.
 
 #### Master Problem
@@ -64,7 +64,7 @@ $$
 \min \quad & d^T y + \theta \\
 \textrm{s.t.} \quad & G y \leq h, \\
   & \theta \geq \pi_k^T (b - B y), \quad k \in K\\
-  & \sigma_s^T (b - B y), \quad s \in S, \\
+  & \sigma_s^T (b - B y) \leq 0 , \quad s \in S, \\
 \end{aligned}
 \end{equation}
 $$
