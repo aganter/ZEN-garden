@@ -107,9 +107,7 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
 2. **Optimality Cut:**
    If the subproblem is feasible, an optimality cut is generated:
 
-   $$
-   \theta \geq \pi^T (b - B y)
-   $$
+   $\theta$ $\geq$ $\pi^T$ $(b - B y)$
 
    where $\pi$ are the dual multipliers from the subproblem solution.
 
