@@ -1,4 +1,4 @@
-# Benders Decomposition Methods Documentation
+# ZEN-garden Benders Decomposition Method Documentation
 
 ## Overview
 
