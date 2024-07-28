@@ -95,6 +95,9 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
     $$
     \sigma^T (b - B y) \leq 0
     $$
+    $$
+    f(x) = \sum_{i=1}^{N_d} \frac{d_i}{L_i} x_{i}
+    $$
 
    where $\sigma$ are the Farkas duals corresponding to the infeasible constraints.
 
@@ -386,23 +389,3 @@ The following tables explain the default setting for the separation of design an
 | capacity_investment     | design        |
 | capacity_supernodes     | design        |
 | technology_installation | design        |
-
-### Objective Functions
-
-#### Master Objective
-
-The master problem is the design problem. It includes only the design constraints, and the objective function is defined as follows:
-
-- If the objective function is "mga", we check whether we optimize for design or operational variables:
-  - If optimizing "capacity" (design): The objective function of the master problem is the same as that of the monolithic problem.
-  - If optimizing "flow_import" (operational): The objective function of the master problem is the outer approximation of the subproblem's objective function.
-- If the objective function is "total_cost" or "total_carbon_emissions", the objective function of the master problem is the outer approximation of the subproblem's objective function.
-
-#### Subproblem Objective
-
-The subproblem is the operational problem. It includes only the operational constraints, and the objective function is defined as follows:
-
-- If the objective function is "mga", we check whether we optimize for design or operational variables:
-  - If optimizing "capacity" (design): The objective function of the subproblem is a mock constant objective function.
-  - If optimizing "flow_import" (operational): The objective function of the subproblem is the same as that of the monolithic problem.
-- If the objective function is "total_cost" or "total_carbon_emissions", the objective function of the subproblem is the same as that of the monolithic problem.
