@@ -81,7 +81,7 @@ The **ModelingToGenerateAlternatives** class provides functionalities to impleme
   - **Generate Weights:** Combines the random direction vectors and characteristic scales to generate weights for the MGA objective function. These weights are necessary in formulating the objective function for exploring near-optimal solutions as seen above.
 
 - **Adding Cost Deviation Constraint:**
-  - **Add Cost Deviation Constraint:** Adds a constraint to the optimization problem to limit the total cost based on the optimal solution's cost and the allowed deviation defined by the cost slack variables. This ensures that the generated alternatives remain within the specified cost margin.
+  - **Add Cost Deviation Constraint:** Adds a constraint to the optimization problem to limit the total cost based on the optimal solution's cost and the allowed deviation defined by the cost slack variables. This ensures that the generated alternatives remain within the specified cost margin. This method is included in the EnergySystem class but used only if MGA is activated.
 
 - **Solving the Optimization Problem:**
   - **Run:** Executes the MGA process by solving the optimization problem. It generates weights, constructs the optimization problem with the cost deviation constraint and the new objective function, and solves it to find a near-optimal solution. The results are saved for further analysis.
@@ -105,9 +105,11 @@ class ModelingToGenerateAlternatives(Subscriptable):
     """
     
     modeling_to_generate_alternatives: bool = False
+    run_monolithic_optimization: bool = True
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()
+    benders: BendersDecomposition = BendersDecomposition()
 
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
@@ -139,10 +141,10 @@ This class handles all the necessary parameters to set up the MGA algorithm. In 
 </p>
 
 - The parameter `modeling_to_generate_alternatives` should be set to True to activate the MGA method.
-  - The user needs to define the paths for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file.
-  - `analysis`, `system`, and `solver` are deep copies of the default config, which is done for robustness against errors.
-  - It is fundamental that `mga.analysis['folder_output']` is the same as `config.analysis['folder_output']`.
-  - The parameter `cost_slack_variables` defines the allowed percentage of cost deviation.
+- The user needs to define the paths for both the `modeling_to_generate_alternatives` folder and the `characteristic_scale.json` file.
+- `analysis`, `system`, and `solver` are deep copies of the default config, which is done for robustness against errors.
+- It is fundamental that `mga.analysis['folder_output']` has the same init as `config.analysis['folder_output']`.
+- The parameter `cost_slack_variables` defines the allowed percentage of cost deviation.
 
 #### MGA Folder
 The `modeling_to_generate_alternatives` folder looks like:
