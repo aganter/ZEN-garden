@@ -40,23 +40,23 @@ $$
   & G y \leq h, \\
   & E x \leq f, \\
   & x \in \mathbb{R}^n, \\
-  & y \in \mathbb{Z}^p,
+  & y \in \mathbb{R}^m,
 \end{aligned}
 \end{equation}
 $$
 
 where:
-- \(x\) represents the non-complicating variables,
-- \(y\) represents the complicating variables,
-- \(c\) and \(d\) are cost vectors,
-- \(A\) and \(B\) are constraint matrices,
-- \(b\), \(h\), and \(f\) are right-hand side vectors,
-- \(g y \leq h\) represents constraints that depend only on \(y\),
-- \(E x \leq f\) represents constraints that depend only on \(x\).
+- $x$ represents the non-complicating variables, they are continous variables
+- $y$ represents the complicating variables, can be both iteger or continous 
+- $c$ and $d$ are cost vectors,
+- $A$ and $B$ are constraint matrices,
+- $b$, $h$, and $f$ are right-hand side vectors,
+- $g y \leq h$ represents constraints that depend only on $y$,
+- $E x \leq f$ represents constraints that depend only on $x$.
 
 #### Master Problem
 
-The master problem focuses on the complicating variables \(y\):
+The master problem focuses on the complicating variables $y$:
 
 $$
 \begin{equation}
@@ -69,11 +69,11 @@ $$
 \end{equation}
 $$
 
-where \(\theta\) is a lower bound on the objective the subproblems, \(\pi_k\) are dual multipliers from the constraints, and \(\sigma_k\) are extreme ray (retrived with the Farkas lemma) from the  infeasible constraints.
+where $\theta$ is a lower bound on the objective the subproblems, $\pi_k$  are dual multipliers from the constraints, and $\sigma_k$ are extreme ray (retrived with the Farkas lemma) from the  infeasible constraints.
 
 #### Subproblems
 
-Given a fixed \(y\) from the master problem, the subproblem optimizes over the non-complicating variables \(x\):
+Given a fixed $y$ from the master problem, the subproblem optimizes over the non-complicating variables $x$:
 
 $$
 \begin{equation}
@@ -91,7 +91,7 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
 #### Generating Benders Cuts
 
 1. **Feasibility Cut:**
-   If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of \(y\):
+   If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$:
 
    $$
    \begin{equation}
@@ -101,15 +101,15 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
    \end{equation}
    $$
 
-   where \(\sigma\) are the Farkas duals corresponding to the infeasible constraints.
+   where $\sigma$ are the Farkas duals corresponding to the infeasible constraints.
 
    **Farkas' Lemma:**
    Farkas' Lemma is a result from linear algebra used to prove the infeasibility of a system of linear inequalities. It states that for any matrix \(A\) and vector \(b\), exactly one of the following statements is true:
-   - There exists an \(x \geq 0\) such that \(A x = b\),
-   - There exists a \(\sigma\) such that \(\sigma^T A \leq 0\) and \(\sigma^T b > 0\).
+   - There exists an $x \geq 0$ such that $A x \eq b$,
+   - There exists a $\sigma$ such that $\sigma^T A \leq 0$ and $\sigma^T b \geq 0$.
 
-   In the context of Benders Decomposition, Farkas' Lemma is used to generate the extreme rays \(\sigma\) that define the feasibility cuts.
-   
+   In the context of Benders Decomposition, Farkas' Lemma is used to generate the extreme rays $\sigma$ that define the feasibility cuts.
+
 2. **Optimality Cut:**
    If the subproblem is feasible, an optimality cut is generated:
 
@@ -121,6 +121,6 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
    \end{equation}
    $$
 
-   where \(\pi\) are the dual multipliers from the subproblem solution.
+   where $\pi$ are the dual multipliers from the subproblem solution.
 
 By iteratively solving the master problem and subproblems, and adding the appropriate Benders cuts, the method converges to the optimal solution.
