@@ -93,13 +93,7 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
 1. **Feasibility Cut:**
    If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$:
 
-    $$
-    \begin{equation}
-    \begin{aligned}
-    & \sigma_s^T (b - B y) \leq 0 , \quad s \in S, \\
-    \end{aligned}
-    \end{equation}
-    $$
+    $\sigma_s^T$ $(b - B y)$ $\leq 0$
 
    where $\sigma$ are the Farkas duals corresponding to the infeasible constraints.
 
