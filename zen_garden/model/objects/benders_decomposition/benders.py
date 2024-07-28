@@ -5,8 +5,13 @@
   :Organization: Labratory of Reliability and Risk Engineering, ETH Zurich
 
     Class to decompose the optimization problem into a MASTER problem, which is the design problem and a set of
-    SUBPROBLEMS, which are the operational problems with different set of uncertaint parameters.
-    The class is used to define the different benders decomposition method.
+    SUBPROBLEMS, which are the operational problems with different set of parameters
+    The class is able to solve the master problem and the subproblems iteratively by generating feasibility and
+    optimality cuts until the termination criteria is met:
+        - The termination criteria is based on the optimality gap between the master problem and the subproblems if
+        the objective function of the master problem is the outer approximation of the one of the subproblems
+        - The termination criteria is just to satify the feasibility of the subproblems if the objective function of the
+        subproblems is a mock objective function
 """
 
 import logging
@@ -46,7 +51,7 @@ class BendersDecomposition:
         use_monolithic_solution: bool = False,
     ):
         """
-        Initialize the BendersDecomposition object.
+        Initialize the Benders Decomposition method.
 
         :param config: dictionary containing the configuration of the optimization problem
         :param analysis: dictionary containing the analysis configuration
@@ -61,6 +66,7 @@ class BendersDecomposition:
         self.monolithic_problem = monolithic_problem
         self.use_monolithic_solution = use_monolithic_solution
 
+        # Define the input path where the design and operational variables and constraints are stored
         self.input_path = getattr(self.config.benders, "input_path")
         self.energy_system = monolithic_problem.energy_system
         self.data_input = DataInput(
@@ -71,6 +77,7 @@ class BendersDecomposition:
             energy_system=self.energy_system,
             unit_handling=None,
         )
+
         self.config.benders.system.update(self.config.system)
         self.config.benders.system.update(self.config.benders.immutable_system_elements)
         self.config.benders.analysis["dataset"] = os.path.abspath(self.config.benders.analysis["dataset"])
@@ -79,9 +86,8 @@ class BendersDecomposition:
             system=self.config.benders.system,
             folder_output=self.config.benders.analysis.folder_output,
         )
-
         self.benders_output_folder = os.path.abspath(self.benders_output_folder) + "/" + scenario_name
-
+        # Define the different scenarios for the Benders Decomposition method
         scenarios, elements = ScenarioUtils.get_scenarios(
             config=self.config.benders, scenario_script_name="benders_scenarios", job_index=None
         )
@@ -99,7 +105,7 @@ class BendersDecomposition:
         logger = logging.getLogger("gurobipy")
         logging.getLogger("gurobipy").setLevel(logging.ERROR)
         logger.propagate = False
-
+        # Save the monolithic problem in the gurobi format and map the variables
         self.save_monolithic_problem_in_gurobi_format_map_variables()
 
         # DataFrames to store information about the building and solving of the subproblems
@@ -194,7 +200,8 @@ class BendersDecomposition:
     def separate_design_operational_constraints(self) -> list:
         """
         Separate the design and operational constraints based on the user input preferences defined in the config file.
-        It also needs to check and maintain only the constraints that are in the monolithic problem.
+        It also perfomers a sanity check to ensure that all the constraints of the monolithic problem are included in
+        the benders decomposition.
 
         :return: design_constraints, operational_constraints (type: lists of strings)
         """
@@ -212,7 +219,7 @@ class BendersDecomposition:
                 else:
                     raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
 
-        # At the end we need to ensure we have added all the constraints of the monolithic problem
+        # Sanity check on the constraints
         if len(design_constraints) + len(operational_constraints) != len(self.monolithic_constraints):
             missing_constraints = set(self.monolithic_constraints) - set(design_constraints + operational_constraints)
             raise AssertionError(
@@ -224,6 +231,10 @@ class BendersDecomposition:
     def separate_design_operational_variables(self) -> list:
         """
         Separate the design and operational variables based on the user input preferences defined in the config file.
+        The function stores also variables defined as not coupling variables. These variables are design variables that
+        are not included in the subproblems becasue they are not coupled with the operational variables.
+        It also perfomers a sanity check to ensure that all the variables of the monolithic problem are included in the
+        benders decomposition.
 
         :return: design_variables, operational_variables (type: lists of strings)
         """
@@ -243,13 +254,13 @@ class BendersDecomposition:
                 else:
                     raise AssertionError(f"Variable {variable['variable_name']} has an invalid type.")
 
-        # At the end we need to ensure we have added all the variables of the monolithic problem
+        # Sanity check on the variables
         if len(design_variables) + len(operational_variables) != len(self.monolithic_variables):
             missing_variables = set(self.monolithic_variables) - set(design_variables + operational_variables)
             raise AssertionError(
                 f"The following variables are missing in the benders decomposition: {missing_variables}"
             )
-
+        # Define the not coupling variables
         for _, variable in not_subproblem_variables.iterrows():
             if variable["variable_name"] in self.monolithic_variables:
                 if variable["variable_type"] == "design":
@@ -261,7 +272,9 @@ class BendersDecomposition:
 
     def solve_master_problem(self, iteration):
         """
-        Solve the master problem.
+        Solve the master problem by leveraging on the OptimizationSetup method solve().
+
+        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         self.master_model.solve()
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
@@ -273,7 +286,8 @@ class BendersDecomposition:
 
     def solve_subproblems(self, iteration):
         """
-        Solve the subproblems given in the list self.subproblem_models.
+        Solve the subproblems given in the list self.subproblem_models by leveraging on the OptimizationSetup method
+        solve().
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
@@ -322,9 +336,7 @@ class BendersDecomposition:
     def subproblem_to_gurobi(self, subproblem_solved):
         """
         Function to get the solver model (gurobi model solved) of the subproblem. Needed to extract the Farkas
-        multipliers for feasibility cuts and the dual multipliers for optimality cuts.
-        The function first checks if the subproblem is optimal, if not it writes the IIS, necessary to exploit the
-        Farkas lemma.
+        multipliers for feasibility cuts and the Dual multipliers for optimality cuts.
 
         :param subproblem_solved: subproblem model to be converted to gurobi (type: OptimizationSetup)
         """
@@ -420,12 +432,16 @@ class BendersDecomposition:
 
     def check_feasibility_cut_effectiveness(self, feasibility_iteration, current_feasibility_cuts):
         """
-        Check the effectiveness of the feasibility cuts. The tolerance of the solution of the master model can lead to
-        oscillatory behavior of the Benders Decomposition method. The function checks if the last generated feasibility
-        cuts are identical to the previous ones. If they are, the function check the values of the master variables
-        appearing in the feasibility cuts. If the latters do not respect the bounds by a small amount allowed by the
-        solver Gurobi, the function add an "forcing_cut" to the master model. The forcing cut is a cut that forces the
-        master variables to respect the bounds (so adding/subtracting the to tolerance of the solver).
+        Check the effectiveness of the feasibility cuts.
+        The tolerance of the solution of the master model can lead to oscillatory behavior.
+        The function checks if the last generated feasibility cuts are identical to the previous ones. If they are, the
+        function check the values of the master variables appearing in the feasibility cuts. If the latters do not
+        respect the bounds by a small amount allowed by the solver Gurobi, the function add an "forcing_cut" to the
+        master model. The forcing cut is a cut that forces the master variables to respect the bounds (so
+        adding/subtracting the to tolerance of the solver).
+
+        :param feasibility_iteration: current iteration of the Benders Decomposition method (type: int)
+        :param current_feasibility_cuts: list of feasibility cuts (type: list)
         """
         if feasibility_iteration == 1:
             return
@@ -605,12 +621,7 @@ class BendersDecomposition:
 
         # Write the results
         if self.use_monolithic_solution and iteration == 1:
-            Postprocess(
-                model=self.monolithic_problem,
-                scenarios="",
-                model_name=self.monolithic_problem.model_name,
-                subfolder=Path(""),
-            )
+            pass
         else:
             Postprocess(
                 model=self.master_model, scenarios="", model_name=self.master_model.model_name, subfolder=Path("")
@@ -657,6 +668,7 @@ class BendersDecomposition:
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
         continue_iterations = True
 
+        # While loop to solve the master problem and the subproblems iteratively
         while continue_iterations and iteration <= max_number_of_iterations:
             logging.info("")
             logging.info("")
