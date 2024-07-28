@@ -92,10 +92,9 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
 
 1. **Feasibility Cut:**
    If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$:
-
-   $$
-   \sigma^T (b - B y) \leq 0
-   $$
+    $$
+    \sigma^T (b - B y) \leq 0
+    $$
 
    where $\sigma$ are the Farkas duals corresponding to the infeasible constraints.
 
@@ -110,7 +109,7 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
    If the subproblem is feasible, an optimality cut is generated:
 
    $$
-   \theta \geq \pi^T (b - B y),
+   \theta \geq \pi^T (b - B y)
    $$
 
    where $\pi$ are the dual multipliers from the subproblem solution.
@@ -186,7 +185,7 @@ The subproblem is the operational problem. It includes only the operational cons
 This is what the data folder looks like:
 
 <p align="center">
-    <img src="https://github.com/aganter/ZEN-garden/blob/4594ea136a94092836be40d276079acf0668d209/documentation/images/Data_Folder_General_Benders.png" alt="Data Folder Structure Benders" width="600" />
+    <img src="https://github.com/aganter/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/Data_Folder_General_Benders.png" alt="Data Folder Structure Benders" width="600" />
 </p>
 
 Let's analyze it:
@@ -219,7 +218,7 @@ This class handles all the necessary parameters to set up the Benders Decomposit
 ```benders = config.benders```
 
   <p align="center">
-    <img src="https://github.com/aganter/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/Data_Folder_General_Benders.png" alt="Config File Benders" width="800" />
+    <img src="https://github.com/aganter/ZEN-garden/blob/4594ea136a94092836be40d276079acf0668d209/documentation/images/Config_File_Benders.png" alt="Config File Benders" width="800" />
 </p>
 
 
