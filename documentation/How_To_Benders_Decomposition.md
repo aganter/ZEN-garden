@@ -91,10 +91,8 @@ If the subproblem is infeasible, a feasibility cut is generated. If feasible, an
 #### Generating Benders Cuts
 
 1. **Feasibility Cut:**
-   If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$:
-    $$
-    \sigma^T (b - B y) \leq 0
-    $$
+   If the subproblem is infeasible, a feasibility cut is added to the master problem to eliminate the current solution of $y$ 
+
     $$
     f(x) = \sum_{i=1}^{N_d} \frac{d_i}{L_i} x_{i}
     $$
