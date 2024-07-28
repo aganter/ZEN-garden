@@ -75,6 +75,7 @@ class MasterProblem(OptimizationSetup):
         self.operational_variables = operational_variables
         self.operational_constraints = operational_constraints
 
+        # Attributes from the monolithic problem needed to ensure robustness in case of solving Benders for MGA
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
         self.cost_optimal_mga = self.monolithic_problem.cost_optimal_mga
@@ -109,14 +110,16 @@ class MasterProblem(OptimizationSetup):
         Create the master problem, which is the design problem.
         It includes only the design constraints and the objective function is taken from the config as follow:
         - If the objective function is "mga", we check whether we optimize for design or operational variables:
-            - If design, the objective function of the master problem is the same as the one of the monolithic problem
-            - If operational, the objective function of the master problem is a dummy constant objective function
-            - If the objective function is "total_cost", or is "total_carbon_emissions", the objective function of the
-            master problem is a mock constant objective function
+            - If "capacity" --> design: the objective function of the master problem is the same as the one of the
+            monolithic problem
+            - If "flow_import" --> operational: the objective function of the master problem is the outer approximation
+            of the subproblem objective function
+        - If the objective function is "total_cost", or is "total_carbon_emissions", the objective function of the
+        master problem is the outer approximation of the subproblem objective function
         """
         self.construct_optimization_problem()
-        # The monolithic problem, if it is scaled, it remains scaled so before adding constraints and changing the
-        # objective function, we need to scale the whole master problem
+        # We scale the model before removing the operational variables and constraints to avoid differences in the
+        # scaling factors between the master and subproblems
         if self.config.solver["use_scaling"]:
             self.scaling.run_scaling()
         else:
