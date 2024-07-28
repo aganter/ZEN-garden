@@ -7,8 +7,9 @@
     Class to define the subproblems of the Benders Decomposition method.
     This class is a child class of the OptimizationSetup class and inherits all the methods and attributes of the
     parent class.
-    A subproblem is defined as the operational problem under specific parametric uncertainties and includes only the
-    operational variables and constraints.
+    A subproblem is defined as the operational problem and includes only the operational variables and constraints.
+    In order to ensure only the presence of the operational constraints, this class removes the design constraints and
+    the not coupling variables from the subproblem.
 """
 
 import logging
@@ -72,6 +73,7 @@ class Subproblem(OptimizationSetup):
         self.design_constraints = design_constraints
         self.not_coupling_variables = not_coupling_variables
 
+        # Attributes from the monolithic problem needed to ensure robustness in case of solving Benders for MGA
         self.mga_weights = self.monolithic_problem.mga_weights
         self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
         self.cost_optimal_mga = self.monolithic_problem.cost_optimal_mga
@@ -86,14 +88,15 @@ class Subproblem(OptimizationSetup):
         Create the subproblem, which is the operational problem.
         It includes only the operational constraints and the objective function is taken from the config as follow:
         - If the objective function is "mga", we check whether we optimize for design or operational variables:
-            - If design, the objective function of the subproblem is a dummy constant objective function
-            - If operational, the objective function of the subproblem is the same as the one of the monolithic problem
+            - If "capacity" --> design: the objective function of the subproblem is a mock constant objective function
+            - If "flow_import" --> operational: the objective function of the subproblem is the same as the one of the
+            monolithic problem
             - If the objective function is "total_cost", or is "total_carbon_emissions", the objective function of the
             subproblem the same as the one of the monolithic problem.
         """
         self.construct_optimization_problem()
-        # The monolithic problem, if it is scaled, it remains scaled so before adding constraints and changing the
-        # objective function, we need to scale the whole subproblem problem
+        # We scale the model before removing the operational variables and constraints to avoid differences in the
+        # scaling factors between the master and subproblems
         if self.config.solver["use_scaling"]:
             self.scaling.run_scaling()
         else:
@@ -101,7 +104,6 @@ class Subproblem(OptimizationSetup):
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
-            # If the objective function optimizes for design variables, we use a dummy objective in the subproblem
             if "capacity" in str(self.monolithic_problem.model.objective):
                 self.variables.add_variable(
                     self.model,
@@ -132,7 +134,7 @@ class Subproblem(OptimizationSetup):
                 self.config.analysis["objective"],
             )
 
-        # Remove the design constraints from the subproblem
+        # Remove the design constraints and not coupling variables from the subproblem
         logging.info("--- Removing design constraints from the subproblem ---")
         for design_constraint in self.design_constraints:
             self.model.constraints.remove(design_constraint)

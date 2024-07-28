@@ -22,7 +22,6 @@ from zen_garden.model.optimization_setup import OptimizationSetup
 class MasterProblem(OptimizationSetup):
     """
     Class defining the Master Problem of the Benders Decomposition method.
-    Initialize the MasterProblem object.
     """
 
     label = "MasterProblem"
