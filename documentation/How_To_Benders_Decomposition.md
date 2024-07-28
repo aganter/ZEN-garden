@@ -165,9 +165,9 @@ The **BendersDecomposition** class provides functionalities to implement the **B
 - **Fit:** The fit method combines the above-described methods into the iterative Benders approach.
 
 
-#### Objective Functions
+### Objective Functions
 
-##### Master Objective
+#### Master Objective
 
 The master problem is the design problem. It includes only the design constraints, and the objective function is defined as follows:
 
@@ -178,7 +178,7 @@ The master problem is the design problem. It includes only the design constraint
 - **When the Objective Function is "total_cost" or "total_carbon_emissions":**
   - In these scenarios, the objective function of the master problem is also set as the outer approximation of the subproblem's objective function. This approach ensures that the master problem focuses on minimizing either the total cost or the total carbon emissions of the system, considering the outer bounds provided by the subproblem solutions. The outer approximation provides a feasible estimate that guides the design decisions towards the overall optimization goals. Ordinaray, in the Benders Decomposition method the separation is made so the investment costs are in the Master problem. Here, we aim to address parametric uncertainties so all the element of the total cost (capex included) go into the Subproblems.
 
-##### Subproblem Objective
+#### Subproblem Objective
 
 The subproblem is the operational problem. It includes only the operational constraints, and the objective function is defined as follows:
 
@@ -194,7 +194,7 @@ The subproblem is the operational problem. It includes only the operational cons
 This is what the data folder looks like:
 
 <p align="center">
-    <img src="https://github.com/aganter/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/Data_Folder_General_Benders.png" alt="Data Folder Structure Benders" width="600" />
+    <img src="https://github.com/aganter/ZEN-garden/blob/4594ea136a94092836be40d276079acf0668d209/documentation/images/Data_Folder_General_Benders.png" alt="Data Folder Structure Benders" width="600" />
 </p>
 
 Let's analyze it:
