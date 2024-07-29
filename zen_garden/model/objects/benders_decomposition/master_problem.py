@@ -31,7 +31,7 @@ class MasterProblem(OptimizationSetup):
         config: dict,
         config_benders: dict,
         analysis: dict,
-        monolithic_problem: OptimizationSetup,
+        monolithic_model: OptimizationSetup,
         model_name: str,
         scenario_name: str,
         scenario_dict: dict,
@@ -46,7 +46,7 @@ class MasterProblem(OptimizationSetup):
         :param config: dictionary containing the configuration of the optimization problem
         :param config_benders: dictionary containing the configuration of the Benders Decomposition method
         :param analysis: dictionary containing the analysis configuration
-        :param monolithic_problem: OptimizationSetup object of the monolithic problem
+        :param monolithic_model: OptimizationSetup object of the monolithic problem
         :param model_name: name of the model
         :param scenario_name: name of the scenario
         :param scenario_dict: dictionary containing the scenario data
@@ -70,14 +70,14 @@ class MasterProblem(OptimizationSetup):
         self.config_benders = config_benders
         self.analysis = analysis
 
-        self.monolithic_problem = monolithic_problem
+        self.monolithic_model = monolithic_model
         self.operational_variables = operational_variables
         self.operational_constraints = operational_constraints
 
         # Attributes from the monolithic problem needed to ensure robustness in case of solving Benders for MGA
-        self.mga_weights = self.monolithic_problem.mga_weights
-        self.mga_objective_coords = self.monolithic_problem.mga_objective_coords
-        self.cost_optimal_mga = self.monolithic_problem.cost_optimal_mga
+        self.mga_weights = self.monolithic_model.mga_weights
+        self.mga_objective_coords = self.monolithic_model.mga_objective_coords
+        self.cost_optimal_mga = self.monolithic_model.cost_optimal_mga
 
         self.only_feasibility_checks = False
 
@@ -126,10 +126,10 @@ class MasterProblem(OptimizationSetup):
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
-            if "capacity" in str(self.monolithic_problem.model.objective):
-                self.model.add_objective(self.monolithic_problem.model.objective.expression, overwrite=True)
+            if "capacity" in str(self.monolithic_model.model.objective):
+                self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
                 self.only_feasibility_checks = True
-            elif "flow_import" in str(self.monolithic_problem.model.objective):
+            elif "flow_import" in str(self.monolithic_model.model.objective):
                 self.theta_objective_master()
             else:
                 raise AssertionError("Objective function not recognized for MGA.")

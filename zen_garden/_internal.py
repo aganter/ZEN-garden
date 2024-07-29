@@ -81,7 +81,7 @@ def main(config, dataset_path=None, job_index=None):
             benders_decomposition = BendersDecomposition(
                 config=config,
                 analysis=config.analysis,
-                monolithic_problem=optimization_setup,
+                monolithic_model=optimization_setup,
                 scenario_name=scenario,
                 use_monolithic_solution=config.benders.use_monolithic_solution,
             )
