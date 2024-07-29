@@ -206,8 +206,8 @@ class BendersDecomposition(Subscriptable):
         "run_default_scenario": True,
     }
     use_monolithic_solution: bool = False
-    absolute_optimality_gap: int = 1e-4
-    max_number_of_iterations: int = 1e4
+    absolute_optimality_gap: int = 1e-3
+    max_number_of_iterations: int = 1e6
 ```
 
 This class handles all the necessary parameters to set up the Benders Decomposition algorithm. In particular, in the `config.py`, the user needs to set:

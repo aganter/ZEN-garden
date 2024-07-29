@@ -122,6 +122,9 @@ class BendersDecomposition:
         self.optimality_cuts_counter = 0
         columns = ["number_of_monolithic_constraints", "number_of_feasibility_cuts", "number_of_optimality_cuts"]
         self.cuts_counter_df = pd.DataFrame(columns=columns)
+        # Dataframe with name of the constraints added
+        columns = ["constraint_name", "iteration"]
+        self.constraints_added = pd.DataFrame(columns=columns)
 
         self.subproblems_gurobi = []
 
@@ -438,7 +441,7 @@ class BendersDecomposition:
 
         return feasibility_cuts
 
-    def add_feasibility_cuts_to_master(self, feasibility_cuts, feasibility_iteration):
+    def add_feasibility_cuts_to_master(self, feasibility_cuts, feasibility_iteration, iteration):
         """
         Add the feasibility cuts to the master model.
 
@@ -457,8 +460,16 @@ class BendersDecomposition:
                 rhs=feasibility_cut_rhs,
                 name=f"feasibility_cuts_{subproblem_name}_iteration_{feasibility_iteration}",
             )
+            # Save the cut in the constraints_added dataframe
+            new_row = pd.DataFrame(
+                {
+                    "constraint_name": [f"feasibility_cuts_{subproblem_name}_iteration_{feasibility_iteration}"],
+                    "iteration": [iteration],
+                }
+            )
+            self.constraints_added = pd.concat([self.constraints_added, new_row], ignore_index=True)
 
-    def check_feasibility_cut_effectiveness(self, feasibility_iteration, current_feasibility_cuts):
+    def check_feasibility_cut_effectiveness(self, feasibility_iteration, current_feasibility_cuts, iteration):
         """
         Check the effectiveness of the feasibility cuts.
         The tolerance of the solution of the master model can lead to oscillatory behavior.
@@ -506,6 +517,14 @@ class BendersDecomposition:
                     rhs=self.master_model.model.variables[name].sel(coords).lower,
                     name=f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}",
                 )
+                # Save the cut in the constraints_added dataframe
+                new_row = pd.DataFrame(
+                    {
+                        "constraint_name": [f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}"],
+                        "iteration": [iteration],
+                    }
+                )
+                self.constraints_added = pd.concat([self.constraints_added, new_row], ignore_index=True)
                 counter += 1
 
     def generate_optimality_cut(self, gurobi_model) -> tuple:
@@ -565,7 +584,7 @@ class BendersDecomposition:
 
         return optimality_cuts
 
-    def add_optimality_cuts_to_master(self, optimality_cuts, optimality_iteration):
+    def add_optimality_cuts_to_master(self, optimality_cuts, optimality_iteration, iteration):
         """
         Add the optimality cuts to the master model.
 
@@ -585,6 +604,14 @@ class BendersDecomposition:
                 rhs=optimality_cut_rhs,
                 name=f"optimality_cuts_{subproblem_name}_iteration_{optimality_iteration}",
             )
+            # Save the cut in the constraints_added dataframe
+            new_row = pd.DataFrame(
+                {
+                    "constraint_name": [f"optimality_cuts_{subproblem_name}_iteration_{optimality_iteration}"],
+                    "iteration": [iteration],
+                }
+            )
+            self.constraints_added = pd.concat([self.constraints_added, new_row], ignore_index=True)
 
     def check_termination_criteria(self, iteration) -> list:
         """
@@ -684,6 +711,7 @@ class BendersDecomposition:
             }
         )
         self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
+        self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
 
     def fit(self):
         """
@@ -714,8 +742,8 @@ class BendersDecomposition:
             if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- Subproblems are infeasible ---")
                 feasibility_cuts = self.define_list_of_feasibility_cuts()
-                self.check_feasibility_cut_effectiveness(feasibility_iteration, feasibility_cuts)
-                self.add_feasibility_cuts_to_master(feasibility_cuts, feasibility_iteration)
+                self.check_feasibility_cut_effectiveness(feasibility_iteration, feasibility_cuts, iteration)
+                self.add_feasibility_cuts_to_master(feasibility_cuts, feasibility_iteration, iteration)
                 feasibility_iteration += 1
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
@@ -724,7 +752,7 @@ class BendersDecomposition:
                     continue_iterations = False
                 else:
                     optimality_cuts = self.define_list_of_optimality_cuts()
-                    self.add_optimality_cuts_to_master(optimality_cuts, optimality_iteration)
+                    self.add_optimality_cuts_to_master(optimality_cuts, optimality_iteration, iteration)
                     optimality_iteration += 1
                     termination_criteria = self.check_termination_criteria(iteration)
                     if all(value for _, value in termination_criteria):
@@ -752,5 +780,6 @@ class BendersDecomposition:
                     }
                 )
                 self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
+                self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
 
             iteration += 1
