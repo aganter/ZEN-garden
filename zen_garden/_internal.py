@@ -78,6 +78,8 @@ def main(config, dataset_path=None, job_index=None):
         # BENDERS DECOMPOSITION
         if config.benders.benders_decomposition:
             logging.info("--- Benders Decomposition accessed ---")
+            if config.solver["use_scaling"]:
+                optimization_setup.scaling.scale_again_solution()
             benders_decomposition = BendersDecomposition(
                 config=config,
                 analysis=config.analysis,

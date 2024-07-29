@@ -756,6 +756,13 @@ class Scaling:
             var = model.variables[name_var]
             mask = np.where(var.labels.data != -1)
             var.solution.data[mask] = var.solution.data[mask] * (self.D_c_inv[var.labels.data[mask]])
+    
+    def scale_again_solution(self):
+        model = self.model
+        for name_var in model.variables:
+            var = model.variables[name_var]
+            mask = np.where(var.labels.data != -1)
+            var.solution.data[mask] = var.solution.data[mask] / (self.D_c_inv[var.labels.data[mask]])
 
     def analyze_numerics(self):
         #print numerics if no scaling is activated

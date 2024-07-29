@@ -303,14 +303,18 @@ class ModelingToGenerateAlternatives:
                     scenario_name=scenario_name,
                     param_map=param_map,
                 )
+
             # Benders Decomposition
             if self.config_mga.benders.benders_decomposition:
                 logging.info("--- Benders Decomposition accessed ---")
                 logging.info("")
+                if self.config_mga.solver["use_scaling"]:
+                    self.mga_solution.scaling.scale_again_solution()
+
                 benders_decomposition = BendersDecomposition(
                     config=self.config_mga,
                     analysis=self.config_mga.analysis,
-                    monolithic_problem=self.mga_solution,
+                    monolithic_model=self.mga_solution,
                     scenario_name=str(subfolder),
                     use_monolithic_solution=self.config_mga.benders.use_monolithic_solution,
                 )
