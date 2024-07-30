@@ -468,7 +468,6 @@ class BendersDecomposition:
         :param feasibility_cuts: list of feasibility cuts (type: list)
         :param feasibility_iteration: current feasibility_iteration of the Benders Decomposition method (type: int)
         """
-        logging.info("--- Adding feasibility cut to master model")
         starting_time = time.time()
         for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
             self.feasibility_cuts_counter += 1
@@ -538,7 +537,7 @@ class BendersDecomposition:
             ):
                 self.master_model.model.add_constraints(
                     lhs=self.master_model.model.variables[name].sel(coords),
-                    sign="=>",
+                    sign=">=",
                     rhs=self.master_model.model.variables[name].sel(coords).lower + 1e-3,
                     name=f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}",
                 )
@@ -632,7 +631,6 @@ class BendersDecomposition:
         :param optimality_iteration: current iteration of the Benders Decomposition method (type: int)
         """
         starting_time = time.time()
-        logging.info("--- Adding optimality cut to master model")
         for subproblem_name, optimality_cut_lhs, optimality_cut_rhs in optimality_cuts:
             self.optimality_cuts_counter += 1
             lhs = optimality_cut_lhs + self.master_model.model.variables["outer_approximation"]
