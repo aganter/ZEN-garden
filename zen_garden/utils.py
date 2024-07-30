@@ -1414,9 +1414,9 @@ class StringUtils:
         """
         model_name = os.path.basename(analysis["dataset"])
         if not os.path.exists(folder_output):
-            os.mkdir(folder_output)
+            os.mkdir(folder_output, exist_ok=True)
         if not os.path.exists(out_folder := os.path.join(folder_output, model_name)):
-            os.mkdir(out_folder)
+            os.mkdir(out_folder, exist_ok=True)
         else:
             logging.warning(f"The output folder '{out_folder}' already exists")
             if analysis["overwrite_output"]:

@@ -122,6 +122,7 @@ class System(Subscriptable):
 
 
 class SolverOptions(Subscriptable):
+    OutputFlag: int = 0
     InfUnbdInfo: int = 1
     NumericFocus: int = 1
     FeasibilityTol: float = 1e-4
@@ -130,6 +131,7 @@ class SolverOptions(Subscriptable):
 class Solver(Subscriptable):
     name: str = "highs"
     solver_options: SolverOptions = SolverOptions()
+    warmstart_fn: str = None
     check_unit_consistency: bool = True
     solver_dir: str = ".//outputs//solver_files"
     keep_files: bool = False
@@ -191,6 +193,8 @@ class BendersDecomposition(Subscriptable):
     benders_decomposition: bool = False
     analysis: Analysis = Analysis()
     system: System = System()
+    solver_master: Solver = Solver()
+    solver_subproblem: Solver = Solver()
     input_path: Path = Path("data/")
     scenarios: dict[str, Any] = {"": {}}
     immutable_system_elements: dict = {

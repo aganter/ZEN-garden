@@ -137,6 +137,7 @@ class BendersDecomposition:
         self.master_model = MasterProblem(
             config=self.monolithic_model.config,
             config_benders=self.config.benders,
+            solver=self.config.benders.solver_master,
             analysis=self.analysis,
             monolithic_model=self.monolithic_model,
             model_name=self.monolithic_model.model_name,
@@ -157,6 +158,7 @@ class BendersDecomposition:
             subproblem = Subproblem(
                 config=self.monolithic_model.config,
                 config_benders=self.config.benders,
+                solver=self.config.benders.solver_subproblem,
                 analysis=self.analysis,
                 monolithic_model=self.monolithic_model,
                 model_name=self.monolithic_model.model_name,
@@ -279,6 +281,11 @@ class BendersDecomposition:
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
+        # Get the solution file of the last master problem
+        warm_start = self.master_model.model.get_solution_file()
+        # Update the solver options
+        self.config.benders.solver_master["warmstart_fn"] = warm_start
+
         self.master_model.solve()
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value

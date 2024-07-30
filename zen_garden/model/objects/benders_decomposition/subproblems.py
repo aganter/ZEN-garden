@@ -29,6 +29,7 @@ class Subproblem(OptimizationSetup):
         self,
         config: dict,
         config_benders: dict,
+        solver: dict,
         analysis: dict,
         monolithic_model: OptimizationSetup,
         model_name: str,
@@ -57,6 +58,7 @@ class Subproblem(OptimizationSetup):
 
         super().__init__(
             config=config,
+            solver=solver,
             model_name=model_name,
             scenario_name=scenario_name,
             scenario_dict=scenario_dict,
@@ -67,6 +69,7 @@ class Subproblem(OptimizationSetup):
 
         self.config = config
         self.config_benders = config_benders
+        self.solver = solver
         self.analysis = analysis
 
         self.monolithic_model = monolithic_model

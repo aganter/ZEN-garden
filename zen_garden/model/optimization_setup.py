@@ -41,6 +41,7 @@ class OptimizationSetup(object):
     def __init__(
         self,
         config,
+        solver,
         model_name,
         scenario_name: str,
         scenario_dict: dict,
@@ -57,7 +58,7 @@ class OptimizationSetup(object):
         self.model_name = model_name
         self.analysis = config.analysis
         self.system = config.system
-        self.solver = config.solver
+        self.solver = solver
         self.scenarios_config = config.scenarios
         self.input_data_checks = input_data_checks
         self.input_data_checks.optimization_setup = self
@@ -575,6 +576,7 @@ class OptimizationSetup(object):
                 io_api=self.solver["io_api"],
                 keep_files=self.solver["keep_files"],
                 sanitize_zeros=True,
+                warmstart_fn=self.solver["warmstart_fn"],
                 # remaining kwargs are passed to the solver
                 **solver_options,
             )

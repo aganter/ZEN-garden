@@ -63,6 +63,7 @@ class ModelingToGenerateAlternatives:
         # Initialize the OptimizationSetup object for the MGA iteration model
         self.mga_solution: OptimizationSetup = OptimizationSetup(
             config=self.config_mga,
+            solver=self.config_mga.solver,
             model_name=self.optimized_setup.model_name,
             scenario_name=self.scenario_name,
             scenario_dict=self.scenario_dict,

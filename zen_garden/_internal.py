@@ -66,6 +66,7 @@ def main(config, dataset_path=None, job_index=None):
         # FORMULATE THE OPTIMIZATION PROBLEM
         optimization_setup = OptimizationSetup(
             config,
+            solver=config.solver,
             model_name=model_name,
             scenario_name=scenario,
             scenario_dict=scenario_dict,
@@ -94,13 +95,13 @@ def main(config, dataset_path=None, job_index=None):
             logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
             config.mga.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
             config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
+            config.mga.system.update(config.system)
+            config.mga.system.update(config.mga.immutable_system_elements)
             mga_output_folder = StringUtils.get_output_folder(
                 analysis=config.mga.analysis,
                 system=config.mga["system"],
                 folder_output=config.mga.analysis["folder_output"],
             )
-            config.mga.system.update(config.system)
-            config.mga.system.update(config.mga.immutable_system_elements)
 
             scenarios, elements = ScenarioUtils.get_scenarios(
                 config=config.mga, scenario_script_name="mga_iterations", job_index=job_index
