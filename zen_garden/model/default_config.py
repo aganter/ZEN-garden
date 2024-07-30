@@ -122,7 +122,6 @@ class System(Subscriptable):
 
 
 class SolverOptions(Subscriptable):
-    OutputFlag: int = 0
     InfUnbdInfo: int = 1
     NumericFocus: int = 1
     FeasibilityTol: float = 1e-4
