@@ -132,6 +132,9 @@ class BendersDecomposition:
         # Dataframe with the time for adding the constraints
         columns = ["iteration", "constraint_type", "addition_time_sec"]
         self.constraints_addition_time = pd.DataFrame(columns=columns)
+        # Dataframe to save the monolithic and master solution when oscillatory behavior is detected
+        columns = ["iteration", "counter", "monolithic_solution", "master_solution"]
+        self.oscillatory_behavior = pd.DataFrame(columns=columns)
 
         self.subproblems_gurobi = []
         self.rhs_subproblmes = []
@@ -288,17 +291,12 @@ class BendersDecomposition:
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
-        # Get the solution file of the last master problem
-        warm_start = self.master_model.model.get_solution_file()
-        # Update the solver options
-        self.config.benders.solver_master["warmstart_fn"] = warm_start
-
         self.master_model.solve()
 
         if self.name_forcing_cuts:
-            for name in self.name_forcing_cuts:
-                self.master_model.model.constraints.remove(name)
-                self.name_forcing_cuts.remove(name)
+            for cut in self.name_forcing_cuts:
+                self.master_model.model.constraints.remove(cut)
+            self.name_forcing_cuts.clear()
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value
             new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
@@ -381,7 +379,7 @@ class BendersDecomposition:
                 if variable_name in subproblem.model.variables:
                     variable_solution = master_solution[variable_name]
                     variable_solution = variable_solution.where(
-                        (variable_solution > 1e-4) | np.isnan(variable_solution), 0
+                        (variable_solution > 1e-5) | np.isnan(variable_solution), 0
                     )
                     subproblem.model.variables[variable_name].lower = variable_solution
                     subproblem.model.variables[variable_name].upper = variable_solution
@@ -415,7 +413,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.FarkasDual),
             )
-            if abs(multiplier) > 1e-8
+            if abs(multiplier) > 1e-6
         ]
 
         # Initialize feasibility cut components
@@ -542,10 +540,11 @@ class BendersDecomposition:
             name = self.master_model.model.variables.get_label_position(var)[0]
             coords = self.master_model.model.variables.get_label_position(var)[1]
             solution = self.master_model.model.solution[name].sel(coords)
+            monolithic_solution = self.monolithic_model.model.solution[name].sel(coords)
             if (
-                abs(solution) <= self.master_model.model.variables[name].sel(coords).lower + 1e-3
+                abs(solution) <= self.master_model.model.variables[name].sel(coords).upper + 1e-6
                 or solution <= self.master_model.model.variables[name].sel(coords).lower
-            ):
+            ) and (solution != 0):
                 name_cut = f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}"
                 self.master_model.model.add_constraints(
                     lhs=self.master_model.model.variables[name].sel(coords),
@@ -563,6 +562,16 @@ class BendersDecomposition:
                     }
                 )
                 self.constraints_added = pd.concat([self.constraints_added, new_row], ignore_index=True)
+                # Save the monolithic and master solution in the oscillatory_behavior dataframe
+                new_row = pd.DataFrame(
+                    {
+                        "iteration": [iteration],
+                        "counter": [counter],
+                        "monolithic_solution": [monolithic_solution],
+                        "master_solution": [solution],
+                    }
+                )
+                self.oscillatory_behavior = pd.concat([self.oscillatory_behavior, new_row], ignore_index=True)
                 counter += 1
         return oscillatory_behavior
 
@@ -583,7 +592,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.Pi),
             )
-            if abs(multiplier) > 1e-8
+            if abs(multiplier) > 1e-6
         ]
 
         # Initialize optimality cut components
@@ -778,6 +787,7 @@ class BendersDecomposition:
             os.path.join(self.benders_output_folder, "constraints_construction_time.csv")
         )
         self.constraints_addition_time.to_csv(os.path.join(self.benders_output_folder, "constraints_addition_time.csv"))
+        self.oscillatory_behavior.to_csv(os.path.join(self.benders_output_folder, "oscillatory_behavior.csv"))
 
     def fit(self):
         """
@@ -826,6 +836,7 @@ class BendersDecomposition:
                 self.constraints_addition_time.to_csv(
                     os.path.join(self.benders_output_folder, "constraints_addition_time.csv")
                 )
+                self.oscillatory_behavior.to_csv(os.path.join(self.benders_output_folder, "oscillatory_behavior.csv"))
                 continue_iterations = False
                 break
 
@@ -854,6 +865,14 @@ class BendersDecomposition:
                     termination_criteria = self.check_termination_criteria(iteration)
                     if all(value for _, value in termination_criteria):
                         continue_iterations = False
+
+            if self.master_model.only_feasibility_checks:
+                table = []
+                headers = ["Objective", "Monolithic", "Master"]
+                table.append(
+                    ["Master", self.monolithic_model.model.objective.value, self.master_model.model.objective.value]
+                )
+                logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
 
             if continue_iterations is False:
                 self.save_master_and_subproblems()
@@ -884,5 +903,6 @@ class BendersDecomposition:
                 self.constraints_addition_time.to_csv(
                     os.path.join(self.benders_output_folder, "constraints_addition_time.csv")
                 )
+                self.oscillatory_behavior.to_csv(os.path.join(self.benders_output_folder, "oscillatory_behavior.csv"))
 
             iteration += 1

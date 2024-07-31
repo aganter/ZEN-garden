@@ -123,9 +123,9 @@ class System(Subscriptable):
 
 class SolverOptions(Subscriptable):
     InfUnbdInfo: int = 1
-    NumericFocus: int = 2
-    FeasibilityTol: float = 1e-4
-    ScaleFlag: int = 1
+    NumericFocus: int = 3
+    FeasibilityTol: float = 1e-2
+    ScaleFlag: int = 2
 
 
 class Solver(Subscriptable):
