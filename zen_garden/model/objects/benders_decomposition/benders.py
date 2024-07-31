@@ -731,8 +731,8 @@ class BendersDecomposition:
         for subproblem in self.subproblem_models:
             if "mock_objective_subproblem" in subproblem.model.variables:
                 subproblem.model.variables.remove("mock_objective_subproblem")
-
-        self.master_model.model.constraints.remove("constraint_for_binaries")
+        if "constraint_for_binaries" in self.master_model.model.constraints:
+            self.master_model.model.constraints.remove("constraint_for_binaries")
 
     def save_master_and_subproblems(self):
         """
