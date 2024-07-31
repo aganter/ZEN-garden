@@ -123,8 +123,9 @@ class System(Subscriptable):
 
 class SolverOptions(Subscriptable):
     InfUnbdInfo: int = 1
-    NumericFocus: int = 1
+    NumericFocus: int = 2
     FeasibilityTol: float = 1e-4
+    ScaleFlag: int = 1
 
 
 class Solver(Subscriptable):
@@ -201,8 +202,8 @@ class BendersDecomposition(Subscriptable):
         "run_default_scenario": True,
     }
     use_monolithic_solution: bool = False
-    absolute_optimality_gap: int = 1e-3
-    max_number_of_iterations: int = 1e6
+    absolute_optimality_gap: int = 1e-2
+    max_number_of_iterations: int = 1e8
 
 
 class ModelingToGenerateAlternatives(Subscriptable):

@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 import warnings
 import pandas as pd
+import numpy as np
 import psutil
 from tabulate import tabulate
 from gurobipy import GRB
@@ -135,6 +136,7 @@ class BendersDecomposition:
         self.subproblems_gurobi = []
         self.rhs_subproblmes = []
         self.lhs_subproblems_design = []
+        self.name_forcing_cuts = []
 
         # Define lower and upper bounds of the objective
         self.lower_bound = None
@@ -292,6 +294,11 @@ class BendersDecomposition:
         self.config.benders.solver_master["warmstart_fn"] = warm_start
 
         self.master_model.solve()
+
+        if self.name_forcing_cuts:
+            for name in self.name_forcing_cuts:
+                self.master_model.model.constraints.remove(name)
+                self.name_forcing_cuts.remove(name)
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value
             new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
@@ -373,6 +380,9 @@ class BendersDecomposition:
             for subproblem in self.subproblem_models:
                 if variable_name in subproblem.model.variables:
                     variable_solution = master_solution[variable_name]
+                    variable_solution = variable_solution.where(
+                        (variable_solution > 1e-4) | np.isnan(variable_solution), 0
+                    )
                     subproblem.model.variables[variable_name].lower = variable_solution
                     subproblem.model.variables[variable_name].upper = variable_solution
 
@@ -405,7 +415,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.FarkasDual),
             )
-            if multiplier != 0
+            if abs(multiplier) > 1e-8
         ]
 
         # Initialize feasibility cut components
@@ -427,7 +437,8 @@ class BendersDecomposition:
                 if subproblem_var_name in self.master_model.model.variables:
                     master_variable = self.master_model.model.variables[subproblem_var_name].sel(subproblem_var_coords)
                     feasibility_cut_lhs += farkas * (master_variable * coeff)
-
+        if feasibility_cut_rhs == -0.0:
+            feasibility_cut_rhs = +0.0
         end_time = time.time()
         construction_time = end_time - starting_time
         new_row = pd.DataFrame(
@@ -526,21 +537,23 @@ class BendersDecomposition:
                     master_variables_in_redundant_feasibility_cuts += last_feasibility_cut_lhs.vars.data.tolist()
 
         master_variables_in_redundant_feasibility_cuts = list(set(master_variables_in_redundant_feasibility_cuts))
+        counter = 1
         for var in master_variables_in_redundant_feasibility_cuts:
-            counter = 1
             name = self.master_model.model.variables.get_label_position(var)[0]
             coords = self.master_model.model.variables.get_label_position(var)[1]
             solution = self.master_model.model.solution[name].sel(coords)
             if (
                 abs(solution) <= self.master_model.model.variables[name].sel(coords).lower + 1e-3
-                or solution <= self.master_model.model.variables[name].sel(coords).upper
+                or solution <= self.master_model.model.variables[name].sel(coords).lower
             ):
+                name_cut = f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}"
                 self.master_model.model.add_constraints(
                     lhs=self.master_model.model.variables[name].sel(coords),
-                    sign=">=",
-                    rhs=self.master_model.model.variables[name].sel(coords).lower + 1e-3,
-                    name=f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}",
+                    sign="=",
+                    rhs=self.master_model.model.variables[name].sel(coords).lower,
+                    name=name_cut,
                 )
+                self.name_forcing_cuts.append(name_cut)
                 oscillatory_behavior = True
                 # Save the cut in the constraints_added dataframe
                 new_row = pd.DataFrame(
@@ -570,7 +583,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.Pi),
             )
-            if multiplier != 0
+            if abs(multiplier) > 1e-8
         ]
 
         # Initialize optimality cut components
@@ -694,12 +707,13 @@ class BendersDecomposition:
 
         # Log the table if lower bound is not zero
         if self.lower_bound != 0:
-            logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".4f"))
+            logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
         return termination_criteria
 
     def remove_mock_variables(self):
         """
         Remove the mock variables from the subproblems or the theta variable from the master problem if they exist.
+        Moreover, remove the constraint_for_binaries from the master problem.
         This is done in order to retrieve the same problem configuration as before than the scaling process.
         Consequently, the user is able to save the solution of the problem in the output folder.
         """
@@ -708,6 +722,8 @@ class BendersDecomposition:
         for subproblem in self.subproblem_models:
             if "mock_objective_subproblem" in subproblem.model.variables:
                 subproblem.model.variables.remove("mock_objective_subproblem")
+
+        self.master_model.model.constraints.remove("constraint_for_binaries")
 
     def save_master_and_subproblems(self):
         """
@@ -758,6 +774,10 @@ class BendersDecomposition:
         )
         self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
         self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
+        self.constraints_construction_time.to_csv(
+            os.path.join(self.benders_output_folder, "constraints_construction_time.csv")
+        )
+        self.constraints_addition_time.to_csv(os.path.join(self.benders_output_folder, "constraints_addition_time.csv"))
 
     def fit(self):
         """
@@ -781,6 +801,34 @@ class BendersDecomposition:
                 self.solve_master_model_with_monolithic_solution(iteration)
             else:
                 self.solve_master_model(iteration)
+            if self.master_model.model.termination_condition != "optimal":
+                logging.info("--- Master problem is infeasible ---")
+                self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
+                self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
+                self.optimality_gap_df_infeasibility.to_csv(
+                    os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
+                )
+                self.optimality_gap_df_optimal.to_csv(
+                    os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv")
+                )
+                self.cuts_counter_df = pd.DataFrame(
+                    {
+                        "number_of_monolithic_constraints": [self.monolithic_model.model.constraints.ncons],
+                        "number_of_feasibility_cuts": [self.feasibility_cuts_counter],
+                        "number_of_optimality_cuts": [self.optimality_cuts_counter],
+                    }
+                )
+                self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
+                self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
+                self.constraints_construction_time.to_csv(
+                    os.path.join(self.benders_output_folder, "constraints_construction_time.csv")
+                )
+                self.constraints_addition_time.to_csv(
+                    os.path.join(self.benders_output_folder, "constraints_addition_time.csv")
+                )
+                continue_iterations = False
+                break
+
             self.fix_design_variables_in_subproblem_model()
 
             self.solve_subproblems_models(iteration)
@@ -830,5 +878,11 @@ class BendersDecomposition:
                 )
                 self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
                 self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
+                self.constraints_construction_time.to_csv(
+                    os.path.join(self.benders_output_folder, "constraints_construction_time.csv")
+                )
+                self.constraints_addition_time.to_csv(
+                    os.path.join(self.benders_output_folder, "constraints_addition_time.csv")
+                )
 
             iteration += 1

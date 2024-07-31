@@ -71,6 +71,7 @@ class MasterProblem(OptimizationSetup):
         self.config = config
         self.config_benders = config_benders
         self.solver = solver
+        self.solver.solver_options["ScaleFlag"] = 2
         self.analysis = analysis
 
         self.monolithic_model = monolithic_model
@@ -88,6 +89,8 @@ class MasterProblem(OptimizationSetup):
 
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
+
+        self.add_dummy_constraint_for_binaries()
 
     def theta_objective_master(self):
         """
@@ -151,3 +154,15 @@ class MasterProblem(OptimizationSetup):
         logging.info("--- Removing operational variables from the master problem ---")
         for operational_variable in self.operational_variables:
             self.model.variables.remove(operational_variable)
+
+    def add_dummy_constraint_for_binaries(self):
+        """
+        Add a constraint not binding for the binaries to ensure the model recognize them in the optimization.
+        """
+        if hasattr(self.model.variables, "technology_installation"):
+            binaries = self.model.variables.technology_installation
+            number_of_technologies = (
+                self.model.variables.binaries.nvars + 1
+            )  # Add one to avoid the constraint to be binding
+            constraint = binaries.sum() <= number_of_technologies
+            self.constraints.add_constraint("constraint_for_binaries", constraint)

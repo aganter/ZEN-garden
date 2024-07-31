@@ -735,6 +735,9 @@ class Technology(Element):
         # it is possible to get the dual values of the constraints.
         mask = cls._technology_installation_mask(optimization_setup)
         if mask.any():
+            binary = True
+            if optimization_setup.building_subproblem:
+                binary = False
             variables.add_variable(
                 model,
                 name="technology_installation",
@@ -742,7 +745,7 @@ class Technology(Element):
                     ["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"],
                     optimization_setup,
                 ),
-                binary=True,
+                binary=binary,
                 doc="installment of a technology at location l and time t",
                 mask=mask,
                 unit_category=None,

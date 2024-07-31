@@ -82,6 +82,8 @@ class OptimizationSetup(object):
         self.mga_weights = None
         self.mga_objective_coords: list = []
         self.cost_optimal_mga = 0
+        # Add this parameter for Benders Decomposition, to be able to relax the Subproblem and create a LP from it
+        self.building_subproblem = False
 
         # sorted list of class names
         element_classes = self.dict_element_classes.keys()

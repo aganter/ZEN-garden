@@ -80,6 +80,7 @@ class Subproblem(OptimizationSetup):
         self.mga_weights = self.monolithic_model.mga_weights
         self.mga_objective_coords = self.monolithic_model.mga_objective_coords
         self.cost_optimal_mga = self.monolithic_model.cost_optimal_mga
+        self.building_subproblem = True
 
         self.create_subproblem()
 
