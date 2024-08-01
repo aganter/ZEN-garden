@@ -84,7 +84,7 @@ class Subproblem(OptimizationSetup):
 
         self.create_subproblem()
 
-        self.folder_output = os.path.abspath(benders_output_folder + "/" + "subproblems" + "/" + scenario_name)
+        self.folder_output = os.path.abspath(benders_output_folder + "/" + "subproblems")
         self.optimized_time_steps = [0]
 
     def create_subproblem(self):

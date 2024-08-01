@@ -413,7 +413,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.FarkasDual),
             )
-            if abs(multiplier) > 1e-6
+            if abs(multiplier) > 1e-4
         ]
 
         # Initialize feasibility cut components
@@ -542,7 +542,7 @@ class BendersDecomposition:
             solution = self.master_model.model.solution[name].sel(coords)
             monolithic_solution = self.monolithic_model.model.solution[name].sel(coords)
             if (
-                abs(solution) <= self.master_model.model.variables[name].sel(coords).upper + 1e-6
+                abs(solution) <= self.master_model.model.variables[name].sel(coords).lower + 1e-6
                 or solution <= self.master_model.model.variables[name].sel(coords).lower
             ) and (solution != 0):
                 name_cut = f"forcing_cut_{name}_{counter}_iteration_{feasibility_iteration}"
@@ -592,7 +592,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.Pi),
             )
-            if abs(multiplier) > 1e-6
+            if abs(multiplier) > 1e-4
         ]
 
         # Initialize optimality cut components
