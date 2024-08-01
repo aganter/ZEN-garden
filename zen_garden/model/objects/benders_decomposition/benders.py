@@ -114,6 +114,9 @@ class BendersDecomposition:
         self.building_subproblem = pd.DataFrame(columns=columns)
         columns = ["subproblem", "iteration", "solve_time_sec", "solve_memory_MB"]
         self.solving_subproblem = pd.DataFrame(columns=columns)
+        # Dataframe to store information about solving time master
+        columns = ["iteration", "solve_time_sec", "solve_memory_MB"]
+        self.solving_master = pd.DataFrame(columns=columns)
         # DataFrame to store information about the building and solving of the master problem
         columns = ["iteration", "optimality_gap"]
         self.optimality_gap_df_infeasibility = pd.DataFrame(columns=columns)
@@ -291,12 +294,20 @@ class BendersDecomposition:
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
+        starting_time = time.time()
         self.master_model.solve()
 
         if self.name_forcing_cuts:
             for cut in self.name_forcing_cuts:
                 self.master_model.model.constraints.remove(cut)
             self.name_forcing_cuts.clear()
+
+        solve_time = time.time() - starting_time
+        solve_memory = psutil.Process(os.getpid()).memory_info().rss / 1024**2
+        new_row = pd.DataFrame(
+            {"iteration": [iteration], "solve_time_sec": [solve_time], "solve_memory_MB": [solve_memory]}
+        )
+        self.solving_master = pd.concat([self.solving_master, new_row], ignore_index=True)
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value
             new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
@@ -770,6 +781,7 @@ class BendersDecomposition:
 
         self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
         self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
+        self.solving_master.to_csv(os.path.join(self.benders_output_folder, "solving_master.csv"))
         self.optimality_gap_df_infeasibility.to_csv(
             os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
         )
@@ -815,6 +827,7 @@ class BendersDecomposition:
                 logging.info("--- Master problem is infeasible ---")
                 self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
                 self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
+                self.solving_master.to_csv(os.path.join(self.benders_output_folder, "solving_master.csv"))
                 self.optimality_gap_df_infeasibility.to_csv(
                     os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
                 )
@@ -882,6 +895,7 @@ class BendersDecomposition:
                 logging.info("--- Saving possible results ---")
                 self.building_subproblem.to_csv(os.path.join(self.benders_output_folder, "building_subproblem.csv"))
                 self.solving_subproblem.to_csv(os.path.join(self.benders_output_folder, "solving_subproblem.csv"))
+                self.solving_master.to_csv(os.path.join(self.benders_output_folder, "solving_master.csv"))
                 self.optimality_gap_df_infeasibility.to_csv(
                     os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
                 )
