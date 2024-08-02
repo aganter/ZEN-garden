@@ -349,7 +349,7 @@ class StorageTechnologyRules(GenericRule):
         capacity_addition = self.variables["capacity_addition"].rename({"set_technologies": "set_storage_technologies"})
         capacity_addition_power = capacity_addition.sel({"set_storage_technologies":techs,"set_capacity_types": "power"})
         capacity_addition_energy = capacity_addition.sel({"set_storage_technologies":techs,"set_capacity_types": "energy"})
-        lhs = (capacity_addition_energy * e2p - capacity_addition_power).where(mask)
+        lhs = (capacity_addition_energy - capacity_addition_power * e2p ).where(mask)
         rhs = 0
         constraints = lhs == rhs
 
