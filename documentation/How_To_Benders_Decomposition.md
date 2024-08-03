@@ -226,7 +226,7 @@ This class handles all the necessary parameters to set up the Benders Decomposit
 - The parameter `use_monolithic_solution` should be set to True if the user wants to exploit the solution of the monolithic problem as starting point of the Benders Decomposition.
 - The parameter `run_default_scenario` should be set to True if the user wants to consider as one of the subproblems also the default scenario.
 
-**TO NOTE:** The `config` is still a `.py` script, functionalities to generate automatically the input and folder paths are not yet present for this method
+**TO NOTE:** The `config` is still a `.py` script. Functionalities to generate automatically the input and folder paths are not yet present for this method.
 
 #### Benders Decompsotion Folder
 The `benders_decomposition` folder looks like:

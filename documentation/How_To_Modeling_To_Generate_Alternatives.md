@@ -146,7 +146,7 @@ This class handles all the necessary parameters to set up the MGA algorithm. In 
 - It is fundamental that `mga.analysis['folder_output']` has the same init as `config.analysis['folder_output']`.
 - The parameter `cost_slack_variables` defines the allowed percentage of cost deviation.
 
-**TO NOTE:** The `config` is still a `.py` script, functionalities to generate automatically the input and folder paths are not yet present for this method
+**TO NOTE:** The `config` is still a `.py` script. Functionalities to generate automatically the input and folder paths are not yet present for this method.
 
 #### MGA Folder
 The `modeling_to_generate_alternatives` folder looks like:
