@@ -195,10 +195,11 @@ class BendersDecomposition(Subscriptable):
     """
     Class defining the Benders Decomposition method.
     """
-
     benders_decomposition: bool = False
     analysis: Analysis = Analysis()
     system: System = System()
+    solver_master: Solver = Solver()
+    solver_subproblem: Solver = Solver()
     input_path: Path = Path("data/")
     scenarios: dict[str, Any] = {"": {}}
     immutable_system_elements: dict = {
@@ -206,8 +207,8 @@ class BendersDecomposition(Subscriptable):
         "run_default_scenario": True,
     }
     use_monolithic_solution: bool = False
-    absolute_optimality_gap: int = 1e-3
-    max_number_of_iterations: int = 1e6
+    absolute_optimality_gap: int = 1e-2
+    max_number_of_iterations: int = 1e8
 ```
 
 This class handles all the necessary parameters to set up the Benders Decomposition algorithm. In particular, in the `config.py`, the user needs to set:
@@ -220,8 +221,12 @@ This class handles all the necessary parameters to set up the Benders Decomposit
 
 
 - The parameter `benders_decomposition` should be set to True to activate the Benders Decomposition method.
+- It is really recommended to set the parameters `FeasibilityTol` as indicated in the picture.
+- It is necessary to set the paramenter `InfUnbdInfo` to 1 for the `solver_subproblem.solver_options` to run Benders Decomposition.
 - The parameter `use_monolithic_solution` should be set to True if the user wants to exploit the solution of the monolithic problem as starting point of the Benders Decomposition.
 - The parameter `run_default_scenario` should be set to True if the user wants to consider as one of the subproblems also the default scenario.
+
+**TO NOTE:** The `config` is still a `.py` script, functionalities to generate automatically the input and folder paths are not yet present for this method
 
 #### Benders Decompsotion Folder
 The `benders_decomposition` folder looks like:
@@ -287,21 +292,21 @@ The following tables explain the default setting for the separation of design an
 | constraint_nodal_energy_balance                      | operational     |
 | constraint_carrier_flow_import_supernodes            | operational     |
 | constraint_technology_capacity_limit_not_reached     | design          |
-| constraint_technology_capacity_limit_reached         | design          |
-| constraint_technology_min_capacity_addition          | design          |
-| constraint_technology_max_capacity_addition          | design          |
-| constraint_technology_construction_time              | design          |
-| constraint_technology_construction_time_outside      | design          |
-| constraint_technology_lifetime                       | design          |
-| constraint_technology_lifetime_previous              | design          |
+| constraint_technology_capacity_limit_reached         | operational     |
+| constraint_technology_min_capacity_addition          | operational     |
+| constraint_technology_max_capacity_addition          | operational     |
+| constraint_technology_construction_time              | operational     |
+| constraint_technology_construction_time_outside      | operational     |
+| constraint_technology_lifetime                       | operational     |
+| constraint_technology_lifetime_previous              | operational     |
 | constraint_capex_yearly                              | operational     |
 | constraint_cost_capex_total                          | operational     |
 | constraint_opex_yearly                               | operational     |
 | constraint_cost_opex_total                           | operational     |
 | constraint_carbon_emissions_technology_total         | operational     |
 | constraint_technologies_capacity_supernodes          | design          |
-| constraint_technology_diffusion_limit                | design          |
-| constraint_technology_diffusion_limit_total          | design          |
+| constraint_technology_diffusion_limit                | operational     |
+| constraint_technology_diffusion_limit_total          | operational     |
 | constraint_capacity_factor_conversion                | operational     |
 | constraint_opex_technology_conversion                | operational     |
 | constraint_carbon_emissions_technology_conversion    | operational     |
@@ -320,7 +325,7 @@ The following tables explain the default setting for the separation of design an
 | constraint_carbon_emissions_technology_storage       | operational     |
 | constraint_storage_level_max                         | operational     |
 | constraint_couple_storage_level                      | operational     |
-| constraint_capacity_energy_to_power_ratio            | design          |
+| constraint_capacity_energy_to_power_ratio            | operational     |
 | constraint_storage_technology_capex                  | operational     |
 | constraint_optimal_cost_total_deviation              | operational     |
 
@@ -330,12 +335,9 @@ The following tables explain the default setting for the separation of design an
 
 | Variable Name              | Variable Type |
 |----------------------------|---------------|
-| capacity_previous          | design        |
-| capacity_investment        | design        |
 | capacity_supernodes        | design        |
 | technology_installation    | design        |
 | capacity                   | design        |
-| capacity_addition          | design        |
 
 ##### Operational Variables
 
@@ -363,6 +365,9 @@ The following tables explain the default setting for the separation of design an
 | cost_opex                                 | operational     |
 | cost_opex_total                           | operational     |
 | opex_yearly                               | operational     |
+| capacity_previous                         | operational     |
+| capacity_investment                       | operational     |
+| capacity_addition                         | operational     |
 | carbon_emissions_technology               | operational     |
 | carbon_emissions_technology_total         | operational     |
 | flow_conversion_input                     | operational     |
@@ -377,9 +382,8 @@ The following tables explain the default setting for the separation of design an
 
 ### Non-Coupling Variables
 
+These are variables that are needed for the problem, e.g. in the MGA objective function but are present only in the Master Problem and do not have influence in the Subproblem
+
 | Variable Name           | Variable Type |
 |-------------------------|---------------|
-| capacity_previous       | design        |
-| capacity_investment     | design        |
 | capacity_supernodes     | design        |
-| technology_installation | design        |
