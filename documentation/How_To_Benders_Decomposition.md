@@ -216,7 +216,7 @@ This class handles all the necessary parameters to set up the Benders Decomposit
 ```benders = config.benders```
 
   <p align="center">
-    <img src="https://github.com/aganter/ZEN-garden/blob/4594ea136a94092836be40d276079acf0668d209/documentation/images/Config_File_Benders.png" alt="Config File Benders" width="800" />
+    <img src="https://github.com/aganter/ZEN-garden/blob/99c8b778a1baa4fe851209c18b4a164dbf449a77/documentation/images/Config_File_Benders.png" alt="Config File Benders" width="800" />
 </p>
 
 
