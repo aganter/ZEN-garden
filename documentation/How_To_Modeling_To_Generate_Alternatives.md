@@ -226,5 +226,5 @@ N.B.: In order to be able to perform the supernodes aggregation, the file `set_n
     <img src="https://github.com/ZEN-universe/ZEN-garden/blob/92d1848062337784c31f9711135cb9c49bf71b4f/documentation/images/supernodes.png" width="400" />
 </p>
 <p align="center">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/speredgeds.png" width="400" />
+    <img src="https://github.com/aganter/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/superedgeds.png" width="400" />
 </p>
