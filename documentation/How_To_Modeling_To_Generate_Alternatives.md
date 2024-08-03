@@ -152,7 +152,7 @@ This class handles all the necessary parameters to set up the MGA algorithm. In 
 The `modeling_to_generate_alternatives` folder looks like:
 
 <p align="center">
-    <img src="https://github.com/ZEN-universe/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/MGA_Folder.png" width="600" />
+    <img src="https://github.com/aganter/ZEN-garden/blob/00868c8d9af77b3422554fd2353efe2459ec87aa/documentation/images/MGA_Folder.png" width="600" />
 </p>
 
 The `1_carbon_storage.json` file is the dictionary where we set the parameters for the new objective function, specifically:
