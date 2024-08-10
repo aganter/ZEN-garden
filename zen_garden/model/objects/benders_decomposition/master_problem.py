@@ -91,6 +91,7 @@ class MasterProblem(OptimizationSetup):
         self.optimized_time_steps = [0]
 
         self.add_dummy_constraint_for_binaries()
+        self.add_upper_bounds_to_capacity()
 
     def theta_objective_master(self):
         """
@@ -166,3 +167,11 @@ class MasterProblem(OptimizationSetup):
             )  # Add one to avoid the constraint to be binding
             constraint = binaries.sum() <= number_of_technologies
             self.constraints.add_constraint("constraint_for_binaries", constraint)
+
+    def add_upper_bounds_to_capacity(self):
+        """
+        Add upper bounds to the capacity variables to avoid unbounded solutions.
+        """
+        if self.analysis["objective"] == "mga":
+            if hasattr(self.model.variables, "capacity"):
+                self.model.variables.capacity.upper = self.monolithic_model.model.solution.capacity * 1.3

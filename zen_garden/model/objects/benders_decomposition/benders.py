@@ -427,7 +427,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.FarkasDual),
             )
-            if abs(multiplier) > 1e-4
+            if abs(multiplier) > 0
         ]
 
         # Initialize feasibility cut components
@@ -449,8 +449,6 @@ class BendersDecomposition:
                 if subproblem_var_name in self.master_model.model.variables:
                     master_variable = self.master_model.model.variables[subproblem_var_name].sel(subproblem_var_coords)
                     feasibility_cut_lhs += farkas * (master_variable * coeff)
-        if feasibility_cut_rhs == -0.0:
-            feasibility_cut_rhs = +0.0
         end_time = time.time()
         construction_time = end_time - starting_time
         new_row = pd.DataFrame(
@@ -612,7 +610,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.Pi),
             )
-            if abs(multiplier) > 1e-4
+            if abs(multiplier) > 1e-2
         ]
 
         # Initialize optimality cut components
