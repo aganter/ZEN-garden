@@ -174,4 +174,4 @@ class MasterProblem(OptimizationSetup):
         """
         if self.analysis["objective"] == "mga":
             if hasattr(self.model.variables, "capacity"):
-                self.model.variables.capacity.upper = self.monolithic_model.model.solution.capacity * 1.3
+                self.model.variables.capacity.upper = self.monolithic_model.model.solution.capacity * 3

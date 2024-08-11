@@ -165,10 +165,10 @@ class BendersDecomposition:
             benders_output_folder=self.benders_output_folder,
         )
 
-        logging.info("")
-        logging.info("--- Creating the subproblems ---")
         self.subproblem_models = []
         for scenario, scenario_dict in zip(scenarios, elements):
+            logging.info("")
+            logging.info("--- Creating the subproblem %s ---", scenario)
             start_time = time.time()
             pid = os.getpid()
             subproblem = Subproblem(
@@ -365,6 +365,7 @@ class BendersDecomposition:
             env.start()
             self.config.benders.solver_subproblem.solver_options["env"] = env
             subproblem.solve()
+            logging.info("Subproblem %s is %s", subproblem.scenario_name, subproblem.model.termination_condition)
 
             solve_time = time.time() - start_time
             solve_memory = psutil.Process(pid).memory_info().rss / 1024**2
