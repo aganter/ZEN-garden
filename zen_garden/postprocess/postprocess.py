@@ -378,6 +378,8 @@ class Postprocess:
             fname = self.name_dir.parent.joinpath("solver")
         else:
             fname = self.name_dir.joinpath("solver")
+        if "env" in self.solver.solver_options.__dict__:
+            del self.solver.solver_options.__dict__["env"]
         self.write_file(fname, self.solver, format="json")
 
     def save_param_map(self):

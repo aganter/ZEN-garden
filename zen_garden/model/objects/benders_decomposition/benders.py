@@ -23,7 +23,7 @@ import pandas as pd
 import numpy as np
 import psutil
 from tabulate import tabulate
-from gurobipy import GRB
+from gurobipy import GRB, Env
 
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
@@ -359,7 +359,11 @@ class BendersDecomposition:
         for subproblem in self.subproblem_models:
             start_time = time.time()
             pid = os.getpid()
-
+            env = Env(empty=True)
+            env.setParam("OutputFlag", 0)
+            env.setParam("LogToConsole", 0)
+            env.start()
+            self.config.benders.solver_subproblem.solver_options["env"] = env
             subproblem.solve()
 
             solve_time = time.time() - start_time
