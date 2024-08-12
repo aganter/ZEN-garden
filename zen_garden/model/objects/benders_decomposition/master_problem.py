@@ -88,7 +88,7 @@ class MasterProblem(OptimizationSetup):
         self.only_feasibility_checks = False
 
         self.create_master_problem()
-        if self.config["run_monolithic_optimization"]:
+        if self.config["run_monolithic_optimization"] and self.config_benders["use_valid_inequalities"]:
             if "constraint_capacity_factor_conversion" in self.model.constraints:
                 self.valid_inequalities_conversion_technology()
             if "constraint_capacity_factor_transport" in self.model.constraints:
