@@ -189,11 +189,12 @@ class MasterProblem(OptimizationSetup):
         if self.config["run_monolithic_optimization"]:
             if hasattr(self.model.variables, "capacity"):
                 self.model.variables.capacity.upper = (
-                    self.monolithic_model.model.solution.capacity * self.config_benders["upper_bound_capacity"]
+                    self.monolithic_model.model.solution.capacity
+                    * self.config_benders["upper_bound_capacity_multiplier"]
                 )
         else:
             if hasattr(self.model.variables, "capacity"):
-                self.model.variables.capacity.upper = 1e6
+                self.model.variables.capacity.upper = self.config_benders["upper_bound_capacity_maximum"]
 
     def valid_inequalities_conversion_technology(self):
         """
