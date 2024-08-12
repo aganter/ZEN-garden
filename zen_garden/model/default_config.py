@@ -122,11 +122,11 @@ class System(Subscriptable):
 
 
 class SolverOptions(Subscriptable):
+    Method: int = 1
     env: object = None
     InfUnbdInfo: int = 1
-    NumericFocus: int = 3
     FeasibilityTol: float = 1e-6
-    ScaleFlag: int = 2
+    ScaleFlag: int = -1
 
 
 class Solver(Subscriptable):
