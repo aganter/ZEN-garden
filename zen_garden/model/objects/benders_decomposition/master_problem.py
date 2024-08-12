@@ -186,9 +186,14 @@ class MasterProblem(OptimizationSetup):
         """
         Add upper bounds to the capacity variables to avoid unbounded solutions.
         """
-        if self.analysis["objective"] == "mga":
+        if self.config["run_monolithic_optimization"]:
             if hasattr(self.model.variables, "capacity"):
-                self.model.variables.capacity.upper = self.monolithic_model.model.solution.capacity * 1.5
+                self.model.variables.capacity.upper = (
+                    self.monolithic_model.model.solution.capacity * self.config_benders["upper_bound_capacity"]
+                )
+        else:
+            if hasattr(self.model.variables, "capacity"):
+                self.model.variables.capacity.upper = 1e6
 
     def valid_inequalities_conversion_technology(self):
         """

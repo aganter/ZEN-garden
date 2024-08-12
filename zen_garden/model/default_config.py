@@ -205,6 +205,7 @@ class BendersDecomposition(Subscriptable):
     use_monolithic_solution: bool = False
     absolute_optimality_gap: int = 1e-2
     max_number_of_iterations: int = 1e8
+    upper_bound_capacity_multiplier: float = 3.0
 
 
 class ModelingToGenerateAlternatives(Subscriptable):
