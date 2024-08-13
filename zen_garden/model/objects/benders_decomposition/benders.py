@@ -760,7 +760,7 @@ class BendersDecomposition:
                             upper_bound = self.master_model.model.variables.capacity.upper
                         self.master_model.model.variables.capacity.upper = upper_bound * increment
                         self.solve_master_model(iteration)
-                        increment += 0.1
+                        increment += 0.2
                         if increment > 1e4:
                             self.master_model.model.print_infeasibilities()
                             self.optimality_gap_df_infeasibility.to_csv(
