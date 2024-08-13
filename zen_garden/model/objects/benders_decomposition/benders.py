@@ -16,6 +16,7 @@
 
 import logging
 import os
+import json
 from pathlib import Path
 import warnings
 import pandas as pd
@@ -23,6 +24,9 @@ import numpy as np
 import shutil
 from tabulate import tabulate
 from gurobipy import GRB, Env
+import cProfile
+import pstats
+import io
 
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
@@ -752,6 +756,11 @@ class BendersDecomposition:
                 self.solve_master_model(iteration)
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
+                print(self.master_model.model.compute_infeasibilities())
+                self.master_model.model.print_infeasibilities()
+                self.master_model.model.to_gurobipy().write("master_problem.lp")
+                with open("map_variables_monolithic_gurobi.json", "w", encoding="utf-8") as f:
+                    json.dump(self.map_variables_monolithic_gurobi, f)
                 self.optimality_gap_df_infeasibility.to_csv(
                     os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
                 )
@@ -775,6 +784,8 @@ class BendersDecomposition:
 
             # Check terminatio condition of the subproblems
             if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
+                pr = cProfile.Profile()
+                pr.enable()
                 logging.info("--- Subproblems are infeasible ---")
                 feasibility_cuts = self.define_list_of_feasibility_cuts()
                 oscillatory_behavior = self.check_feasibility_cut_effectiveness(
@@ -783,6 +794,12 @@ class BendersDecomposition:
                 if not oscillatory_behavior:
                     self.add_feasibility_cuts_to_master(feasibility_cuts, feasibility_iteration, iteration)
                 feasibility_iteration += 1
+                pr.disable()
+                s = io.StringIO()
+                sortby = "cumulative"
+                ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+                ps.print_stats()
+                print(s.getvalue())
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- All the subproblems are optimal ---")
