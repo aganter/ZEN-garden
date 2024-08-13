@@ -14,6 +14,7 @@
 
 import logging
 import os
+import time
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 
@@ -32,6 +33,7 @@ class Subproblem(OptimizationSetup):
         solver: dict,
         analysis: dict,
         monolithic_model: OptimizationSetup,
+        master_model: OptimizationSetup,
         model_name: str,
         scenario_name: str,
         scenario_dict: dict,
@@ -73,6 +75,7 @@ class Subproblem(OptimizationSetup):
         self.analysis = analysis
 
         self.monolithic_model = monolithic_model
+        self.master_model = master_model
         self.design_constraints = design_constraints
         self.not_coupling_variables = not_coupling_variables
 
@@ -86,6 +89,10 @@ class Subproblem(OptimizationSetup):
 
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "subproblems")
         self.optimized_time_steps = [0]
+
+        self.rhs_cuts = None
+        self.lhs_cuts = None
+        self.define_lhs_rhs_for_cuts()
 
     def create_subproblem(self):
         """
@@ -145,3 +152,38 @@ class Subproblem(OptimizationSetup):
         logging.info("--- Removing not coupling design variables from the subproblem ---")
         for not_coupling_variable in self.not_coupling_variables:
             self.model.variables.remove(not_coupling_variable)
+
+    def get_linopy_variable(self, row):
+        """
+        Helper function to get the corresponding Linopy variable of a constraint.
+        """
+        label_position = self.master_model.model.variables.get_label_position(row["labels"])
+        return self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1])
+
+    def define_lhs_rhs_for_cuts(self):
+        """
+        Define the left-hand side and right-hand side of the constraints for the Benders cuts.
+        These are shared between the feasibility and optimality cuts and remain always the same. What changes are the
+        multipliers of the cuts.
+        """
+        logging.info("--- Defining the right-hand side of the constraints for the Benders cuts ---")
+        start_time = time.time()
+        constraints = self.model.constraints.flat
+        constraints.rename(columns={"labels": "labels_con", "vars": "labels"}, inplace=True)
+
+        # Define the right-hand side of the constraints for the Benders cuts
+        self.rhs_cuts = constraints[["labels_con", "rhs"]].drop_duplicates(subset="labels_con", keep="first")
+        end_time = time.time()
+        logging.info(f"--- Done in {end_time - start_time:.2f} seconds ---")
+
+        logging.info("--- Defining the left-hand side of the constraints for the Benders cuts ---")
+        start_time = time.time()
+        # Define the left-hand side of the constraints for the Benders cuts, including only the variables that are
+        # shared between the master and subproblems, so the design variables
+        shared_labels = self.master_model.model.variables.flat[["labels"]]
+        self.lhs_cuts = constraints.merge(shared_labels, on="labels")
+
+        # Adding also the corresponding master variable of the Linopy model
+        self.lhs_cuts["master_variable"] = self.lhs_cuts.apply(self.get_linopy_variable, axis=1)
+        end_time = time.time()
+        logging.info(f"--- Done in {end_time - start_time:.2f} seconds ---")
