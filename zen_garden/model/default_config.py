@@ -89,6 +89,7 @@ class System(Subscriptable):
     set_conversion_technologies: list[str] = []
     set_storage_technologies: list[str] = []
     set_retrofitting_technologies: list[str] = []
+    set_exclusive_retrofitting_technologies: dict[str, list[str]] = {}
     storage_periodicity: bool = True
     set_transport_technologies: list[str] = []
     set_transport_technologies_loss_exponential: list[str] = []

@@ -138,5 +138,16 @@ class RetrofittingTechnologyRules(GenericRule):
         lhs = term_flow_base - retrofit_flow_coupling * term_flow_retrofit
         rhs = 0
         constraints = lhs <= rhs
-
         self.constraints.add_constraint("retrofit_flow_coupling", constraints)
+
+        # only one CCS tech can be coupled
+        for base, techs in self.system["set_exclusive_retrofitting_technologies"].items():
+            mask = retrofit_base_technologies[retrofit_base_technologies.index.isin(techs)].unique()[0]
+            assert len(retrofit_base_technologies[retrofit_base_technologies.index.isin(techs)].unique())==1 and mask==base, "No retrofit base technology found in exclusive_installation"
+            term_flow_reference_retrofit = (flow_conversion_input.where(rc_in).loc[techs].sum("set_input_carriers") + flow_conversion_output.where(rc_out).loc[techs].sum("set_output_carriers"))
+            lhs = (term_flow_reference_retrofit / retrofit_flow_coupling.loc[techs]).sum("set_conversion_technologies") - term_flow_reference.loc[mask]
+            rhs = 0
+            constraints = lhs <= rhs
+            self.constraints.add_constraint(f"exclusive_retrofit_techs_{base}", constraints)
+
+
