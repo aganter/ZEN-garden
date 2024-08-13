@@ -745,15 +745,19 @@ class BendersDecomposition:
                 self.solve_master_model_with_monolithic_solution(iteration)
             else:
                 self.solve_master_model(iteration)
-            if self.master_model.model.termination_condition != "optimal":
+            while self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
                 if self.config.benders["augment_capacity_bounds"]:
                     logging.info("--- Augmenting capacity bounds ---")
-                    upper_bound = self.master_model.model.variables.capacity.upper.where(
-                        self.master_model.model.variables.capacity.upper != 0,
-                        other=self.master_model.model.variables.capacity.upper.mean(),
-                    )
+                    if increment == 1:
+                        upper_bound = self.master_model.model.variables.capacity.upper.where(
+                            self.master_model.model.variables.capacity.upper != 0,
+                            other=self.master_model.model.variables.capacity.upper.median(),
+                        )
+                    else:
+                        upper_bound = self.master_model.model.variables.capacity.upper
                     self.master_model.model.variables.capacity.upper = upper_bound * increment
+                    self.solve_master_model(iteration)
                     increment += 0.1
                     if increment > 2:
                         self.master_model.model.print_infeasibilities()
@@ -774,6 +778,8 @@ class BendersDecomposition:
                         self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
                         continue_iterations = False
                         break
+                else:
+                    break
             # Fix the design variables in the subproblems to the optimal solution of the master problem and solve them
             self.fix_design_variables_in_subproblem_model()
             self.solve_subproblems_models()
