@@ -441,7 +441,6 @@ class BendersDecomposition:
         :param feasibility_iteration: current feasibility_iteration of the Benders Decomposition method (type: int)
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
-        start_time_list = time.time()
         for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
             self.feasibility_cuts_counter += 1
             self.master_model.model.add_constraints(
@@ -458,9 +457,6 @@ class BendersDecomposition:
                 }
             )
             self.constraints_added = pd.concat([self.constraints_added, new_row], ignore_index=True)
-        end_time_list = time.time()
-        total_time_list = end_time_list - start_time_list
-        logging.info("Time to add the feasibility cuts: %s", total_time_list)
 
     def check_feasibility_cut_effectiveness(self, feasibility_iteration, current_feasibility_cuts, iteration):
         """
@@ -562,7 +558,7 @@ class BendersDecomposition:
         optimality_cut_lhs = lp.merge(linear_expression_list)
         end_time_cuts = time.time()
         total_time_cuts = end_time_cuts - start_time_cuts
-        logging.info("Time to generate the feasibility cut: %s", total_time_cuts)
+        logging.info("Time to generate the optimality cut: %s", total_time_cuts)
         return optimality_cut_lhs, optimality_cut_rhs
 
     def define_list_of_optimality_cuts(self) -> list:
@@ -576,7 +572,7 @@ class BendersDecomposition:
             - optimality_cut_lhs: left-hand side of the optimality cut
             - optimality_cut_rhs: right-hand side of the optimality cut
         """
-        logging.info("--- Generatings ---")
+        logging.info("--- Generatings optimality cuts ---")
         optimality_cuts = [
             (
                 subproblem.scenario_name if subproblem.scenario_name else "default",
@@ -774,7 +770,6 @@ class BendersDecomposition:
 
             # Check terminatio condition of the subproblems
             if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
-                start = time.time()
                 logging.info("--- Subproblems are infeasible ---")
                 feasibility_cuts = self.define_list_of_feasibility_cuts()
                 oscillatory_behavior = self.check_feasibility_cut_effectiveness(
@@ -783,9 +778,6 @@ class BendersDecomposition:
                 if not oscillatory_behavior:
                     self.add_feasibility_cuts_to_master(feasibility_cuts, feasibility_iteration, iteration)
                 feasibility_iteration += 1
-                end = time.time()
-                total_time = end - start
-                logging.info("--- Time to generate feasibility cuts: %s seconds ---", total_time)
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- All the subproblems are optimal ---")
