@@ -779,6 +779,7 @@ class BendersDecomposition:
                         continue_iterations = False
                         break
                 else:
+                    continue_iterations = False
                     break
             # Fix the design variables in the subproblems to the optimal solution of the master problem and solve them
             self.fix_design_variables_in_subproblem_model()
