@@ -187,6 +187,7 @@ class MasterProblem(OptimizationSetup):
         Add upper bounds to the capacity variables to avoid unbounded solutions.
         """
         if self.config["run_monolithic_optimization"]:
+            logging.info("Upper bound capacity multiplier: %s", self.config_benders["upper_bound_capacity_multiplier"])
             if hasattr(self.model.variables, "capacity"):
                 self.model.variables.capacity.upper = (
                     self.monolithic_model.model.solution.capacity

@@ -19,14 +19,12 @@ import os
 import json
 from pathlib import Path
 import warnings
+import time
+import shutil
 import pandas as pd
 import numpy as np
-import shutil
 from tabulate import tabulate
 from gurobipy import GRB, Env
-import cProfile
-import pstats
-import io
 
 from zen_garden.preprocess.extract_input_data import DataInput
 from zen_garden.model.optimization_setup import OptimizationSetup
@@ -380,6 +378,7 @@ class BendersDecomposition:
         :return: feasibility_cut_lhs: left-hand side of the feasibility cut (type: LinExpr)
         :return: feasibility_cut_rhs: right-hand side of the feasibility cut (type: float)
         """
+        start_time_cuts = time.time()
         # Get Farkas multipliers for constraints
         farkas_multipliers = [
             (constraint_name, multiplier)
@@ -409,6 +408,9 @@ class BendersDecomposition:
                 if subproblem_var_name in self.master_model.model.variables:
                     master_variable = self.master_model.model.variables[subproblem_var_name].sel(subproblem_var_coords)
                     feasibility_cut_lhs += farkas * (master_variable * coeff)
+        end_time_cuts = time.time()
+        total_time_cuts = end_time_cuts - start_time_cuts
+        logging.info("Time to generate the feasibility cut: %s", total_time_cuts)
         return feasibility_cut_lhs, feasibility_cut_rhs
 
     def define_list_of_feasibility_cuts(self) -> list:
@@ -422,6 +424,7 @@ class BendersDecomposition:
             - feasibility_cut_lhs: left-hand side of the feasibility cut
             - feasibility_cut_rhs: right-hand side of the feasibility cut
         """
+        start_time_list = time.time()
         logging.info("--- Generating feasibility cuts ---")
         infeasible_subproblems = [
             subproblem
@@ -436,6 +439,9 @@ class BendersDecomposition:
             )
             for subproblem in infeasible_subproblems
         ]
+        end_time_list = time.time()
+        total_time_list = end_time_list - start_time_list
+        logging.info("Time to generate the feasibility cuts: %s", total_time_list)
         return feasibility_cuts
 
     def add_feasibility_cuts_to_master(self, feasibility_cuts, feasibility_iteration, iteration):
@@ -784,8 +790,7 @@ class BendersDecomposition:
 
             # Check terminatio condition of the subproblems
             if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
-                pr = cProfile.Profile()
-                pr.enable()
+                start = time.time()
                 logging.info("--- Subproblems are infeasible ---")
                 feasibility_cuts = self.define_list_of_feasibility_cuts()
                 oscillatory_behavior = self.check_feasibility_cut_effectiveness(
@@ -794,12 +799,9 @@ class BendersDecomposition:
                 if not oscillatory_behavior:
                     self.add_feasibility_cuts_to_master(feasibility_cuts, feasibility_iteration, iteration)
                 feasibility_iteration += 1
-                pr.disable()
-                s = io.StringIO()
-                sortby = "cumulative"
-                ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-                ps.print_stats()
-                print(s.getvalue())
+                end = time.time()
+                total_time = end - start
+                logging.info("--- Time to generate feasibility cuts: %s seconds ---", total_time)
 
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- All the subproblems are optimal ---")
