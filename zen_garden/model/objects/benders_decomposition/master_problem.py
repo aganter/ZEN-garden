@@ -189,11 +189,7 @@ class MasterProblem(OptimizationSetup):
         if self.config["run_monolithic_optimization"]:
             logging.info("Upper bound capacity multiplier: %s", self.config_benders["upper_bound_capacity_multiplier"])
             if hasattr(self.model.variables, "capacity"):
-                upper_bound = self.monolithic_model.model.solution.capacity.where(
-                    self.monolithic_model.model.solution.capacity != 0,
-                    other=self.monolithic_model.model.solution.capacity.max() / 10,
-                )
-
+                upper_bound = self.monolithic_model.model.solution.capacity
                 self.model.variables.capacity.upper = (
                     upper_bound * self.config_benders["upper_bound_capacity_multiplier"]
                 )

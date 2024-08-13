@@ -733,6 +733,7 @@ class BendersDecomposition:
         optimality_iteration = 1
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
         continue_iterations = True
+        increment = 1
 
         # While loop to solve the master problem and the subproblems iteratively
         while continue_iterations and iteration <= max_number_of_iterations:
@@ -746,24 +747,33 @@ class BendersDecomposition:
                 self.solve_master_model(iteration)
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
-                self.master_model.model.print_infeasibilities()
-                self.optimality_gap_df_infeasibility.to_csv(
-                    os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
-                )
-                self.optimality_gap_df_optimal.to_csv(
-                    os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv")
-                )
-                self.cuts_counter_df = pd.DataFrame(
-                    {
-                        "number_of_monolithic_constraints": [self.monolithic_model.model.constraints.ncons],
-                        "number_of_feasibility_cuts": [self.feasibility_cuts_counter],
-                        "number_of_optimality_cuts": [self.optimality_cuts_counter],
-                    }
-                )
-                self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
-                self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
-                continue_iterations = False
-                break
+                if self.config.benders["augment_capacity_bounds"]:
+                    logging.info("--- Augmenting capacity bounds ---")
+                    upper_bound = self.master_model.model.variables.capacity.upper.where(
+                        self.master_model.model.variables.capacity.upper != 0,
+                        other=self.master_model.model.variables.capacity.upper.mean(),
+                    )
+                    self.master_model.model.variables.capacity.upper = upper_bound * increment
+                    increment += 0.1
+                    if increment > 2:
+                        self.master_model.model.print_infeasibilities()
+                        self.optimality_gap_df_infeasibility.to_csv(
+                            os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
+                        )
+                        self.optimality_gap_df_optimal.to_csv(
+                            os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv")
+                        )
+                        self.cuts_counter_df = pd.DataFrame(
+                            {
+                                "number_of_monolithic_constraints": [self.monolithic_model.model.constraints.ncons],
+                                "number_of_feasibility_cuts": [self.feasibility_cuts_counter],
+                                "number_of_optimality_cuts": [self.optimality_cuts_counter],
+                            }
+                        )
+                        self.cuts_counter_df.to_csv(os.path.join(self.benders_output_folder, "cuts_counter.csv"))
+                        self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
+                        continue_iterations = False
+                        break
             # Fix the design variables in the subproblems to the optimal solution of the master problem and solve them
             self.fix_design_variables_in_subproblem_model()
             self.solve_subproblems_models()
