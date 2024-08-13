@@ -754,7 +754,7 @@ class BendersDecomposition:
                         if increment == 1:
                             upper_bound = self.master_model.model.variables.capacity.upper.where(
                                 self.master_model.model.variables.capacity.upper != 0,
-                                other=self.master_model.model.variables.capacity.upper.median(),
+                                other=self.master_model.model.variables.capacity.upper.max(),
                             )
                         else:
                             upper_bound = self.master_model.model.variables.capacity.upper
