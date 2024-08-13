@@ -191,7 +191,7 @@ class MasterProblem(OptimizationSetup):
             if hasattr(self.model.variables, "capacity"):
                 upper_bound = self.monolithic_model.model.solution.capacity.where(
                     self.monolithic_model.model.solution.capacity != 0,
-                    other=self.monolithic_model.model.solution.capacity.max(),
+                    other=self.monolithic_model.model.solution.capacity.max()/2,
                 )
 
                 self.model.variables.capacity.upper = (
