@@ -373,40 +373,32 @@ class BendersDecomposition:
         Augment the capacity bounds of the master problem in case of infeasibility.
         """
         max_number_feasibility_iterations = self.config.benders["max_number_feasibility_iterations"]
-        logging.info("--- Augmenting capacity bounds ---")
-        if feasibility_master_iteration == 1:
-            logging.info("--- Augment Upper Bounds that are Zero ---")
-            # Select the upper bouds that are zero
-            zero_upper_bounds = self.master_model.model.variables.capacity.upper == 0
-            # Set the upper bounds to the maximum value
-            self.master_model.model.variables.capacity.upper = self.master_model.model.variables.capacity.upper.where(
-                ~zero_upper_bounds, self.master_model.model.variables.capacity.upper.max()
+        logging.info("--- Augment Upper Bounds that are Infeasible ---")
+        gurobi_master_model = self.solved_model_to_gurobi(self.master_model)
+        gurobi_master_model.computeIIS()
+        upper_bounds_iis = [
+            (int(variables.VarName[1:]))
+            for variables, iis in zip(gurobi_master_model.getVars(), gurobi_master_model.IISUB)
+            if iis != 0
+        ]
+        if not upper_bounds_iis:
+            logging.info("No upper bounds to augment")
+            return False
+        upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
+        invalid_upper_bounds = self.master_model.model.variables.flat.merge(upper_bounds_iis_df, on="labels")
+        for _, row in invalid_upper_bounds.iterrows():
+            label_position = self.master_model.model.variables.get_label_position(int(row["labels"]))
+            existing_bound = self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
+            if existing_bound == 0:
+                existing_bound = self.master_model.model.variables.capacity.upper.mean()
+            self.master_model.model.variables.capacity.upper.loc[
+                label_position[1]["set_technologies"],
+                label_position[1]["set_capacity_types"],
+                label_position[1]["set_location"],
+                label_position[1]["set_time_steps_yearly"],
+            ] = (
+                existing_bound * 1.2
             )
-        else:
-            logging.info("--- Augment Upper Bounds that are Infeasible ---")
-            gurobi_master_model = self.solved_model_to_gurobi(self.master_model)
-            gurobi_master_model.computeIIS()
-            upper_bounds_iis = [
-                (int(variables.VarName[1:]))
-                for variables, iis in zip(gurobi_master_model.getVars(), gurobi_master_model.IISUB)
-                if iis != 0
-            ]
-            if not upper_bounds_iis:
-                logging.info("No upper bounds to augment")
-                return False
-            upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
-            invalid_upper_bounds = self.master_model.model.variables.flat.merge(upper_bounds_iis_df, on="labels")
-            for _, row in invalid_upper_bounds.iterrows():
-                label_position = self.master_model.model.variables.get_label_position(int(row["labels"]))
-                existing_bound = self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
-                self.master_model.model.variables.capacity.upper.loc[
-                    label_position[1]["set_technologies"],
-                    label_position[1]["set_capacity_types"],
-                    label_position[1]["set_location"],
-                    label_position[1]["set_time_steps_yearly"],
-                ] = (
-                    existing_bound * 1.2
-                )
 
         self.solve_master_model(iteration)
 
@@ -439,6 +431,7 @@ class BendersDecomposition:
             for constr, multiplier in zip(gurobi_model.getConstrs(), gurobi_model.getAttr(GRB.Attr.FarkasDual))
         ]
         farkas_multipliers_df = pd.DataFrame(farkas_multipliers, columns=["labels_con", "multiplier"])
+
         merged_rhs_df = pd.merge(farkas_multipliers_df, subproblem.rhs_cuts, on="labels_con")
         merged_rhs_df["product"] = merged_rhs_df["multiplier"] * merged_rhs_df["rhs"]
         feasibility_cut_rhs = merged_rhs_df["product"].sum()
@@ -446,6 +439,13 @@ class BendersDecomposition:
         merged_lhs_df = pd.merge(farkas_multipliers_df, subproblem.lhs_cuts, on="labels_con")
         merged_lhs_df["product"] = merged_lhs_df["multiplier"] * merged_lhs_df["coeffs"]
         filtered_df = merged_lhs_df[merged_lhs_df["product"] != 0]
+        if not filtered_df[filtered_df.duplicated(subset=["labels"], keep=False)].empty:
+            product_df = filtered_df[["labels", "product"]]
+            product_df = product_df.groupby("labels").sum()
+            product_df = product_df.reset_index()
+            unique_filtered_df = filtered_df.drop_duplicates(subset=["labels"])
+            filtered_df = product_df.merge(unique_filtered_df[["labels", "master_variable"]], on="labels")
+        filtered_df = filtered_df.loc[filtered_df["product"] != 0]
         linear_expression_list = list(filtered_df["product"] * filtered_df["master_variable"])
         feasibility_cut_lhs = lp.merge(linear_expression_list)
         end_time_cuts = time.time()
