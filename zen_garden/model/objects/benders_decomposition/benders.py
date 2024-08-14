@@ -380,9 +380,7 @@ class BendersDecomposition:
             zero_upper_bounds = self.master_model.model.variables.capacity.upper == 0
             # Set the upper bounds to the maximum value
             self.master_model.model.variables.capacity.upper = self.master_model.model.variables.capacity.upper.where(
-                ~zero_upper_bounds,
-                (
-                    self.master_model.model.variables.capacity.upper.max()
+                ~zero_upper_bounds, self.master_model.model.variables.capacity.upper.max()
             )
         else:
             logging.info("--- Augment Upper Bounds that are Infeasible ---")
