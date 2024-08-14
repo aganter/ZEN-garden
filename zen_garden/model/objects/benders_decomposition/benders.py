@@ -104,9 +104,6 @@ class BendersDecomposition:
             self.separate_design_operational_variables()
         )
 
-        self.monolithic_gurobi = None
-        self.map_variables_monolithic_gurobi = {}
-
         logger = logging.getLogger("gurobipy")
         logging.getLogger("gurobipy").setLevel(logging.ERROR)
         logger.propagate = False
@@ -176,26 +173,6 @@ class BendersDecomposition:
                 benders_output_folder=self.benders_output_folder,
             )
             self.subproblem_models.append(subproblem)
-
-    def save_monolithic_model_in_gurobi_format_map_variables(self):
-        """
-        Save the monolithic problem in the gurobi format. This is necessary to map the variables of the monolithic
-        problem to the gurobi variables. The mapping is a dictionary with key the name of the variable in the gurobi
-        model and following three values:
-            1. variable_name: the variable name in the monolithic problem
-            2. variable_coords: the coordinates of the variable in the monolithic problem
-            3. variable_gurobi: the variable in the gurobi model
-
-        """
-        self.monolithic_gurobi = getattr(self.monolithic_model.model, "solver_model")
-        variables = self.monolithic_gurobi.getVars()
-        label_positions = [
-            self.monolithic_model.model.variables.get_label_position(int(var.VarName[1:])) for var in variables
-        ]
-        self.map_variables_monolithic_gurobi = {
-            var.VarName: {"variable_name": label_pos[0], "variable_coords": label_pos[1], "variable_gurobi": var}
-            for var, label_pos in zip(variables, label_positions)
-        }
 
     def separate_design_operational_constraints(self) -> list:
         """
