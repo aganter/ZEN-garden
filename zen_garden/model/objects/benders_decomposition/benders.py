@@ -107,8 +107,6 @@ class BendersDecomposition:
         logger = logging.getLogger("gurobipy")
         logging.getLogger("gurobipy").setLevel(logging.ERROR)
         logger.propagate = False
-        # Save the monolithic problem in the gurobi format and map the variables
-        self.save_monolithic_model_in_gurobi_format_map_variables()
 
         # DataFrame to store information about the building and solving of the master problem
         columns = ["iteration", "optimality_gap"]
