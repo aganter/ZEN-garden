@@ -410,7 +410,7 @@ class BendersDecomposition:
                     label_position[1]["set_location"],
                     label_position[1]["set_time_steps_yearly"],
                 ] = (
-                    existing_bound * 1.2
+                    existing_bound * 1.1
                 )
 
         self.solve_master_model(iteration)
