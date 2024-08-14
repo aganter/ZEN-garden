@@ -357,15 +357,15 @@ class BendersDecomposition:
                     subproblem.model.variables[variable_name].lower = variable_solution
                     subproblem.model.variables[variable_name].upper = variable_solution
 
-    def subproblem_to_gurobi(self, subproblem_solved):
+    def solved_model_to_gurobi(self, linopy_model_solved):
         """
         Function to get the solver model (gurobi model solved) of the subproblem. Needed to extract the Farkas
         multipliers for feasibility cuts and the Dual multipliers for optimality cuts.
 
-        :param subproblem_solved: subproblem model to be converted to gurobi (type: OptimizationSetup)
+        :param linopy_model_solved: subproblem model to be converted to gurobi (type: OptimizationSetup)
         """
 
-        gurobi_model = getattr(subproblem_solved.model, "solver_model")
+        gurobi_model = getattr(linopy_model_solved.model, "solver_model")
         return gurobi_model
 
     def generate_feasibility_cut(self, gurobi_model, subproblem):
@@ -427,7 +427,7 @@ class BendersDecomposition:
         feasibility_cuts = [
             (
                 subproblem.scenario_name if subproblem.scenario_name else "default",
-                *self.generate_feasibility_cut(self.subproblem_to_gurobi(subproblem), subproblem),
+                *self.generate_feasibility_cut(self.solved_model_to_gurobi(subproblem), subproblem),
             )
             for subproblem in infeasible_subproblems
         ]
@@ -576,7 +576,7 @@ class BendersDecomposition:
         optimality_cuts = [
             (
                 subproblem.scenario_name if subproblem.scenario_name else "default",
-                *self.generate_optimality_cut(self.subproblem_to_gurobi(subproblem), subproblem),
+                *self.generate_optimality_cut(self.solved_model_to_gurobi(subproblem), subproblem),
             )
             for subproblem in self.subproblem_models
         ]
@@ -731,9 +731,10 @@ class BendersDecomposition:
         iteration = 1
         feasibility_iteration = 1
         optimality_iteration = 1
+        feasibility_master_iteration = 1
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
+        max_number_feasibility_iterations = self.config.benders["max_number_feasibility_iterations"]
         continue_iterations = True
-        increment = 1
 
         # While loop to solve the master problem and the subproblems iteratively
         while continue_iterations and iteration <= max_number_of_iterations:
@@ -747,21 +748,41 @@ class BendersDecomposition:
                 self.solve_master_model(iteration)
 
             if self.master_model.model.termination_condition != "optimal":
-                while self.master_model.model.termination_condition != "optimal":
+                while (
+                    self.master_model.model.termination_condition != "optimal"
+                    and feasibility_master_iteration <= max_number_feasibility_iterations
+                ):
                     logging.info("--- Master problem is infeasible ---")
                     if self.config.benders["augment_capacity_bounds"]:
                         logging.info("--- Augmenting capacity bounds ---")
-                        if increment == 1:
-                            upper_bound = self.master_model.model.variables.capacity.upper.where(
-                                self.master_model.model.variables.capacity.upper != 0,
-                                other=self.master_model.model.variables.capacity.upper.max(),
+                        gurobi_master_model = self.solved_model_to_gurobi(self.master_model)
+                        upper_bounds_iis = [
+                            (int(variables.VarName[1:]))
+                            for variables, iis in zip(gurobi_master_model.getVars(), gurobi_master_model.IISUB)
+                            if iis != 0
+                        ]
+                        upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
+                        invalid_upper_bounds = self.master_model.model.variables.flat.merge(
+                            upper_bounds_iis_df, on="labels"
+                        )
+                        for _, row in invalid_upper_bounds.iterrows():
+                            label_position = self.master_model.model.variables.get_label_position(row["labels"])
+                            existing_bound = (
+                                self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
                             )
-                        else:
-                            upper_bound = self.master_model.model.variables.capacity.upper
-                        self.master_model.model.variables.capacity.upper = upper_bound * increment
+                            if existing_bound == 0:
+                                self.master_model.model.variables[f"{label_position[0]}"].sel(
+                                    label_position[1]
+                                ).upper = self.master_model.model.variables.capacity.upper.max()
+                            else:
+                                self.master_model.model.variables[f"{label_position[0]}"].sel(
+                                    label_position[1]
+                                ).upper = (
+                                    self.master_model.model.variables.capacity.upper.sel(labels=row["labels"]) * 1.1
+                                )
                         self.solve_master_model(iteration)
-                        increment += 0.2
-                        if increment > 1e4:
+
+                        if feasibility_master_iteration == max_number_feasibility_iterations:
                             self.master_model.model.print_infeasibilities()
                             self.optimality_gap_df_infeasibility.to_csv(
                                 os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
@@ -780,6 +801,7 @@ class BendersDecomposition:
                             self.constraints_added.to_csv(os.path.join(self.benders_output_folder, "cuts_added.csv"))
                             continue_iterations = False
                             break
+                        feasibility_master_iteration += 1
                     else:
                         continue_iterations = False
                         break
