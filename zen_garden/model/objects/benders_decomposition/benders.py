@@ -135,6 +135,8 @@ class BendersDecomposition:
         # Define lower and upper bounds of the objective
         self.lower_bound = None
         self.upper_bound = None
+        # Define the master_upper_bound for capacity
+        self.capacity_master_upper_bound_mean = None
 
         logging.info("")
         logging.info("--- Creating the master problem ---")
@@ -152,6 +154,7 @@ class BendersDecomposition:
             operational_constraints=self.operational_constraints,
             benders_output_folder=self.benders_output_folder,
         )
+        self.capacity_master_upper_bound_mean = self.master_model.model.variables.capacity.upper.mean()
 
         self.subproblem_models = []
         for scenario, scenario_dict in zip(scenarios, elements):
@@ -390,7 +393,7 @@ class BendersDecomposition:
             label_position = self.master_model.model.variables.get_label_position(int(row["labels"]))
             existing_bound = self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
             if existing_bound == 0:
-                existing_bound = self.master_model.model.variables.capacity.upper.mean()
+                existing_bound = self.capacity_master_upper_bound_mean
             self.master_model.model.variables.capacity.upper.loc[
                 label_position[1]["set_technologies"],
                 label_position[1]["set_capacity_types"],
