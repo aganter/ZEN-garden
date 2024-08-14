@@ -382,10 +382,7 @@ class BendersDecomposition:
             self.master_model.model.variables.capacity.upper = self.master_model.model.variables.capacity.upper.where(
                 ~zero_upper_bounds,
                 (
-                    self.master_model.model.variables.capacity.upper.mean()
-                    + self.master_model.model.variables.capacity.upper.mean()
-                )
-                * 0.5,
+                    self.master_model.model.variables.capacity.upper.max()
             )
         else:
             logging.info("--- Augment Upper Bounds that are Infeasible ---")
@@ -410,7 +407,7 @@ class BendersDecomposition:
                     label_position[1]["set_location"],
                     label_position[1]["set_time_steps_yearly"],
                 ] = (
-                    existing_bound * 1.1
+                    existing_bound * 1.2
                 )
 
         self.solve_master_model(iteration)
