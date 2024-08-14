@@ -805,7 +805,6 @@ class BendersDecomposition:
                 ):
                     logging.info("--- Master problem is infeasible ---")
                     if self.config.benders["augment_capacity_bounds"]:
-                        logging.info("--- Augmenting capacity bounds ---")
                         continue_iterations = self.augment_capacity_bounds(iteration, feasibility_master_iteration)
                         if not continue_iterations:
                             self.save_csv_files()
