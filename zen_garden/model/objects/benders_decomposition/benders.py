@@ -375,6 +375,7 @@ class BendersDecomposition:
         max_number_feasibility_iterations = self.config.benders["max_number_feasibility_iterations"]
         logging.info("--- Augmenting capacity bounds ---")
         if feasibility_master_iteration == 1:
+            logging.info("--- Augment Upper Bounds that are Zero ---")
             # Select the upper bouds that are zero
             zero_upper_bounds = self.master_model.model.variables.capacity.upper == 0
             # Set the upper bounds to the maximum value
@@ -382,6 +383,7 @@ class BendersDecomposition:
                 ~zero_upper_bounds, self.master_model.model.variables.capacity.upper.mean()
             )
         else:
+            logging.info("--- Augment Upper Bounds that are Infeasible ---")
             gurobi_master_model = self.solved_model_to_gurobi(self.master_model)
             gurobi_master_model.computeIIS()
             upper_bounds_iis = [
