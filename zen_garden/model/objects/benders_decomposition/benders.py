@@ -389,6 +389,9 @@ class BendersDecomposition:
                 for variables, iis in zip(gurobi_master_model.getVars(), gurobi_master_model.IISUB)
                 if iis != 0
             ]
+            if not upper_bounds_iis:
+                logging.info("No upper bounds to augment")
+                return False
             upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
             invalid_upper_bounds = self.master_model.model.variables.flat.merge(upper_bounds_iis_df, on="labels")
             for _, row in invalid_upper_bounds.iterrows():
@@ -407,7 +410,6 @@ class BendersDecomposition:
 
         if feasibility_master_iteration == max_number_feasibility_iterations:
             self.master_model.model.print_infeasibilities()
-            self.save_csv_files()
             return False
         return True
 
@@ -806,6 +808,7 @@ class BendersDecomposition:
                         logging.info("--- Augmenting capacity bounds ---")
                         continue_iterations = self.augment_capacity_bounds(iteration, feasibility_master_iteration)
                         if not continue_iterations:
+                            self.save_csv_files()
                             break
                         feasibility_master_iteration += 1
                     else:
