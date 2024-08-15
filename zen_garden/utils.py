@@ -509,6 +509,12 @@ class ScenarioDict(dict):
             default_f_name = self.validate_file_name(default_f_name)
             default_factor = param_dict.get("default_op", default_factor)
 
+        if element in self.dict and "attributes" in (element_dict := self.dict[element]):
+            param_dict = element_dict["attributes"]
+            default_f_name = param_dict.get("file", default_f_name)
+            default_f_name = self.validate_file_name(default_f_name)
+            default_factor = param_dict.get("default_op", default_factor)
+
         return default_f_name, default_factor
 
     def get_param_file(self, element, param):

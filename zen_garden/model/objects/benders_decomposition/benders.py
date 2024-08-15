@@ -731,7 +731,9 @@ class BendersDecomposition:
                 subproblem.scaling.re_scale()
 
         # Write the results
-        Postprocess(model=self.master_model, scenarios="", model_name=self.master_model.model_name, subfolder=Path(""))
+        Postprocess(
+            model=self.master_model, scenarios={"": {}}, model_name=self.master_model.model_name, subfolder=Path("")
+        )
         # Delete the solver_dir of the master model
         if os.path.exists(self.master_model.solver.solver_dir):
             shutil.rmtree(self.master_model.solver.solver_dir)
