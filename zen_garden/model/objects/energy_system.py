@@ -673,8 +673,11 @@ class EnergySystemRules(GenericRule):
 
         if self.parameters.price_carbon_emissions_budget_overshoot == np.inf:
             if self.optimization_setup.analysis["objective"] == "mga":
-                last_year = self.energy_system.set_time_steps_yearly[-1]
-                lhs = self.variables["carbon_emissions_budget_overshoot"].loc[last_year]
+                mask_last_year = [
+                    year == self.energy_system.set_time_steps_yearly[-1]
+                    for year in self.energy_system.set_time_steps_yearly
+                ]
+                lhs = self.variables["carbon_emissions_budget_overshoot"].where(mask_last_year)
                 rhs = 0
             else:
                 lhs = self.variables["carbon_emissions_budget_overshoot"]
