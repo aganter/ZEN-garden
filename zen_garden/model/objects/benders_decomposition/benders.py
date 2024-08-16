@@ -186,13 +186,29 @@ class BendersDecomposition:
 
         # The benders_constraints is a dataframe with columns: constraint_name and constraint_type
         for _, constraint in benders_constraints.iterrows():
-            if constraint["constraint_name"] in self.monolithic_constraints:
-                if constraint["constraint_type"] == "design":
-                    design_constraints.append(constraint["constraint_name"])
-                elif constraint["constraint_type"] == "operational":
-                    operational_constraints.append(constraint["constraint_name"])
+            name = constraint["constraint_name"]
+            if constraint["constraint_type"] == "design":
+                if name == "exclusive_retrofit_techs_":
+                    for base_tech in self.config.system["set_exclusive_retrofitting_technologies"].items():
+                        design_constraints.append(f"{name}{base_tech[0]}")
                 else:
-                    raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
+                    design_constraints.append(name)
+            elif constraint["constraint_type"] == "operational":
+                if name == "exclusive_retrofit_techs_":
+                    for base_tech in self.config.system["set_exclusive_retrofitting_technologies"].items():
+                        operational_constraints.append(f"{name}{base_tech[0]}")
+                else:
+                    operational_constraints.append(name)
+            else:
+                raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
+
+        # Remove from the two list the constraints that are not in the monolithic problem
+        design_constraints = [
+            constraint for constraint in design_constraints if constraint in self.monolithic_constraints
+        ]
+        operational_constraints = [
+            constraint for constraint in operational_constraints if constraint in self.monolithic_constraints
+        ]
 
         # Sanity check on the constraints
         if len(design_constraints) + len(operational_constraints) != len(self.monolithic_constraints):

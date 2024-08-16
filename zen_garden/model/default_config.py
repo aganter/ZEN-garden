@@ -96,6 +96,7 @@ class System(Subscriptable):
     set_conversion_technologies: list[str] = []
     set_storage_technologies: list[str] = []
     set_retrofitting_technologies: list[str] = []
+    set_exclusive_retrofitting_technologies: dict[str, list[str]] = {}
     storage_periodicity: bool = True
     set_transport_technologies: list[str] = []
     set_transport_technologies_loss_exponential: list[str] = []
@@ -209,10 +210,12 @@ class BendersDecomposition(Subscriptable):
     max_number_of_iterations: int = 1e8
     max_number_feasibility_iterations: int = 1e8
     multiplier_threshold: int = 1e-2
+    cap_capacity_bounds: bool = False
+    augment_capacity_bounds: bool = False
     upper_bound_capacity_multiplier: float = 3.0
     upper_bound_capacity_maximum: int = 1e8
-    use_valid_inequalities: bool = True
-    augment_capacity_bounds: bool = True
+    use_valid_inequality_objective: bool = False
+    objective_multiplier: float = 0.5
 
 
 class ModelingToGenerateAlternatives(Subscriptable):
