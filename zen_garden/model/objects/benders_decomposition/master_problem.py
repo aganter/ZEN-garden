@@ -86,6 +86,7 @@ class MasterProblem(OptimizationSetup):
         self.only_feasibility_checks = False
 
         self.create_master_problem()
+
         self.remove_operational()
 
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
@@ -184,14 +185,13 @@ class MasterProblem(OptimizationSetup):
             if hasattr(self.model.variables, "capacity"):
                 monolithic_solution = self.monolithic_model.model.solution.capacity.where(
                     self.monolithic_model.model.solution.capacity != 0,
-                    self.monolithic_model.model.solution.capacity.max() * 0.5,
+                    self.monolithic_model.model.solution.capacity.max(),
                 )
                 upper_bound = self.model.variables.capacity.upper.where(
-                    self.model.variables.capacity.upper != np.inf, monolithic_solution
+                    self.model.variables.capacity.upper != np.inf,
+                    monolithic_solution * self.config_benders["upper_bound_capacity_multiplier"],
                 )
-                self.model.variables.capacity.upper = (
-                    upper_bound * self.config_benders["upper_bound_capacity_multiplier"]
-                )
+                self.model.variables.capacity.upper = upper_bound
         else:
             if hasattr(self.model.variables, "capacity"):
                 self.model.variables.capacity.upper = self.config_benders["upper_bound_capacity_maximum"]
@@ -208,17 +208,14 @@ class MasterProblem(OptimizationSetup):
         ):
             lhs = self.model.objective.expression
             if self.monolithic_model.model.objective.value < 0:
-                rhs = self.monolithic_model.model.objective.value * (1 + self.config_benders["objective_multiplier"])
+                rhs = self.monolithic_model.model.objective.value * 1.5
                 constraint = lhs >= rhs
             elif self.monolithic_model.model.objective.value > 0:
-                rhs = self.monolithic_model.model.objective.value * (1 - self.config_benders["objective_multiplier"])
+                rhs = self.monolithic_model.model.objective.value * 0.5
                 constraint = lhs >= rhs
             else:
                 constraint = None
 
             self.constraints.add_constraint("valid_inequality_objective", constraint)
         else:
-            raise AssertionError(
-                "Valid inequality objective only supported when the monolithic solution is available, "
-                "and the objective function is MGA capacity."
-            )
+            logging.info("Valid inequalities for the objective function are not added.")
