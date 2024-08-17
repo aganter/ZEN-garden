@@ -15,6 +15,8 @@
 import logging
 import os
 import numpy as np
+import xarray as xr
+import pandas as pd
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 
@@ -87,16 +89,28 @@ class MasterProblem(OptimizationSetup):
 
         self.create_master_problem()
 
-        self.remove_operational()
-
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
 
         self.add_dummy_constraint_for_binaries()
+
+        self.feasibility_master_iteration = 0
         if self.config_benders["cap_capacity_bounds"]:
             self.add_upper_bounds_to_capacity()
-        if self.config_benders["use_valid_inequality_objective"]:
-            self.valid_inequality_objective()
+        if self.config_benders["use_valid_inequalities"] and self.config["run_monolithic_optimization"]:
+            logging.info("Adding valid inequalities to the master problem.")
+            self.valid_inequalities_decision_variables()
+            if "constraint_capacity_factor_conversion" in self.model.constraints:
+                logging.info("Adding valid inequalities for conversion technologies.")
+                self.valid_inequalities_conversion_technology()
+            if "constraint_capacity_factor_transport" in self.model.constraints:
+                logging.info("Adding valid inequalities for transport technologies.")
+                self.valid_inequalities_transport_technology()
+            if "constraint_capacity_factor_storage" in self.model.constraints:
+                logging.info("Adding valid inequalities for storage technologies.")
+                self.valid_inequalities_storage_technology()
+
+        self.remove_operational()
 
     def theta_objective_master(self):
         """
@@ -183,39 +197,250 @@ class MasterProblem(OptimizationSetup):
         if self.config["run_monolithic_optimization"]:
             logging.info("Upper bound capacity multiplier: %s", self.config_benders["upper_bound_capacity_multiplier"])
             if hasattr(self.model.variables, "capacity"):
-                monolithic_solution = self.monolithic_model.model.solution.capacity.where(
-                    self.monolithic_model.model.solution.capacity != 0,
-                    self.monolithic_model.model.solution.capacity.max(),
+                upper_bound = (
+                    self.monolithic_model.model.solution.capacity
+                    * self.config_benders["upper_bound_capacity_multiplier"]
                 )
-                upper_bound = self.model.variables.capacity.upper.where(
-                    self.model.variables.capacity.upper != np.inf,
-                    monolithic_solution * self.config_benders["upper_bound_capacity_multiplier"],
-                )
+
                 self.model.variables.capacity.upper = upper_bound
         else:
             if hasattr(self.model.variables, "capacity"):
                 self.model.variables.capacity.upper = self.config_benders["upper_bound_capacity_maximum"]
 
-    def valid_inequality_objective(self):
+    def valid_inequalities_decision_variables(self):
         """
-        Add valid initial inequalities for the objective function if the monolithic model solution is available.
-        This will speed up the convergence of the Benders Decomposition method.
+        Add valid inequalities to the master problem for the decision variables.
         """
-        if (
-            self.config["run_monolithic_optimization"]
-            and "mga" in self.analysis["objective"]
-            and "capacity" in str(self.monolithic_model.model.objective)
-        ):
-            lhs = self.model.objective.expression
-            if self.monolithic_model.model.objective.value < 0:
-                rhs = self.monolithic_model.model.objective.value * 1.5
-                constraint = lhs >= rhs
-            elif self.monolithic_model.model.objective.value > 0:
-                rhs = self.monolithic_model.model.objective.value * 0.5
-                constraint = lhs >= rhs
-            else:
-                constraint = None
-
-            self.constraints.add_constraint("valid_inequality_objective", constraint)
+        if hasattr(self.model.variables, "capacity_supernodes"):
+            objective = "capacity_supernodes"
+        elif hasattr(self.model.variables, "capacity"):
+            objective = "capacity"
         else:
-            logging.info("Valid inequalities for the objective function are not added.")
+            logging.info("No valid inequalities for the decision variables.")
+            return
+
+        # Positive coefficients
+        mask = self.monolithic_model.mga_weights > 0
+        weights = self.monolithic_model.mga_weights.where(mask, drop=True)
+
+        variables_positive = self.model.variables[objective].broadcast_like(weights)
+        variables_positive = variables_positive.where(~np.isnan(weights), drop=True)
+        positive_expression = variables_positive.sum()
+        rhs_positive = self.monolithic_model.model.solution[objective].broadcast_like(weights)
+        rhs_positive = rhs_positive.where(~np.isnan(weights), drop=True)
+        rhs_positive = rhs_positive.sum().values.item()
+
+        constraint_positive = positive_expression >= rhs_positive
+
+        # Negative coefficients
+        weights = self.monolithic_model.mga_weights.where(~mask, drop=True)
+        variables_negative = self.model.variables[objective].broadcast_like(weights)
+        variables_negative = variables_negative.where(~np.isnan(weights), drop=True)
+        negative_expression = variables_negative.sum()
+        rhs_negative = self.monolithic_model.model.solution[objective].broadcast_like(weights)
+        rhs_negative = rhs_negative.where(~np.isnan(weights), drop=True)
+        rhs_negative = rhs_negative.sum().values.item()
+
+        constraint_negative = negative_expression <= rhs_negative
+
+        self.constraints.add_constraint("valid_inequalities_decision_variables_positive", constraint_positive)
+        self.constraints.add_constraint("valid_inequalities_decision_variables_negative", constraint_negative)
+
+    def valid_inequalities_conversion_technology(self):
+        """
+        Add valid initial inequalities for conversion technologies if the monolithic model solution is available. This
+        will speed up the convergence of the Benders Decomposition method.
+        """
+        coefficients = self.model.constraints.constraint_capacity_factor_conversion.coeffs
+        dims_to_keep = ["set_conversion_technologies", "set_capacity_types", "set_nodes", "set_time_steps_operation"]
+        coefficients = coefficients.drop_vars([coord for coord in coefficients.coords if coord not in dims_to_keep])
+        coefficients_lhs = coefficients.rename(
+            {"set_conversion_technologies": "set_technologies", "set_nodes": "set_location"}
+        )
+        techs = self.sets["set_conversion_technologies"]
+        if len(techs) == 0:
+            return
+        nodes = self.sets["set_nodes"]
+        times = coefficients.sel(_term=0).coords["set_time_steps_operation"]
+        time_step_year = xr.DataArray(
+            [self.energy_system.time_steps.convert_time_step_operation2year(t) for t in times.data],
+            coords=[times],
+        )
+        term_capacity = (
+            coefficients_lhs.sel(_term=0).loc[techs, nodes, :]
+            * self.model.variables["capacity"].loc[techs, "power", nodes, time_step_year]
+        ).rename({"set_technologies": "set_conversion_technologies", "set_location": "set_nodes"})
+        lhs = term_capacity
+
+        time_steps_operation = self.monolithic_model.model.solution["flow_conversion_output"][
+            "set_time_steps_operation"
+        ].values
+        reference_flows_data = np.empty((len(techs), len(nodes), len(time_steps_operation)))
+        for i, t in enumerate(techs):
+            rc = self.sets["set_reference_carriers"][t][0]
+            if rc in self.sets["set_input_carriers"][t]:
+                reference_flows_data[i, :, :] = (
+                    self.monolithic_model.model.solution["flow_conversion_input"].loc[t, rc, nodes, :].values
+                )
+            else:
+                reference_flows_data[i, :, :] = (
+                    self.monolithic_model.model.solution["flow_conversion_output"].loc[t, rc, nodes, :].values
+                )
+
+        reference_flows_da = xr.DataArray(
+            data=reference_flows_data,
+            dims=["set_conversion_technologies", "set_nodes", "set_time_steps_operation"],
+            coords={
+                "set_conversion_technologies": techs,
+                "set_nodes": nodes,
+                "set_time_steps_operation": time_steps_operation,
+            },
+            name="reference_flows",
+        )
+
+        rhs = reference_flows_da * (-coefficients.sel(_term=1))
+        constraint = lhs >= rhs
+
+        self.constraints.add_constraint("valid_inequalities_conversion_technology", constraint)
+
+    def valid_inequalities_transport_technology(self):
+        """
+        Add valid initial inequalities for transport technologies if the monolithic model solution is available. This
+        will speed up the convergence of the Benders Decomposition method.
+        """
+        coefficients = self.model.constraints.constraint_capacity_factor_transport.coeffs
+        dims_to_keep = ["set_transport_technologies", "set_capacity_types", "set_edges", "set_time_steps_operation"]
+        coefficients = coefficients.drop_vars([coord for coord in coefficients.coords if coord not in dims_to_keep])
+        coefficients_lhs = coefficients.rename(
+            {"set_transport_technologies": "set_technologies", "set_edges": "set_location"}
+        )
+        techs = self.sets["set_transport_technologies"]
+        if len(techs) == 0:
+            return
+        edges = self.sets["set_edges"]
+        times = self.model.variables["flow_transport"].coords["set_time_steps_operation"]
+        time_step_year = xr.DataArray(
+            [self.energy_system.time_steps.convert_time_step_operation2year(t) for t in times.data],
+            coords=[times],
+        )
+        term_capacity = (
+            coefficients_lhs.sel(_term=0).loc[techs, edges, :]
+            * self.model.variables["capacity"].loc[techs, "power", edges, time_step_year]
+        ).rename({"set_technologies": "set_transport_technologies", "set_location": "set_edges"})
+
+        lhs = term_capacity
+        rhs = self.monolithic_model.model.solution["flow_transport"].loc[techs, edges, :] * (-coefficients.sel(_term=1))
+        constraints = lhs >= rhs
+
+        self.constraints.add_constraint("valid_inequalities_transport_technology", constraints)
+
+    def get_storage2year_time_step_array(self):
+        """returns array with storage2year time steps"""
+        times = {
+            st: y
+            for y in self.sets["set_time_steps_yearly"]
+            for st in self.energy_system.time_steps.get_time_steps_year2storage(y)
+        }
+        times = pd.Series(times, name="set_time_steps_yearly")
+        times.index.name = "set_time_steps_storage"
+        return times
+
+    def map_and_expand(self, array, mapping):
+        """maps and expands array"""
+        assert isinstance(mapping, pd.Series) or isinstance(
+            mapping.index, pd.Index
+        ), "Mapping must be a pd.Series or with a single-level pd.Index"
+        # get mapping values
+        array = array.sel({mapping.name: mapping.values})
+        # rename
+        array = array.rename({mapping.name: mapping.index.name})
+        # assign coordinates
+        array = array.assign_coords({mapping.index.name: mapping.index})
+        return array
+
+    def valid_inequalities_storage_technology(self):
+        """
+        Add valid initial inequalities for storage technologies if the monolithic model solution is available. This
+        will speed up the convergence of the Benders Decomposition method.
+        """
+        coefficients = self.model.constraints.constraint_capacity_factor_storage.coeffs
+        dims_to_keep = ["set_storage_technologies", "set_capacity_types", "set_nodes", "set_time_steps_operation"]
+        coefficients = coefficients.drop_vars([coord for coord in coefficients.coords if coord not in dims_to_keep])
+        coefficients_lhs = coefficients.rename(
+            {"set_storage_technologies": "set_technologies", "set_nodes": "set_location"}
+        )
+        techs = self.sets["set_storage_technologies"]
+        if len(techs) == 0:
+            return
+        nodes = self.sets["set_nodes"]
+        times = self.model.variables.coords["set_time_steps_operation"]
+        time_step_year = xr.DataArray(
+            [self.energy_system.time_steps.convert_time_step_operation2year(t) for t in times.data], coords=[times]
+        )
+        term_capacity = (
+            coefficients_lhs.sel(_term=0).loc[techs, nodes, :]
+            * self.model.variables["capacity"].loc[techs, "power", nodes, time_step_year]
+        ).rename({"set_technologies": "set_storage_technologies", "set_location": "set_nodes"})
+
+        lhs_storage = term_capacity
+        flow_expression_storage = (
+            self.monolithic_model.model.solution["flow_storage_charge"]
+            + self.monolithic_model.model.solution["flow_storage_discharge"]
+        )
+        rhs_storage = flow_expression_storage * (-coefficients.sel(_term=1))
+        constraints_storage = lhs_storage >= rhs_storage
+
+        self.constraints.add_constraint("valid_inequalities_storage_technology", constraints_storage)
+
+        times = self.get_storage2year_time_step_array()
+        capacity = self.map_and_expand(self.model.variables["capacity"], times)
+        capacity = capacity.rename({"set_technologies": "set_storage_technologies", "set_location": "set_nodes"})
+        capacity = capacity.sel({"set_nodes": nodes, "set_storage_technologies": techs})
+        storage_level = self.monolithic_model.model.solution["storage_level"]
+        mask_capacity_type = self.model.variables["capacity"].coords["set_capacity_types"] == "energy"
+        lhs_max_level = capacity.where(mask_capacity_type, 0.0)
+        rhs_max_level = storage_level.where(mask_capacity_type, 0.0)
+        constraints_max_level = lhs_max_level >= rhs_max_level
+
+        self.constraints.add_constraint("valid_inequalities_storage_level", constraints_max_level)
+
+    def augment_upper_bound_capacity(self):
+        """
+        Augment the capacity bounds of the master problem in case of infeasibility.
+        """
+        logging.info("--- Augment Upper Bounds that are Infeasible ---")
+        gurobi_master_model = getattr(self.model, "solver_model")
+        gurobi_master_model.computeIIS()
+        upper_bounds_iis = [
+            (int(variables.VarName[1:]))
+            for variables, iis in zip(gurobi_master_model.getVars(), gurobi_master_model.IISUB)
+            if iis != 0
+        ]
+        if not upper_bounds_iis:
+            logging.info("No upper bounds to augment")
+            return False
+
+        upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
+        invalid_upper_bounds = self.model.variables.flat.merge(upper_bounds_iis_df, on="labels")
+        for _, row in invalid_upper_bounds.iterrows():
+            label_position = self.model.variables.get_label_position(int(row["labels"]))
+            existing_bound = self.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
+            if existing_bound == 0:
+                existing_bound = self.monolithic_model.model.solution.capacity.mean()
+
+            self.model.variables.capacity.upper.loc[
+                label_position[1]["set_technologies"],
+                label_position[1]["set_capacity_types"],
+                label_position[1]["set_location"],
+                label_position[1]["set_time_steps_yearly"],
+            ] = (
+                existing_bound * 1.05
+            )
+
+        self.solve()
+        self.feasibility_master_iteration += 1
+
+        if self.feasibility_master_iteration > self.config.benders["max_number_feasibility_iterations"]:
+            self.model.print_infeasibilities()
+            return False
+        return True

@@ -166,6 +166,32 @@ class ModelingToGenerateAlternatives:
                 for loc in self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_loc]:
                     self.decision_variables.append([obj, loc])
 
+            if self.mga_solution.config["objective_variables"] in ("capacity", "capacity_supernodes"):
+                list_of_location = list(set([loc for _, loc in self.decision_variables]))
+                if self.mga_solution.config["objective_variables"] == "capacity":
+                    set_edges = self.mga_data_input.energy_system.set_edges
+                    all_possible_edges = [
+                        f"{loc1}-{loc2}" for loc1 in list_of_location for loc2 in list_of_location if loc1 != loc2
+                    ]
+                else:
+                    set_edges = list(set(self.mga_data_input.energy_system.superedges.values()))
+                    all_possible_edges = [f"{loc1}-{loc2}" for loc1 in list_of_location for loc2 in list_of_location]
+
+                transport_technologies = self.mga_data_input.energy_system.set_transport_technologies
+                expanded_decision_variables = []
+
+                for obj, loc in self.decision_variables:
+                    if obj in transport_technologies:
+                        for edge in all_possible_edges:
+                            if edge in set_edges:
+                                if [obj, edge] not in expanded_decision_variables:
+                                    expanded_decision_variables.append([obj, edge])
+                    else:
+                        if [obj, loc] not in expanded_decision_variables:
+                            expanded_decision_variables.append([obj, loc])
+
+            self.decision_variables = expanded_decision_variables
+
     def generate_random_directions(self) -> dict:
         """
         Generate random directions from a normal distribution with mean 0 and standard deviation 1 for each of the

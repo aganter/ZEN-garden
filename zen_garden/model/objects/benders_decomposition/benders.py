@@ -595,8 +595,17 @@ class BendersDecomposition:
         if "constraint_for_binaries" in self.master_model.model.constraints:
             self.master_model.model.constraints.remove("constraint_for_binaries")
 
-        if "valid_inequality_objective" in self.master_model.model.constraints:
-            self.master_model.model.constraints.remove("valid_inequality_objective")
+        valid_inequality_objective = [
+            "valid_inequalities_decision_variables_positive",
+            "valid_inequalities_decision_variables_negative",
+            "valid_inequalities_conversion_technology",
+            "valid_inequalities_transport_technology",
+            "valid_inequalities_storage_technology",
+            "valid_inequalities_storage_level",
+        ]
+        for inequality in valid_inequality_objective:
+            if inequality in self.master_model.model.constraints:
+                self.master_model.model.constraints.remove(inequality)
 
     def save_csv_files(self):
         """
@@ -680,8 +689,16 @@ class BendersDecomposition:
 
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
-                continue_iterations = False
-                break
+                if self.config.benders["augment_capacity_bounds"]:
+                    while self.master_model.model.termination_condition != "optimal":
+                        continue_iteration = self.master_model.augment_upper_bound_capacity()
+                        if not continue_iteration:
+                            self.save_csv_files()
+                            break
+                else:
+                    self.save_csv_files()
+                    continue_iterations = False
+                    break
 
             if self.master_model.model.termination_condition == "optimal":
                 # Fix the design variables in the subproblems to the optimal solution of the master problem and solve

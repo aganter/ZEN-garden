@@ -174,7 +174,7 @@ class Subproblem(OptimizationSetup):
         # Define the right-hand side of the constraints for the Benders cuts
         self.rhs_cuts = constraints[["labels_con", "rhs"]].drop_duplicates(subset="labels_con", keep="first")
         end_time = time.time()
-        logging.info(f"--- Done in {end_time - start_time:.2f} seconds ---")
+        logging.info("--- Done in %.2f seconds ---" % (end_time - start_time))
 
         logging.info("--- Defining the left-hand side of the constraints for the Benders cuts ---")
         start_time = time.time()
@@ -186,4 +186,4 @@ class Subproblem(OptimizationSetup):
         # Adding also the corresponding master variable of the Linopy model
         self.lhs_cuts["master_variable"] = self.lhs_cuts.apply(self.get_linopy_variable, axis=1)
         end_time = time.time()
-        logging.info(f"--- Done in {end_time - start_time:.2f} seconds ---")
+        logging.info("--- Done in %.2f seconds ---", (end_time - start_time))
