@@ -599,10 +599,15 @@ class BendersDecomposition:
         """
         Save the csv files in the output folder.
         """
-        self.optimality_gap_df_infeasibility.to_csv(
-            os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
-        )
-        self.optimality_gap_df_optimal.to_csv(os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv"))
+        if self.master_model.only_feasibility_checks:
+            self.optimality_gap_df_infeasibility.to_csv(
+                os.path.join(self.benders_output_folder, "optimality_gap_infeasibility.csv")
+            )
+        else:
+            self.optimality_gap_df_optimal.to_csv(
+                os.path.join(self.benders_output_folder, "optimality_gap_optimal.csv")
+            )
+
         self.cuts_counter_df = pd.DataFrame(
             {
                 "number_of_monolithic_constraints": [self.monolithic_model.model.constraints.ncons],
