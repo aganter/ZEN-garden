@@ -466,7 +466,7 @@ class OptimizationSetup(object):
         """constructs the optimization problem"""
         # create empty ConcreteModel
         if self.solver["solver_dir"] is not None and not os.path.exists(self.solver["solver_dir"]):
-            os.makedirs(self.solver["solver_dir"])
+            os.makedirs(self.solver["solver_dir"], exist_ok=True)
         self.model = lp.Model(solver_dir=self.solver["solver_dir"])
         # we need to reset the components to not carry them over
         self.sets = IndexSet()
