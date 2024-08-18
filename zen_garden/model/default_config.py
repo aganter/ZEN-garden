@@ -210,7 +210,8 @@ class BendersDecomposition(Subscriptable):
     max_number_of_iterations: int = 1e8
     cap_capacity_bounds: bool = True
     augment_capacity_bounds: bool = True
-    upper_bound_capacity_multiplier: float = 3
+    upper_bound_capacity_multiplier: float = 4
+    max_number_feasibility_iterations: int = 1e8
     upper_bound_capacity_maximum: int = 1e8
 
 
