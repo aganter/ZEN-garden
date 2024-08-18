@@ -87,6 +87,7 @@ class MasterProblem(OptimizationSetup):
         self.only_feasibility_checks = False
 
         self.create_master_problem()
+        self.remove_operational()
 
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
@@ -96,11 +97,6 @@ class MasterProblem(OptimizationSetup):
         self.feasibility_master_iteration = 0
         if self.config_benders["cap_capacity_bounds"]:
             self.add_upper_bounds_to_capacity()
-        if self.config_benders["use_valid_inequalities"] and self.config["run_monolithic_optimization"]:
-            logging.info("Adding valid inequalities to the master problem.")
-            self.valid_inequalities_decision_variables()
-
-        self.remove_operational()
 
     def theta_objective_master(self):
         """
@@ -189,7 +185,7 @@ class MasterProblem(OptimizationSetup):
             if hasattr(self.model.variables, "capacity"):
                 monolithic_capacity = self.monolithic_model.model.solution.capacity.where(
                     self.monolithic_model.model.solution.capacity > 0,
-                    self.monolithic_model.model.solution.capacity.mean(),
+                    self.monolithic_model.model.solution.capacity.max(),
                 )
                 upper_bound = self.model.variables.capacity.upper.where(
                     self.model.variables.capacity.upper != np.inf, monolithic_capacity
@@ -200,45 +196,6 @@ class MasterProblem(OptimizationSetup):
         else:
             if hasattr(self.model.variables, "capacity"):
                 self.model.variables.capacity.upper = self.config_benders["upper_bound_capacity_maximum"]
-
-    def valid_inequalities_decision_variables(self):
-        """
-        Add valid inequalities to the master problem for the decision variables.
-        """
-        if hasattr(self.model.variables, "capacity_supernodes"):
-            objective = "capacity_supernodes"
-        elif hasattr(self.model.variables, "capacity"):
-            objective = "capacity"
-        else:
-            logging.info("No valid inequalities for the decision variables.")
-            return
-
-        # Positive coefficients
-        mask = self.monolithic_model.mga_weights > 0
-        weights = self.monolithic_model.mga_weights.where(mask, drop=True)
-
-        variables_positive = self.model.variables[objective].broadcast_like(weights)
-        variables_positive = variables_positive.where(~np.isnan(weights), drop=True)
-        positive_expression = variables_positive.sum()
-        rhs_positive = self.monolithic_model.model.solution[objective].broadcast_like(weights)
-        rhs_positive = rhs_positive.where(~np.isnan(weights), drop=True)
-        rhs_positive = rhs_positive.sum().values.item()
-
-        constraint_positive = positive_expression >= rhs_positive
-
-        # Negative coefficients
-        weights = self.monolithic_model.mga_weights.where(~mask, drop=True)
-        variables_negative = self.model.variables[objective].broadcast_like(weights)
-        variables_negative = variables_negative.where(~np.isnan(weights), drop=True)
-        negative_expression = variables_negative.sum()
-        rhs_negative = self.monolithic_model.model.solution[objective].broadcast_like(weights)
-        rhs_negative = rhs_negative.where(~np.isnan(weights), drop=True)
-        rhs_negative = rhs_negative.sum().values.item()
-
-        constraint_negative = negative_expression <= rhs_negative
-
-        self.constraints.add_constraint("valid_inequalities_decision_variables_positive", constraint_positive)
-        self.constraints.add_constraint("valid_inequalities_decision_variables_negative", constraint_negative)
 
     def augment_upper_bound_capacity(self):
         """
@@ -253,21 +210,10 @@ class MasterProblem(OptimizationSetup):
         ]
         if not upper_bounds_iis:
             self.model.print_infeasibilities()
-            if [
-                "valid_inequalities_decision_variables_positive",
-                "valid_inequalities_decision_variables_negative",
-            ] in self.model.constraints:
-                for constraint in [
-                    "valid_inequalities_decision_variables_positive",
-                    "valid_inequalities_decision_variables_negative",
-                ]:
-                    self.model.constraints.remove(constraint)
-            else:
-                logging.info("No other augmentation possible.")
-                return False
+            logging.info("--- No other augmentation possible ---")
+            return False
         else:
             logging.info("--- Augment Upper Bounds that are Infeasible ---")
-            self.model.print_infeasibilities()
             upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
             invalid_upper_bounds = self.model.variables.flat.merge(upper_bounds_iis_df, on="labels")
             for _, row in invalid_upper_bounds.iterrows():
@@ -279,7 +225,7 @@ class MasterProblem(OptimizationSetup):
                     label_position[1]["set_location"],
                     label_position[1]["set_time_steps_yearly"],
                 ] = (
-                    existing_bound * 1.05
+                    existing_bound * 1.20
                 )  # Increase the upper bound by 5% to avoid the same infeasibility
 
             self.solve()

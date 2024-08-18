@@ -209,11 +209,9 @@ class BendersDecomposition(Subscriptable):
     absolute_optimality_gap: int = 1e-2
     max_number_of_iterations: int = 1e8
     cap_capacity_bounds: bool = True
-    upper_bound_capacity_multiplier: float = 2.5
-    upper_bound_capacity_maximum: int = 1e8
     augment_capacity_bounds: bool = True
-    max_number_feasibility_iterations: int = 1e10
-    use_valid_inequalities: bool = False
+    upper_bound_capacity_multiplier: float = 3
+    upper_bound_capacity_maximum: int = 1e8
 
 
 class ModelingToGenerateAlternatives(Subscriptable):

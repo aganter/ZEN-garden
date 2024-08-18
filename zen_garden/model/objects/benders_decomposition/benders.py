@@ -595,14 +595,6 @@ class BendersDecomposition:
         if "constraint_for_binaries" in self.master_model.model.constraints:
             self.master_model.model.constraints.remove("constraint_for_binaries")
 
-        valid_inequality_objective = [
-            "valid_inequalities_decision_variables_positive",
-            "valid_inequalities_decision_variables_negative",
-        ]
-        for inequality in valid_inequality_objective:
-            if inequality in self.master_model.model.constraints:
-                self.master_model.model.constraints.remove(inequality)
-
     def save_csv_files(self):
         """
         Save the csv files in the output folder.
