@@ -598,10 +598,6 @@ class BendersDecomposition:
         valid_inequality_objective = [
             "valid_inequalities_decision_variables_positive",
             "valid_inequalities_decision_variables_negative",
-            "valid_inequalities_conversion_technology",
-            "valid_inequalities_transport_technology",
-            "valid_inequalities_storage_technology",
-            "valid_inequalities_storage_level",
         ]
         for inequality in valid_inequality_objective:
             if inequality in self.master_model.model.constraints:
@@ -690,10 +686,11 @@ class BendersDecomposition:
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
                 if self.config.benders["augment_capacity_bounds"]:
-                    while self.master_model.model.termination_condition != "optimal":
-                        continue_iteration = self.master_model.augment_upper_bound_capacity()
-                        if not continue_iteration:
+                    while self.master_model.model.termination_condition != "optimal" and continue_iterations:
+                        feasibility_continue = self.master_model.augment_upper_bound_capacity()
+                        if not feasibility_continue:
                             self.save_csv_files()
+                            continue_iterations = False
                             break
                 else:
                     self.save_csv_files()

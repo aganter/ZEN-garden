@@ -213,7 +213,7 @@ class BendersDecomposition(Subscriptable):
     upper_bound_capacity_maximum: int = 1e8
     augment_capacity_bounds: bool = True
     max_number_feasibility_iterations: int = 1e10
-    use_valid_inequalities: bool = True
+    use_valid_inequalities: bool = False
 
 
 class ModelingToGenerateAlternatives(Subscriptable):
