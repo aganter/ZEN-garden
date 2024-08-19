@@ -116,23 +116,26 @@ class Subproblem(OptimizationSetup):
         # Define the objective function
         if self.analysis["objective"] == "mga":
             if "capacity" in str(self.monolithic_model.model.objective):
-                self.variables.add_variable(
-                    self.model,
-                    name="mock_objective_subproblem",
-                    index_sets=self.sets["set_time_steps_yearly"],
-                    doc="mock variables for the objective of the subproblems",
-                    unit_category={"time": -1},
-                    bounds=(0, 0),
-                )
-                self.model.add_objective(
-                    sum(
-                        [
-                            self.model.variables["mock_objective_subproblem"][year]
-                            for year in self.energy_system.set_time_steps_yearly
-                        ]
-                    ).to_linexpr(),
-                    overwrite=True,
-                )
+                if self.config.benders["subproblem_objective"]:
+                    self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
+                else:
+                    self.variables.add_variable(
+                        self.model,
+                        name="mock_objective_subproblem",
+                        index_sets=self.sets["set_time_steps_yearly"],
+                        doc="mock variables for the objective of the subproblems",
+                        unit_category={"time": -1},
+                        bounds=(0, 0),
+                    )
+                    self.model.add_objective(
+                        sum(
+                            [
+                                self.model.variables["mock_objective_subproblem"][year]
+                                for year in self.energy_system.set_time_steps_yearly
+                            ]
+                        ).to_linexpr(),
+                        overwrite=True,
+                    )
             elif "flow_import" in str(self.monolithic_model.model.objective):
                 self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
             else:
@@ -174,7 +177,7 @@ class Subproblem(OptimizationSetup):
         # Define the right-hand side of the constraints for the Benders cuts
         self.rhs_cuts = constraints[["labels_con", "rhs"]].drop_duplicates(subset="labels_con", keep="first")
         end_time = time.time()
-        logging.info("--- Done in %.2f seconds ---" % (end_time - start_time))
+        logging.info("--- Done in %.2f seconds ---", (end_time - start_time))
 
         logging.info("--- Defining the left-hand side of the constraints for the Benders cuts ---")
         start_time = time.time()

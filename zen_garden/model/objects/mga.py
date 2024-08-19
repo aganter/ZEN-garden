@@ -42,6 +42,7 @@ class ModelingToGenerateAlternatives:
         optimized_setup: OptimizationSetup,
         scenario_name: str,
         scenario_dict: dict,
+        random_state,
     ):
         """
         Initialize the Modeling to Generate Alternatives object.
@@ -57,6 +58,7 @@ class ModelingToGenerateAlternatives:
         self.optimized_setup = optimized_setup
         self.scenario_name = scenario_name
         self.scenario_dict = scenario_dict
+        self.random_state = random_state
 
         self.input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
         self.input_data_checks.check_dataset()
@@ -199,7 +201,10 @@ class ModelingToGenerateAlternatives:
 
         :return: Random direction_search_vector for each of the decision variables (type: dict)
         """
-        self.direction_search_vector = {tuple(component): truncnorm.rvs(-1, 1) for component in self.decision_variables}
+        self.direction_search_vector = {
+            tuple(component): truncnorm.rvs(-1, 1, loc=0, scale=1, random_state=self.random_state)
+            for component in self.decision_variables
+        }
 
         return self.direction_search_vector
 

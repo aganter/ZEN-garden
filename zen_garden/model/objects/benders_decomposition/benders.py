@@ -23,6 +23,7 @@ import shutil
 import pandas as pd
 import numpy as np
 import linopy as lp
+import xarray as xr
 from tabulate import tabulate
 from gurobipy import GRB, Env
 
@@ -96,6 +97,8 @@ class BendersDecomposition:
         scenarios, elements = ScenarioUtils.get_scenarios(
             config=self.config.benders, scenario_script_name="benders_scenarios", job_index=None
         )
+        # Save the user defined FeasilibityTol of the subproblem solver
+        self.feasibility_tol_subproblem = self.config.benders.solver_subproblem.solver_options["FeasibilityTol"]
 
         self.monolithic_constraints = self.monolithic_model.model.constraints
         self.monolithic_variables = self.monolithic_model.model.variables
@@ -146,8 +149,6 @@ class BendersDecomposition:
             operational_constraints=self.operational_constraints,
             benders_output_folder=self.benders_output_folder,
         )
-        self.capacity_master_upper_bound_mean = self.master_model.model.variables.capacity.upper.mean()
-
         self.subproblem_models = []
         for scenario, scenario_dict in zip(scenarios, elements):
             logging.info("")
@@ -267,7 +268,7 @@ class BendersDecomposition:
         """
         # Make the directory for the basis file
         self.master_model.solve()
-        self.master_model.solver.warmstart_fn = self.master_model.model.get_solution_file()
+        # self.master_model.solver.warmstart_fn = self.master_model.model.get_solution_file()
 
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value
@@ -297,7 +298,7 @@ class BendersDecomposition:
             self.master_model.model.variables[variable_name].upper = variable_solution
         # Solve the master model
         self.master_model.solve()
-        self.master_model.solver.warmstart_fn = self.master_model.model.get_solution_file()
+        # self.master_model.solver.warmstart_fn = self.master_model.model.get_solution_file()
         # Restore the original bounds of the master variables
         for variable_name in self.master_model.model.variables:
             self.master_model.model.variables[variable_name].lower = original_bounds[variable_name][0]
@@ -310,11 +311,15 @@ class BendersDecomposition:
                 [self.optimality_gap_df_infeasibility, new_row], ignore_index=True
             )
 
-    def solve_subproblems_models(self):
+    def solve_subproblems_models(self, tolernace_change=False):
         """
         Solve the subproblems models given in the list self.subproblem_models by leveraging on the OptimizationSetup
         method solve().
         """
+        if self.config.benders["cap_capacity_bounds"] and tolernace_change:
+            self.config.benders.solver_subproblem.solver_options["FeasibilityTol"] = 1e-6
+        else:
+            self.config.benders.solver_subproblem.solver_options["FeasibilityTol"] = self.feasibility_tol_subproblem
         for subproblem in self.subproblem_models:
             env = Env(empty=True)
             env.setParam("OutputFlag", 0)
@@ -343,6 +348,40 @@ class BendersDecomposition:
                     subproblem.model.variables[variable_name].lower = variable_solution
                     subproblem.model.variables[variable_name].upper = variable_solution
 
+    def add_capacity_bounds_to_master(self):
+        """
+        Add the capacity bounds to the master model. The capacity lower bound constraint is defined as
+        the capacity of the master problem greater or equal to the capacity of the subproblem.
+        """
+        variable = None
+        if hasattr(self.master_model.model.variables, "capacity_supernodes"):
+            variable = "capacity_supernodes"
+        elif hasattr(self.master_model.model.variables, "capacity"):
+            variable = "capacity"
+        if variable is not None:
+            lhs = self.master_model.model.variables[variable]
+
+            solution_arrays = [subproblem.model.solution[variable] for subproblem in self.subproblem_models]
+            if len(solution_arrays) == 1:
+                rhs_min = solution_arrays[0] * 0.9
+                rhs_max = solution_arrays[0] * 1.1
+            else:
+                combined_solution_min = solution_arrays[0]
+                combined_solution_max = solution_arrays[0]
+                for solution in solution_arrays[1:]:
+                    combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
+                    combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
+                rhs_min = combined_solution_min * 0.8
+                rhs_max = combined_solution_max * 1.2
+
+            rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
+            rhs_max = xr.where(rhs_max < 0, 0, rhs_max)
+
+            constraint_min = lhs >= rhs_min
+            constraint_max = lhs <= rhs_max
+            self.master_model.constraints.add_constraint("constraint_capacity_lower_bound", constraint_min)
+            self.master_model.constraints.add_constraint("constraint_capacity_upper_bound", constraint_max)
+
     def solved_model_to_gurobi(self, linopy_model_solved):
         """
         Function to get the solver model (gurobi model solved) of the subproblem. Needed to extract the Farkas
@@ -353,6 +392,30 @@ class BendersDecomposition:
 
         gurobi_model = getattr(linopy_model_solved.model, "solver_model")
         return gurobi_model
+
+    def detect_oscillatory_behavior(self, current_feasibility_cuts, feasibility_iteration):
+        """
+        Detect oscillatory behavior in the Benders Decomposition method. The oscillatory behavior is detected by
+        comparing the feasibility cuts of the current iteration with the feasibility cuts of the previous iteration.
+        If the feasibility cuts are the same, the oscillatory behavior is detected.
+        """
+        oscillatory_behavior = False
+        if feasibility_iteration == 1:
+            return oscillatory_behavior
+        last_feasibility_iteration = str(feasibility_iteration - 1)
+        for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in current_feasibility_cuts:
+            last_feasibility_cut_name = f"feasibility_cuts_{subproblem_name}_iteration_{last_feasibility_iteration}"
+            if last_feasibility_cut_name in self.master_model.model.constraints:
+                last_feasibility_cut_lhs = self.master_model.model.constraints[last_feasibility_cut_name].lhs
+                last_feasibility_cut_rhs = self.master_model.model.constraints[last_feasibility_cut_name].rhs
+                if (
+                    last_feasibility_cut_lhs.equals(feasibility_cut_lhs)
+                    and last_feasibility_cut_rhs.item() == feasibility_cut_rhs
+                ):
+                    logging.info("--- Oscillatory Behavior Detected ---")
+                    oscillatory_behavior = True
+
+        return oscillatory_behavior
 
     def generate_feasibility_cut(self, gurobi_model, subproblem):
         """
@@ -426,6 +489,23 @@ class BendersDecomposition:
             for subproblem in infeasible_subproblems
         ]
         return feasibility_cuts
+
+    def filter_redundant_cuts(self, feasibility_cuts):
+        """
+        Filter the redundant feasibility cuts. The function checks if the feasibility cuts are redundant by comparing
+        the feasibility cuts of the current iteration with the feasibility cuts of the previous iteration. If the
+        feasibility cuts are the same, the feasibility cut is considered redundant.
+
+        :param feasibility_cuts: list of feasibility cuts (type: list)
+
+        :return: filtered_feasibility_cuts: list of filtered feasibility cuts (type: list)
+        """
+        filtered_cuts = []
+        for i, cut in enumerate(feasibility_cuts):
+            if i == 0 or not (cut[1].equals(feasibility_cuts[i - 1][1]) and cut[2] == feasibility_cuts[i - 1][2]):
+                filtered_cuts.append(cut)
+
+        return filtered_cuts
 
     def add_feasibility_cuts_to_master(self, feasibility_cuts, feasibility_iteration, iteration):
         """
@@ -594,6 +674,10 @@ class BendersDecomposition:
 
         if "constraint_for_binaries" in self.master_model.model.constraints:
             self.master_model.model.constraints.remove("constraint_for_binaries")
+        if "constraint_for_capacity_supernodes" in self.master_model.model.constraints:
+            self.master_model.model.constraints.remove("constraint_for_capacity_supernodes")
+        if "constraint_capacity_lower_bound" in self.master_model.model.constraints:
+            self.master_model.model.constraints.remove("constraint_capacity_lower_bound")
 
     def save_csv_files(self):
         """
@@ -624,38 +708,41 @@ class BendersDecomposition:
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
-        logging.info("--- Optimal solution found. Terminating iterations ---")
-        # Re-scale the variables if scaling is used
-        self.remove_mock_variables_and_constraints()
-        if self.config.solver["use_scaling"]:
-            self.master_model.scaling.re_scale()
-            for subproblem in self.subproblem_models:
-                subproblem.scaling.re_scale()
+        if self.master_model.model.termination_condition == "optimal" and all(
+            subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
+        ):
+            logging.info("--- Optimal solution found. Terminating iterations ---")
+            # Re-scale the variables if scaling is used
+            self.remove_mock_variables_and_constraints()
+            if self.config.solver["use_scaling"]:
+                self.master_model.scaling.re_scale()
+                for subproblem in self.subproblem_models:
+                    subproblem.scaling.re_scale()
 
-        # Write the results
-        Postprocess(
-            model=self.master_model, scenarios={"": {}}, model_name=self.master_model.model_name, subfolder=Path("")
-        )
-        # Delete the solver_dir of the master model
-        if os.path.exists(self.master_model.solver.solver_dir):
-            shutil.rmtree(self.master_model.solver.solver_dir)
-
-        for subproblem in self.subproblem_models:
-            scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = StringUtils.generate_folder_path(
-                config=self.config.benders,
-                scenario=subproblem.scenario_name,
-                scenario_dict=subproblem.scenario_dict,
-                steps_horizon=[1],
-                step=1,
-            )
+            # Write the results
             Postprocess(
-                model=subproblem,
-                scenarios=self.config.benders.scenarios,
-                model_name=subproblem.model_name,
-                subfolder=subfolder_subproblem,
-                scenario_name=scenario_name_subproblem,
-                param_map=param_map_subproblem,
+                model=self.master_model, scenarios={"": {}}, model_name=self.master_model.model_name, subfolder=Path("")
             )
+            # Delete the solver_dir of the master model
+            if os.path.exists(self.master_model.solver.solver_dir):
+                shutil.rmtree(self.master_model.solver.solver_dir)
+
+            for subproblem in self.subproblem_models:
+                scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = StringUtils.generate_folder_path(
+                    config=self.config.benders,
+                    scenario=subproblem.scenario_name,
+                    scenario_dict=subproblem.scenario_dict,
+                    steps_horizon=[1],
+                    step=1,
+                )
+                Postprocess(
+                    model=subproblem,
+                    scenarios=self.config.benders.scenarios,
+                    model_name=subproblem.model_name,
+                    subfolder=subfolder_subproblem,
+                    scenario_name=scenario_name_subproblem,
+                    param_map=param_map_subproblem,
+                )
 
         self.save_csv_files()
 
@@ -674,6 +761,12 @@ class BendersDecomposition:
             logging.info("")
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
+            if self.config.benders["cap_capacity_bounds"] and iteration == 1:
+                self.solve_subproblems_models(tolernace_change=True)
+                if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
+                    continue_iterations = False
+                    break
+                self.add_capacity_bounds_to_master()
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
             if self.use_monolithic_solution and iteration == 1:
                 self.solve_master_model_with_monolithic_solution(iteration)
@@ -682,57 +775,56 @@ class BendersDecomposition:
 
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
-                if self.config.benders["augment_capacity_bounds"]:
-                    while self.master_model.model.termination_condition != "optimal" and continue_iterations:
-                        feasibility_continue = self.master_model.augment_upper_bound_capacity()
-                        if not feasibility_continue:
-                            self.save_csv_files()
-                            continue_iterations = False
-                            break
-                else:
-                    self.save_csv_files()
-                    continue_iterations = False
-                    break
+                self.save_csv_files()
+                continue_iterations = False
+                break
 
-            if self.master_model.model.termination_condition == "optimal":
-                # Fix the design variables in the subproblems to the optimal solution of the master problem and solve
-                # the subproblems
-                self.fix_design_variables_in_subproblem_model()
-                self.solve_subproblems_models()
+            # Fix the design variables in the subproblems to the optimal solution of the master problem and solve
+            # the subproblems
+            self.fix_design_variables_in_subproblem_model()
+            self.solve_subproblems_models()
 
-                # Check terminatio condition of the subproblems
-                if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
-                    logging.info("--- Subproblems are infeasible ---")
-                    feasibility_cuts = self.define_list_of_feasibility_cuts()
-                    self.add_feasibility_cuts_to_master(feasibility_cuts, feasibility_iteration, iteration)
+            # Check terminatio condition of the subproblems
+            if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
+                logging.info("--- Subproblems are infeasible ---")
+                feasibility_cuts = self.define_list_of_feasibility_cuts()
+                oscillatory_behavior = self.detect_oscillatory_behavior(
+                    feasibility_cuts,
+                    feasibility_iteration,
+                )
+                filtered_feasibility_cuts = self.filter_redundant_cuts(feasibility_cuts)
+                if not oscillatory_behavior:
+                    self.add_feasibility_cuts_to_master(filtered_feasibility_cuts, feasibility_iteration, iteration)
                     feasibility_iteration += 1
+                else:
+                    continue_iterations = not oscillatory_behavior
 
-                if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
-                    logging.info("--- All the subproblems are optimal ---")
-                    if self.master_model.only_feasibility_checks:
-                        continue_iterations = False
-                    else:
-                        optimality_cuts = self.define_list_of_optimality_cuts()
-                        self.add_optimality_cuts_to_master(optimality_cuts, optimality_iteration, iteration)
-                        optimality_iteration += 1
-                        termination_criteria = self.check_termination_criteria(iteration)
-                        if all(value for _, value in termination_criteria):
-                            continue_iterations = False
-
+            if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
+                logging.info("--- All the subproblems are optimal ---")
                 if self.master_model.only_feasibility_checks:
-                    table = []
-                    headers = ["Objective", "Monolithic", "Master"]
-                    table.append(
-                        ["Master", self.monolithic_model.model.objective.value, self.master_model.model.objective.value]
-                    )
-                    logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
+                    continue_iterations = False
+                else:
+                    optimality_cuts = self.define_list_of_optimality_cuts()
+                    self.add_optimality_cuts_to_master(optimality_cuts, optimality_iteration, iteration)
+                    optimality_iteration += 1
+                    termination_criteria = self.check_termination_criteria(iteration)
+                    if all(value for _, value in termination_criteria):
+                        continue_iterations = False
 
-                if continue_iterations is False:
-                    self.save_master_and_subproblems()
+            if self.master_model.only_feasibility_checks:
+                table = []
+                headers = ["Objective", "Monolithic", "Master"]
+                table.append(
+                    ["Master", self.monolithic_model.model.objective.value, self.master_model.model.objective.value]
+                )
+                logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
 
-                if iteration == max_number_of_iterations:
-                    logging.info("--- Maximum number of iterations reached ---")
-                    logging.info("--- Saving possible results ---")
-                    self.save_csv_files()
+            if continue_iterations is False:
+                self.save_master_and_subproblems()
 
-                iteration += 1
+            if iteration == max_number_of_iterations:
+                logging.info("--- Maximum number of iterations reached ---")
+                logging.info("--- Saving possible results ---")
+                self.save_csv_files()
+
+            iteration += 1

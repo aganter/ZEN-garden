@@ -92,11 +92,11 @@ class MasterProblem(OptimizationSetup):
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
 
-        self.add_dummy_constraint_for_binaries()
+        self.add_dummy_constraint()
 
         self.feasibility_master_iteration = 0
-        if self.config_benders["cap_capacity_bounds"]:
-            self.add_upper_bounds_to_capacity()
+        # if self.config_benders["cap_capacity_bounds"]:
+        # self.add_upper_bounds_to_capacity()
 
     def theta_objective_master(self):
         """
@@ -164,7 +164,7 @@ class MasterProblem(OptimizationSetup):
         for operational_variable in self.operational_variables:
             self.model.variables.remove(operational_variable)
 
-    def add_dummy_constraint_for_binaries(self):
+    def add_dummy_constraint(self):
         """
         Add a constraint not binding for the binaries to ensure the model recognize them in the optimization.
         """
@@ -175,32 +175,51 @@ class MasterProblem(OptimizationSetup):
             )  # Add one to avoid the constraint to be binding
             constraint = binaries.sum() <= number_of_technologies
             self.constraints.add_constraint("constraint_for_binaries", constraint)
+        elif hasattr(self.model.variables, "capacity_supernodes"):
+            sum_capacity = self.model.variables.capacity_supernodes.sum()
+            # Add a dummy constraint to ensure all variables are recognized in the optimization, set the sum to be less
+            # than the maximum capacity
+            constraint = sum_capacity <= 1e10
+            self.constraints.add_constraint("constraint_for_capacity_supernodes", constraint)
 
     def add_upper_bounds_to_capacity(self):
         """
         Add upper bounds to the capacity variables to avoid unbounded solutions.
         """
+        if hasattr(self.model.variables, "capacity_supernodes"):
+            variable = "capacity_supernodes"
+        elif hasattr(self.model.variables, "capacity"):
+            variable = "capacity"
+        else:
+            logging.info("No capacity variables found in the model.")
+            return
         if self.config["run_monolithic_optimization"]:
             logging.info("Upper bound capacity multiplier: %s", self.config_benders["upper_bound_capacity_multiplier"])
-            if hasattr(self.model.variables, "capacity"):
-                monolithic_capacity = self.monolithic_model.model.solution.capacity.where(
-                    self.monolithic_model.model.solution.capacity > 0,
-                    self.monolithic_model.model.solution.capacity.max(),
-                )
-                upper_bound = self.model.variables.capacity.upper.where(
-                    self.model.variables.capacity.upper != np.inf, monolithic_capacity
-                )
-                self.model.variables.capacity.upper = (
-                    upper_bound * self.config_benders["upper_bound_capacity_multiplier"]
-                )
+            monolithic_solution = self.monolithic_model.model.solution[variable].where(
+                self.monolithic_model.model.solution[variable] != 0,
+                self.monolithic_model.model.solution[variable].max(),
+            )
+            upper_bound = self.model.variables[variable].upper.where(
+                self.model.variables[variable].upper != np.inf, monolithic_solution
+            )
+            self.model.variables[variable].upper = upper_bound * self.config_benders["upper_bound_capacity_multiplier"]
         else:
-            if hasattr(self.model.variables, "capacity"):
-                self.model.variables.capacity.upper = self.config_benders["upper_bound_capacity_maximum"]
+            self.model.variables[variable].upper = self.config_benders["upper_bound_capacity_maximum"]
 
     def augment_upper_bound_capacity(self):
         """
         Augment the capacity bounds of the master problem in case of infeasibility.
         """
+        if hasattr(self.model.variables, "capacity_supernodes"):
+            variable = "capacity_supernodes"
+            coord_location = "set_superlocation"
+        elif hasattr(self.model.variables, "capacity"):
+            variable = "capacity"
+            coord_location = "set_location"
+        else:
+            logging.info("No capacity variables found in the model.")
+            return False
+
         gurobi_master_model = getattr(self.model, "solver_model")
         gurobi_master_model.computeIIS()
         upper_bounds_iis = [
@@ -219,14 +238,14 @@ class MasterProblem(OptimizationSetup):
             for _, row in invalid_upper_bounds.iterrows():
                 label_position = self.model.variables.get_label_position(int(row["labels"]))
                 existing_bound = self.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
-                self.model.variables.capacity.upper.loc[
+                self.model.variables[variable].upper.loc[
                     label_position[1]["set_technologies"],
                     label_position[1]["set_capacity_types"],
-                    label_position[1]["set_location"],
+                    label_position[1][coord_location],
                     label_position[1]["set_time_steps_yearly"],
                 ] = (
-                    existing_bound * 1.20
-                )  # Increase the upper bound by 5% to avoid the same infeasibility
+                    existing_bound * 1.05
+                )
 
             self.solve()
             self.feasibility_master_iteration += 1
