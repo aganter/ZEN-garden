@@ -371,7 +371,7 @@ class BendersDecomposition:
                 for solution in solution_arrays[1:]:
                     combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
                     combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
-                rhs_min = combined_solution_min * 0.85
+                rhs_min = combined_solution_min * 0.75
                 rhs_max = combined_solution_max * 1.35
 
             rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
