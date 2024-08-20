@@ -11,7 +11,6 @@ Compilation  of the optimization problem.
 import importlib
 import logging
 import os
-import numpy as np
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
@@ -112,8 +111,6 @@ def main(config, dataset_path=None, job_index=None):
 
             # The scenario will create a double level folder structure: the first to be the different MGA objectives
             # and the second to be the iterations for each objective
-            np_random_seed = 42  # This seed ensures reproducibility across runs
-            random_state = np.random.RandomState(np_random_seed)
             for scenario, scenario_dict in zip(scenarios, elements):
                 parts = scenario.split("_")
                 scenario_name = "_".join(parts[:-2])
@@ -126,7 +123,6 @@ def main(config, dataset_path=None, job_index=None):
                     optimized_setup=optimization_setup,
                     scenario_name=scenario,
                     scenario_dict=scenario_dict,
-                    random_state=random_state,
                 )
                 mga_iterations.fit()
 
