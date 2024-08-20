@@ -52,6 +52,7 @@ class BendersDecomposition:
         monolithic_model: OptimizationSetup,
         scenario_name: str = None,
         use_monolithic_solution: bool = False,
+        decision_variables: list = None,
     ):
         """
         Initialize the Benders Decomposition method.
@@ -68,6 +69,7 @@ class BendersDecomposition:
         self.analysis = analysis
         self.monolithic_model = monolithic_model
         self.use_monolithic_solution = use_monolithic_solution
+        self.decision_variables = decision_variables
 
         # Define the input path where the design and operational variables and constraints are stored
         self.input_path = getattr(self.config.benders, "input_path")
@@ -767,11 +769,11 @@ class BendersDecomposition:
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
             if self.config.benders["cap_capacity_bounds"] and iteration == 1:
-                self.solve_subproblems_models(tolernace_change=True)
-                if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
-                    continue_iterations = False
-                    break
-                self.add_capacity_bounds_to_master()
+                # self.solve_subproblems_models(tolernace_change=True)
+                # if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
+                #     continue_iterations = False
+                #     break
+                # self.add_capacity_bounds_to_master()
                 for subproblem in self.subproblem_models:
                     subproblem.change_objective_to_constant()
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
@@ -781,6 +783,7 @@ class BendersDecomposition:
                 self.solve_master_model(iteration)
 
             if self.master_model.model.termination_condition != "optimal":
+
                 logging.info("--- Master problem is infeasible ---")
                 self.master_model.model.print_infeasibilities()
                 self.save_csv_files()

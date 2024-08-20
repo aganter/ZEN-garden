@@ -723,7 +723,7 @@ class Technology(Element):
                     ["set_technologies", "set_capacity_types", "set_superlocation", "set_time_steps_yearly"],
                     optimization_setup,
                 ),
-                bounds=(0, np.inf),
+                bounds=(0, optimization_setup.config.system["capacity_supernodes_max"]),
                 doc="capacity of installed technologies at superlocation l and time t",
                 unit_category={"energy_quantity": 1, "time": -1},
             )

@@ -103,6 +103,7 @@ class System(Subscriptable):
     double_capex_transport: bool = False
     set_nodes: list[str] = []
     run_supernodes: bool = False
+    capacity_supernodes_max: int = 1e3
     exclude_parameters_from_TSA: bool = True
     conduct_scenario_analysis: bool = False
     run_default_scenario: bool = True
