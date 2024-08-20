@@ -372,7 +372,7 @@ class BendersDecomposition:
                     combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
                     combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
                 rhs_min = combined_solution_min * 0.85
-                rhs_max = combined_solution_max * 1.15
+                rhs_max = combined_solution_max * 1.35
 
             rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
             rhs_max = xr.where(rhs_max < 0, 0, rhs_max)
@@ -782,6 +782,7 @@ class BendersDecomposition:
 
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
+                self.master_model.model.print_infeasibilities()
                 self.save_csv_files()
                 continue_iterations = False
                 break
