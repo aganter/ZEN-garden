@@ -363,16 +363,16 @@ class BendersDecomposition:
 
             solution_arrays = [subproblem.model.solution[variable] for subproblem in self.subproblem_models]
             if len(solution_arrays) == 1:
-                rhs_min = solution_arrays[0] * 0.9
-                rhs_max = solution_arrays[0] * 1.1
+                rhs_min = solution_arrays[0] * 0.85
+                rhs_max = solution_arrays[0] * 1.15
             else:
                 combined_solution_min = solution_arrays[0]
                 combined_solution_max = solution_arrays[0]
                 for solution in solution_arrays[1:]:
                     combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
                     combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
-                rhs_min = combined_solution_min * 0.8
-                rhs_max = combined_solution_max * 1.2
+                rhs_min = combined_solution_min * 0.85
+                rhs_max = combined_solution_max * 1.15
 
             rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
             rhs_max = xr.where(rhs_max < 0, 0, rhs_max)
@@ -501,8 +501,13 @@ class BendersDecomposition:
         :return: filtered_feasibility_cuts: list of filtered feasibility cuts (type: list)
         """
         filtered_cuts = []
-        for i, cut in enumerate(feasibility_cuts):
-            if i == 0 or not (cut[1].equals(feasibility_cuts[i - 1][1]) and cut[2] == feasibility_cuts[i - 1][2]):
+        for _, cut in enumerate(feasibility_cuts):
+            is_unique = True
+            for filtered_cut in filtered_cuts:
+                if cut[1].equals(filtered_cut[1]) and cut[2] == filtered_cut[2]:
+                    is_unique = False
+                    break
+            if is_unique:
                 filtered_cuts.append(cut)
 
         return filtered_cuts
@@ -767,6 +772,8 @@ class BendersDecomposition:
                     continue_iterations = False
                     break
                 self.add_capacity_bounds_to_master()
+                for subproblem in self.subproblem_models:
+                    subproblem.change_objective_to_constant()
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
             if self.use_monolithic_solution and iteration == 1:
                 self.solve_master_model_with_monolithic_solution(iteration)

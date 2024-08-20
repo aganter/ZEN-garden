@@ -190,3 +190,29 @@ class Subproblem(OptimizationSetup):
         self.lhs_cuts["master_variable"] = self.lhs_cuts.apply(self.get_linopy_variable, axis=1)
         end_time = time.time()
         logging.info("--- Done in %.2f seconds ---", (end_time - start_time))
+
+    def change_objective_to_constant(self):
+        """
+        Change the objective function of the subproblem to a constant value.
+        This is needed when the objective function of the subproblem is a mock variable.
+        """
+        if self.analysis["objective"] == "mga":
+            if "capacity" in str(self.monolithic_model.model.objective):
+                if self.config.benders["subproblem_objective"]:
+                    self.variables.add_variable(
+                        self.model,
+                        name="mock_objective_subproblem",
+                        index_sets=self.sets["set_time_steps_yearly"],
+                        doc="mock variables for the objective of the subproblems",
+                        unit_category={"time": -1},
+                        bounds=(0, 0),
+                    )
+                    self.model.add_objective(
+                        sum(
+                            [
+                                self.model.variables["mock_objective_subproblem"][year]
+                                for year in self.energy_system.set_time_steps_yearly
+                            ]
+                        ).to_linexpr(),
+                        overwrite=True,
+                    )
