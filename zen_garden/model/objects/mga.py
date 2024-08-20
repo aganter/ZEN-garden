@@ -205,6 +205,11 @@ class ModelingToGenerateAlternatives:
             tuple(component): truncnorm.rvs(-1, 1, loc=0, scale=1, random_state=self.random_state)
             for component in self.decision_variables
         }
+        # For component in self.decision_variables to have 'biomethane_transport' in the tuple key, the random direction
+        # must be positive
+        for component in self.decision_variables:
+            if component[0] == "biomethane_transport":
+                self.direction_search_vector[tuple(component)] = abs(self.direction_search_vector[tuple(component)])
 
         return self.direction_search_vector
 
