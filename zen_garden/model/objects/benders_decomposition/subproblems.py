@@ -116,7 +116,7 @@ class Subproblem(OptimizationSetup):
         # Define the objective function
         if self.analysis["objective"] == "mga":
             if "capacity" in str(self.monolithic_model.model.objective):
-                if self.config.benders["subproblem_objective"]:
+                if self.config.benders["cap_capacity_bounds"]:
                     self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
                 else:
                     self.variables.add_variable(
@@ -198,21 +198,20 @@ class Subproblem(OptimizationSetup):
         """
         if self.analysis["objective"] == "mga":
             if "capacity" in str(self.monolithic_model.model.objective):
-                if self.config.benders["subproblem_objective"]:
-                    self.variables.add_variable(
-                        self.model,
-                        name="mock_objective_subproblem",
-                        index_sets=self.sets["set_time_steps_yearly"],
-                        doc="mock variables for the objective of the subproblems",
-                        unit_category={"time": -1},
-                        bounds=(0, 0),
-                    )
-                    self.model.add_objective(
-                        sum(
-                            [
-                                self.model.variables["mock_objective_subproblem"][year]
-                                for year in self.energy_system.set_time_steps_yearly
-                            ]
-                        ).to_linexpr(),
-                        overwrite=True,
-                    )
+                self.variables.add_variable(
+                    self.model,
+                    name="mock_objective_subproblem",
+                    index_sets=self.sets["set_time_steps_yearly"],
+                    doc="mock variables for the objective of the subproblems",
+                    unit_category={"time": -1},
+                    bounds=(0, 0),
+                )
+                self.model.add_objective(
+                    sum(
+                        [
+                            self.model.variables["mock_objective_subproblem"][year]
+                            for year in self.energy_system.set_time_steps_yearly
+                        ]
+                    ).to_linexpr(),
+                    overwrite=True,
+                )

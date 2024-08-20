@@ -103,7 +103,7 @@ class System(Subscriptable):
     double_capex_transport: bool = False
     set_nodes: list[str] = []
     run_supernodes: bool = False
-    capacity_supernodes_max: int = 1e3
+    capacity_supernodes_max: int = 1e4
     exclude_parameters_from_TSA: bool = True
     conduct_scenario_analysis: bool = False
     run_default_scenario: bool = True
@@ -209,13 +209,7 @@ class BendersDecomposition(Subscriptable):
     use_monolithic_solution: bool = False
     absolute_optimality_gap: int = 1e-2
     max_number_of_iterations: int = 1e8
-    cap_capacity_bounds: bool = True
-    augment_capacity_bounds: bool = True
-    upper_bound_capacity_multiplier: float = 5
-    max_number_feasibility_iterations: int = 1e8
-    upper_bound_capacity_maximum: int = 1e8
-    use_lower_bound_capacity: bool = True
-    subproblem_objective: bool = True
+    cap_capacity_bounds: bool = False
 
 
 class ModelingToGenerateAlternatives(Subscriptable):

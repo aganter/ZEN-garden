@@ -15,7 +15,6 @@
 import logging
 import os
 import numpy as np
-import pandas as pd
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 
@@ -95,8 +94,6 @@ class MasterProblem(OptimizationSetup):
         self.add_dummy_constraint()
 
         self.feasibility_master_iteration = 0
-        # if self.config_benders["cap_capacity_bounds"]:
-        # self.add_upper_bounds_to_capacity()
 
     def theta_objective_master(self):
         """
@@ -182,75 +179,27 @@ class MasterProblem(OptimizationSetup):
             constraint = sum_capacity <= 1e10
             self.constraints.add_constraint("constraint_for_capacity_supernodes", constraint)
 
-    def add_upper_bounds_to_capacity(self):
+    def check_variables_bounds(self):
         """
-        Add upper bounds to the capacity variables to avoid unbounded solutions.
+        If the objective function is "mga" and we optimize for design variables, we check the bounds of these variables.
         """
-        if hasattr(self.model.variables, "capacity_supernodes"):
-            variable = "capacity_supernodes"
-        elif hasattr(self.model.variables, "capacity"):
-            variable = "capacity"
-        else:
-            logging.info("No capacity variables found in the model.")
-            return
-        if self.config["run_monolithic_optimization"]:
-            logging.info("Upper bound capacity multiplier: %s", self.config_benders["upper_bound_capacity_multiplier"])
-            monolithic_solution = self.monolithic_model.model.solution[variable].where(
-                self.monolithic_model.model.solution[variable] != 0,
-                self.monolithic_model.model.solution[variable].max(),
-            )
-            upper_bound = self.model.variables[variable].upper.where(
-                self.model.variables[variable].upper != np.inf, monolithic_solution
-            )
-            self.model.variables[variable].upper = upper_bound * self.config_benders["upper_bound_capacity_multiplier"]
-        else:
-            self.model.variables[variable].upper = self.config_benders["upper_bound_capacity_maximum"]
+        variable = None
+        if self.analysis["objective"] == "mga" and "capacity" in str(self.monolithic_model.model.objective):
+            if hasattr(self.model.variables, "capacity_supernodes"):
+                variable = "capacity_supernodes"
+            elif hasattr(self.model.variables, "capacity"):
+                variable = "capacity"
+            else:
+                logging.info("No capacity variables found in the master problem.")
 
-    def augment_upper_bound_capacity(self):
-        """
-        Augment the capacity bounds of the master problem in case of infeasibility.
-        """
-        if hasattr(self.model.variables, "capacity_supernodes"):
-            variable = "capacity_supernodes"
-            coord_location = "set_superlocation"
-        elif hasattr(self.model.variables, "capacity"):
-            variable = "capacity"
-            coord_location = "set_location"
-        else:
-            logging.info("No capacity variables found in the model.")
-            return False
-
-        gurobi_master_model = getattr(self.model, "solver_model")
-        gurobi_master_model.computeIIS()
-        upper_bounds_iis = [
-            (int(variables.VarName[1:]))
-            for variables, iis in zip(gurobi_master_model.getVars(), gurobi_master_model.IISUB)
-            if iis != 0
-        ]
-        if not upper_bounds_iis:
-            self.model.print_infeasibilities()
-            logging.info("--- No other augmentation possible ---")
-            return False
-        else:
-            logging.info("--- Augment Upper Bounds that are Infeasible ---")
-            upper_bounds_iis_df = pd.DataFrame(upper_bounds_iis, columns=["labels"])
-            invalid_upper_bounds = self.model.variables.flat.merge(upper_bounds_iis_df, on="labels")
-            for _, row in invalid_upper_bounds.iterrows():
-                label_position = self.model.variables.get_label_position(int(row["labels"]))
-                existing_bound = self.model.variables[f"{label_position[0]}"].sel(label_position[1]).upper
-                self.model.variables[variable].upper.loc[
-                    label_position[1]["set_technologies"],
-                    label_position[1]["set_capacity_types"],
-                    label_position[1][coord_location],
-                    label_position[1]["set_time_steps_yearly"],
-                ] = (
-                    existing_bound * 1.05
-                )
-
-            self.solve()
-            self.feasibility_master_iteration += 1
-
-            if self.feasibility_master_iteration > self.config.benders["max_number_feasibility_iterations"]:
-                self.model.print_infeasibilities()
-                return False
-            return True
+            if variable is not None:
+                if (self.model.variables[variable].upper == np.inf).any():
+                    logging.error(
+                        "The upper bound of the %s variable is set to infinity. Please set a finite upper bound.",
+                        variable,
+                    )
+                if (self.model.variables[variable].lower == -np.inf).any():
+                    logging.error(
+                        "The lower bound of the %s variable is set to infinity. Please set a finite lower bound.",
+                        variable,
+                    )
