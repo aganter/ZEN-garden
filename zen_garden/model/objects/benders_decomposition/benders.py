@@ -379,7 +379,7 @@ class BendersDecomposition:
             rhs_max = combined_solution_max * scaling_factor_upper
 
             rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
-            rhs_max = xr.where(rhs_max <= 0, self.master_model.model.variables[variable].upper, rhs_max)
+            rhs_max = xr.where(rhs_max <= 0, 0, rhs_max)
 
             constraint_min = lhs_lower >= rhs_min
             constraint_max = lhs_upper <= rhs_max
