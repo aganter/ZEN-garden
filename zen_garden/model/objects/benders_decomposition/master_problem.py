@@ -156,10 +156,12 @@ class MasterProblem(OptimizationSetup):
         """
         logging.info("--- Removing operational constraints from the master problem ---")
         for operational_constraint in self.operational_constraints:
-            self.model.constraints.remove(operational_constraint)
+            if operational_constraint in self.model.constraints:
+                self.model.constraints.remove(operational_constraint)
         logging.info("--- Removing operational variables from the master problem ---")
         for operational_variable in self.operational_variables:
-            self.model.variables.remove(operational_variable)
+            if operational_variable in self.model.variables:
+                self.model.variables.remove(operational_variable)
 
     def add_dummy_constraint(self):
         """
@@ -174,7 +176,8 @@ class MasterProblem(OptimizationSetup):
             self.constraints.add_constraint("constraint_for_binaries", constraint)
         # elif hasattr(self.model.variables, "capacity_supernodes"):
         #     sum_capacity = self.model.variables.capacity_supernodes.sum()
-        #     # Add a dummy constraint to ensure all variables are recognized in the optimization, set the sum to be less
+        #     # Add a dummy constraint to ensure all variables are recognized in the optimization, set the sum to be
+        #     # less
         #     # than the maximum capacity
         #     constraint = sum_capacity <= 1e10
         #     self.constraints.add_constraint("constraint_for_capacity_supernodes", constraint)
@@ -185,21 +188,29 @@ class MasterProblem(OptimizationSetup):
         """
         variable = None
         if self.analysis["objective"] == "mga" and "capacity" in str(self.monolithic_model.model.objective):
-            if hasattr(self.model.variables, "capacity_supernodes"):
-                variable = "capacity_supernodes"
-            elif hasattr(self.model.variables, "capacity"):
+            if hasattr(self.model.variables, "capacity"):
                 variable = "capacity"
             else:
                 logging.info("No capacity variables found in the master problem.")
 
-            if variable is not None:
-                if (self.model.variables[variable].upper == np.inf).any():
-                    logging.error(
-                        "The upper bound of the %s variable is set to infinity. Please set a finite upper bound.",
-                        variable,
-                    )
-                if (self.model.variables[variable].lower == -np.inf).any():
-                    logging.error(
-                        "The lower bound of the %s variable is set to infinity. Please set a finite lower bound.",
-                        variable,
-                    )
+        if variable is not None:
+            upper_bound = self.model.variables[variable].upper
+
+            for tech in self.sets['set_technologies']:
+                if tech in self.sets['set_transport_technologies']:
+                    locations_to_check = self.sets['set_edges']
+                else:
+                    locations_to_check = self.sets['set_nodes']
+
+                for location in locations_to_check:
+                    for year in self.model.variables.capacity.coords["set_time_steps_yearly"].values:
+                        if upper_bound.loc[tech, 'power', location, year] == np.inf:
+                            logging.error(
+                                "The upper bound of the %s variable for technology %s, location %s, and year %d is set to infinity. Please set a finite upper bound.",
+                                variable, tech, location, year
+                            )
+                        if upper_bound.loc[tech, 'power', location, year] == -np.inf:
+                            logging.error(
+                                "The lower bound of the %s variable for technology %s, location %s, and year %d is set to infinity. Please set a finite lower bound.",
+                                variable, tech, location, year
+                            )

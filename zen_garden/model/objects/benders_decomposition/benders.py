@@ -357,19 +357,29 @@ class BendersDecomposition:
 
             solution_arrays = [subproblem.model.solution[variable] for subproblem in self.subproblem_models]
             if len(solution_arrays) == 1:
-                rhs_min = solution_arrays[0] * 0.8
-                rhs_max = solution_arrays[0] * 1.2
+                rhs_min = solution_arrays[0]
+                rhs_max = solution_arrays[0]
             else:
                 combined_solution_min = solution_arrays[0]
                 combined_solution_max = solution_arrays[0]
                 for solution in solution_arrays[1:]:
                     combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
                     combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
-                rhs_min = combined_solution_min * 0.8
-                rhs_max = combined_solution_max * 1.2
+
+            coefficients = self.master_model.model.objective.coeffs
+            max_coefficient = np.max(coefficients)
+            min_coefficient = np.min(coefficients)
+            mean_coefficient = np.mean(coefficients)
+            std_coefficient = np.std(coefficients)
+
+            scaling_factor_upper = 1 + 0.5 * (max_coefficient - mean_coefficient) / std_coefficient
+            scaling_factor_lower = 1 - 0.5 * (mean_coefficient - min_coefficient) / std_coefficient
+
+            rhs_min = combined_solution_min * scaling_factor_lower
+            rhs_max = combined_solution_max * scaling_factor_upper
 
             rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
-            rhs_max = xr.where(rhs_max < 0, 0, rhs_max)
+            rhs_max = xr.where(rhs_max <= 0, self.master_model.model.variables[variable].upper, rhs_max)
 
             constraint_min = lhs_lower >= rhs_min
             constraint_max = lhs_upper <= rhs_max
@@ -455,8 +465,6 @@ class BendersDecomposition:
         end_time_cuts = time.time()
         total_time_cuts = end_time_cuts - start_time_cuts
         logging.info("Time to generate the feasibility cut: %s", total_time_cuts)
-        logging.info("%s <= %s", feasibility_cut_lhs, feasibility_cut_rhs)
-        logging.info("")
         return feasibility_cut_lhs, feasibility_cut_rhs
 
     def define_list_of_feasibility_cuts(self) -> list:
@@ -763,8 +771,8 @@ class BendersDecomposition:
             logging.info("")
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
-            if self.config.benders["cap_capacity_bounds"]:
-                if iteration == 1:
+            if iteration == 1:
+                if self.config.benders["cap_capacity_bounds"]:
                     self.solve_subproblems_models(tolernace_change=True)
                     if any(
                         subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
@@ -776,11 +784,11 @@ class BendersDecomposition:
                         subproblem.change_objective_to_constant()
                         subproblem.remove_design_constraints()
                         subproblem.define_lhs_rhs_for_cuts()
-            else:
-                self.master_model.check_variables_bounds()
-                for subproblem in self.subproblem_models:
-                    subproblem.remove_design_constraints()
-                    subproblem.define_lhs_rhs_for_cuts()
+                else:
+                    self.master_model.check_variables_bounds()
+                    for subproblem in self.subproblem_models:
+                        subproblem.remove_design_constraints()
+                        subproblem.define_lhs_rhs_for_cuts()
 
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
             if self.use_monolithic_solution and iteration == 1:

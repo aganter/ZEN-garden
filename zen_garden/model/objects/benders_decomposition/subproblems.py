@@ -154,10 +154,12 @@ class Subproblem(OptimizationSetup):
         # Remove the design constraints and not coupling variables from the subproblem
         logging.info("--- Removing design constraints from the subproblem ---")
         for design_constraint in self.design_constraints:
-            self.model.constraints.remove(design_constraint)
+            if design_constraint in self.model.constraints:
+                self.model.constraints.remove(design_constraint)
         logging.info("--- Removing not coupling design variables from the subproblem ---")
         for not_coupling_variable in self.not_coupling_variables:
-            self.model.variables.remove(not_coupling_variable)
+            if not_coupling_variable in self.model.variables:
+                self.model.variables.remove(not_coupling_variable)
 
     def get_linopy_variable(self, row):
         """

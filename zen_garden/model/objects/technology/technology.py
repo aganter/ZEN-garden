@@ -585,7 +585,7 @@ class Technology(Element):
                 )
                 return 0, bound_capacity
             else:
-                return 0, np.inf
+                return 0, 1e4
 
         # bounds only needed for Big-M formulation, thus if any technology is modeled with on-off behavior
         techs_on_off = cls.create_custom_set(["set_technologies", "set_on_off"], optimization_setup)[0]
@@ -716,10 +716,6 @@ class Technology(Element):
         )
 
         if optimization_setup.system["run_supernodes"]:
-            if optimization_setup.config.benders["absolute_upper_bound"]:
-                upper = optimization_setup.config.system["capacity_supernodes_max"]
-            else:
-                upper = np.inf
             variables.add_variable(
                 model,
                 name="capacity_supernodes",
@@ -727,7 +723,7 @@ class Technology(Element):
                     ["set_technologies", "set_capacity_types", "set_superlocation", "set_time_steps_yearly"],
                     optimization_setup,
                 ),
-                bounds=(0, upper),
+                bounds=(0, np.inf),
                 doc="capacity of installed technologies at superlocation l and time t",
                 unit_category={"energy_quantity": 1, "time": -1},
             )
