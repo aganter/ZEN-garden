@@ -263,7 +263,6 @@ class BendersDecomposition:
         """
         # Make the directory for the basis file
         self.master_model.solve()
-        # self.master_model.solver.warmstart_fn = self.master_model.model.get_solution_file()
 
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
             optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value
@@ -293,7 +292,6 @@ class BendersDecomposition:
             self.master_model.model.variables[variable_name].upper = variable_solution
         # Solve the master model
         self.master_model.solve()
-        # self.master_model.solver.warmstart_fn = self.master_model.model.get_solution_file()
         # Restore the original bounds of the master variables
         for variable_name in self.master_model.model.variables:
             self.master_model.model.variables[variable_name].lower = original_bounds[variable_name][0]
@@ -349,31 +347,32 @@ class BendersDecomposition:
         the capacity of the master problem greater or equal to the capacity of the subproblem.
         """
         variable = None
-        if hasattr(self.master_model.model.variables, "capacity_supernodes"):
-            variable = "capacity_supernodes"
-        elif hasattr(self.master_model.model.variables, "capacity"):
+        lhs_lower = None
+        lhs_upper = None
+        if hasattr(self.master_model.model.variables, "capacity"):
             variable = "capacity"
+            lhs_lower = self.master_model.model.variables[variable]
+            lhs_upper = self.master_model.model.variables[variable]
         if variable is not None:
-            lhs = self.master_model.model.variables[variable]
 
             solution_arrays = [subproblem.model.solution[variable] for subproblem in self.subproblem_models]
             if len(solution_arrays) == 1:
-                rhs_min = solution_arrays[0] * 0.85
-                rhs_max = solution_arrays[0] * 1.15
+                rhs_min = solution_arrays[0] * 0.8
+                rhs_max = solution_arrays[0] * 1.2
             else:
                 combined_solution_min = solution_arrays[0]
                 combined_solution_max = solution_arrays[0]
                 for solution in solution_arrays[1:]:
                     combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
                     combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
-                rhs_min = combined_solution_min * 0.75
-                rhs_max = combined_solution_max * 1.35
+                rhs_min = combined_solution_min * 0.8
+                rhs_max = combined_solution_max * 1.2
 
             rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
             rhs_max = xr.where(rhs_max < 0, 0, rhs_max)
 
-            constraint_min = lhs >= rhs_min
-            constraint_max = lhs <= rhs_max
+            constraint_min = lhs_lower >= rhs_min
+            constraint_max = lhs_upper <= rhs_max
             self.master_model.constraints.add_constraint("constraint_capacity_lower_bound", constraint_min)
             self.master_model.constraints.add_constraint("constraint_capacity_upper_bound", constraint_max)
 
@@ -456,6 +455,8 @@ class BendersDecomposition:
         end_time_cuts = time.time()
         total_time_cuts = end_time_cuts - start_time_cuts
         logging.info("Time to generate the feasibility cut: %s", total_time_cuts)
+        logging.info("%s <= %s", feasibility_cut_lhs, feasibility_cut_rhs)
+        logging.info("")
         return feasibility_cut_lhs, feasibility_cut_rhs
 
     def define_list_of_feasibility_cuts(self) -> list:
@@ -665,19 +666,20 @@ class BendersDecomposition:
         This is done in order to retrieve the same problem configuration as before than the scaling process.
         Consequently, the user is able to save the solution of the problem in the output folder.
         """
-        if "outer_approximation" in self.master_model.model.variables:
-            self.master_model.model.variables.remove("outer_approximation")
 
         for subproblem in self.subproblem_models:
             if "mock_objective_subproblem" in subproblem.model.variables:
                 subproblem.model.variables.remove("mock_objective_subproblem")
 
-        if "constraint_for_binaries" in self.master_model.model.constraints:
-            self.master_model.model.constraints.remove("constraint_for_binaries")
-        if "constraint_for_capacity_supernodes" in self.master_model.model.constraints:
-            self.master_model.model.constraints.remove("constraint_for_capacity_supernodes")
-        if "constraint_capacity_lower_bound" in self.master_model.model.constraints:
-            self.master_model.model.constraints.remove("constraint_capacity_lower_bound")
+        constraints_master_to_remove = ["constraint_for_binaries"]
+        for constraint in constraints_master_to_remove:
+            if constraint in self.master_model.model.constraints:
+                self.master_model.model.constraints.remove(constraint)
+
+        variables_master_to_remove = ["outer_approximation"]
+        for variable in variables_master_to_remove:
+            if variable in self.master_model.model.variables:
+                self.master_model.model.variables.remove(variable)
 
     def save_csv_files(self):
         """
@@ -761,16 +763,24 @@ class BendersDecomposition:
             logging.info("")
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
-            if self.config.benders["cap_capacity_bounds"] and iteration == 1:
-                self.solve_subproblems_models(tolernace_change=True)
-                if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
-                    continue_iterations = False
-                    break
-                self.add_capacity_bounds_to_master()
-                for subproblem in self.subproblem_models:
-                    subproblem.change_objective_to_constant()
+            if self.config.benders["cap_capacity_bounds"]:
+                if iteration == 1:
+                    self.solve_subproblems_models(tolernace_change=True)
+                    if any(
+                        subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
+                    ):
+                        continue_iterations = False
+                        break
+                    self.add_capacity_bounds_to_master()
+                    for subproblem in self.subproblem_models:
+                        subproblem.change_objective_to_constant()
+                        subproblem.remove_design_constraints()
+                        subproblem.define_lhs_rhs_for_cuts()
             else:
                 self.master_model.check_variables_bounds()
+                for subproblem in self.subproblem_models:
+                    subproblem.remove_design_constraints()
+                    subproblem.define_lhs_rhs_for_cuts()
 
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
             if self.use_monolithic_solution and iteration == 1:

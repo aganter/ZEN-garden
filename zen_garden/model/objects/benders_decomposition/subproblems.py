@@ -92,7 +92,6 @@ class Subproblem(OptimizationSetup):
 
         self.rhs_cuts = None
         self.lhs_cuts = None
-        self.define_lhs_rhs_for_cuts()
 
     def create_subproblem(self):
         """
@@ -148,6 +147,10 @@ class Subproblem(OptimizationSetup):
                 self.config.analysis["objective"],
             )
 
+    def remove_design_constraints(self):
+        """
+        Remove the design constraints from the subproblem.
+        """
         # Remove the design constraints and not coupling variables from the subproblem
         logging.info("--- Removing design constraints from the subproblem ---")
         for design_constraint in self.design_constraints:

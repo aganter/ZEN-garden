@@ -172,12 +172,12 @@ class MasterProblem(OptimizationSetup):
             )  # Add one to avoid the constraint to be binding
             constraint = binaries.sum() <= number_of_technologies
             self.constraints.add_constraint("constraint_for_binaries", constraint)
-        elif hasattr(self.model.variables, "capacity_supernodes"):
-            sum_capacity = self.model.variables.capacity_supernodes.sum()
-            # Add a dummy constraint to ensure all variables are recognized in the optimization, set the sum to be less
-            # than the maximum capacity
-            constraint = sum_capacity <= 1e10
-            self.constraints.add_constraint("constraint_for_capacity_supernodes", constraint)
+        # elif hasattr(self.model.variables, "capacity_supernodes"):
+        #     sum_capacity = self.model.variables.capacity_supernodes.sum()
+        #     # Add a dummy constraint to ensure all variables are recognized in the optimization, set the sum to be less
+        #     # than the maximum capacity
+        #     constraint = sum_capacity <= 1e10
+        #     self.constraints.add_constraint("constraint_for_capacity_supernodes", constraint)
 
     def check_variables_bounds(self):
         """

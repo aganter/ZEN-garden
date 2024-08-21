@@ -202,7 +202,6 @@ class ModelingToGenerateAlternatives:
         self.direction_search_vector = {
             tuple(component): truncnorm.rvs(-1, 1, loc=0, scale=1) for component in self.decision_variables
         }
-
         return self.direction_search_vector
 
     def generate_characteristic_scales(self) -> xr.DataArray:
