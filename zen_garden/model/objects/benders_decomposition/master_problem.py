@@ -196,21 +196,29 @@ class MasterProblem(OptimizationSetup):
         if variable is not None:
             upper_bound = self.model.variables[variable].upper
 
-            for tech in self.sets['set_technologies']:
-                if tech in self.sets['set_transport_technologies']:
-                    locations_to_check = self.sets['set_edges']
+            for tech in self.sets["set_technologies"]:
+                if tech in self.sets["set_transport_technologies"]:
+                    locations_to_check = self.sets["set_edges"]
                 else:
-                    locations_to_check = self.sets['set_nodes']
+                    locations_to_check = self.sets["set_nodes"]
 
                 for location in locations_to_check:
                     for year in self.model.variables.capacity.coords["set_time_steps_yearly"].values:
-                        if upper_bound.loc[tech, 'power', location, year] == np.inf:
+                        if upper_bound.loc[tech, "power", location, year] == np.inf:
                             logging.error(
-                                "The upper bound of the %s variable for technology %s, location %s, and year %d is set to infinity. Please set a finite upper bound.",
-                                variable, tech, location, year
+                                "The upper bound of the %s variable for technology %s, location %s, and year %d is set "
+                                "to infinity. Please set a finite upper bound.",
+                                variable,
+                                tech,
+                                location,
+                                year,
                             )
-                        if upper_bound.loc[tech, 'power', location, year] == -np.inf:
+                        if upper_bound.loc[tech, "power", location, year] == -np.inf:
                             logging.error(
-                                "The lower bound of the %s variable for technology %s, location %s, and year %d is set to infinity. Please set a finite lower bound.",
-                                variable, tech, location, year
+                                "The lower bound of the %s variable for technology %s, location %s, and year %d is set "
+                                "to infinity. Please set a finite lower bound.",
+                                variable,
+                                tech,
+                                location,
+                                year,
                             )

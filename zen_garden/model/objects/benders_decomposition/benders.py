@@ -271,9 +271,9 @@ class BendersDecomposition:
                 [self.optimality_gap_df_infeasibility, new_row], ignore_index=True
             )
 
-    def solve_master_model_with_monolithic_solution(self, iteration):
+    def solve_master_model_with_solution(self, solution):
         """
-        Fix the master variables bounds to the optimal solution of the monolithic problem and solve the master model.
+        Fix the master variables bounds to the optimal solution of the solved problem and solve the master model.
         The remove the fixed bounds of the master variables and restore the original bounds.
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
@@ -287,7 +287,7 @@ class BendersDecomposition:
             )
         # Fix the master variables to the optimal solution of the monolithic problem
         for variable_name in self.master_model.model.variables:
-            variable_solution = self.monolithic_model.model.solution[variable_name]
+            variable_solution = solution[variable_name]
             self.master_model.model.variables[variable_name].lower = variable_solution
             self.master_model.model.variables[variable_name].upper = variable_solution
         # Solve the master model
@@ -296,13 +296,6 @@ class BendersDecomposition:
         for variable_name in self.master_model.model.variables:
             self.master_model.model.variables[variable_name].lower = original_bounds[variable_name][0]
             self.master_model.model.variables[variable_name].upper = original_bounds[variable_name][1]
-
-        if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
-            optimality_gap = self.monolithic_model.model.objective.value - self.master_model.model.objective.value
-            new_row = pd.DataFrame({"iteration": [iteration], "optimality_gap": [optimality_gap]})
-            self.optimality_gap_df_infeasibility = pd.concat(
-                [self.optimality_gap_df_infeasibility, new_row], ignore_index=True
-            )
 
     def solve_subproblems_models(self, tolernace_change=False):
         """
@@ -322,24 +315,37 @@ class BendersDecomposition:
             subproblem.solve()
             logging.info("Subproblem %s is %s", subproblem.scenario_name, subproblem.model.termination_condition)
 
-    def fix_design_variables_in_subproblem_model(self):
+    def fix_design_variables_in_subproblem_model(self, problem_type="master", solution_model=None):
         """
         Fix the design variables of the subproblems to the optimal solution of the master problem.
         This function takes the solution of the master problem and fixes the values of the design variables in the
         subproblems by adding the corresponding upper and lower bounds to the variables. In order to keep stability in
         the method, the solution lower than 1e-5 is set to 0, while the NaN values are kept as they are.
         """
-        master_solution = self.master_model.model.solution
+        if problem_type == "master":
+            master_solution = solution_model
+            for variable_name in self.master_model.model.variables:
+                for subproblem in self.subproblem_models:
+                    if variable_name in subproblem.model.variables:
+                        variable_solution = master_solution[variable_name]
+                        variable_solution = variable_solution.where(
+                            (variable_solution > 1e-5) | np.isnan(variable_solution), 0
+                        )
+                        subproblem.model.variables[variable_name].lower = variable_solution
+                        subproblem.model.variables[variable_name].upper = variable_solution
 
-        for variable_name in self.master_model.model.variables:
+        elif problem_type == "subproblem":
+            solution = solution_model
             for subproblem in self.subproblem_models:
-                if variable_name in subproblem.model.variables:
-                    variable_solution = master_solution[variable_name]
+                if "capacity" in subproblem.model.variables:
+                    variable_solution = solution["capacity"]
                     variable_solution = variable_solution.where(
                         (variable_solution > 1e-5) | np.isnan(variable_solution), 0
                     )
-                    subproblem.model.variables[variable_name].lower = variable_solution
-                    subproblem.model.variables[variable_name].upper = variable_solution
+                    subproblem.model.variables["capacity"].lower = variable_solution
+                    subproblem.model.variables["capacity"].upper = variable_solution
+        else:
+            raise AssertionError("The problem type is not valid.")
 
     def add_capacity_bounds_to_master(self):
         """
@@ -516,7 +522,7 @@ class BendersDecomposition:
 
         return filtered_cuts
 
-    def add_feasibility_cuts_to_master(self, feasibility_cuts, feasibility_iteration, iteration):
+    def add_feasibility_cuts_to_master(self, feasibility_cuts, feasibility_iteration, iteration, upfront=False):
         """
         Add the feasibility cuts to the master model.
 
@@ -526,12 +532,17 @@ class BendersDecomposition:
         """
         for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
             self.feasibility_cuts_counter += 1
+            if not upfront:
+                name = f"feasibility_cuts_{subproblem_name}_iteration_{feasibility_iteration}"
+            else:
+                name = f"feasibility_cuts_{subproblem_name}_upfront_{feasibility_iteration}"
             self.master_model.model.add_constraints(
                 lhs=feasibility_cut_lhs,
                 sign="<=",
                 rhs=feasibility_cut_rhs,
-                name=f"feasibility_cuts_{subproblem_name}_iteration_{feasibility_iteration}",
+                name=name,
             )
+
             # Save the cut in the constraints_added dataframe
             new_row = pd.DataFrame(
                 {
@@ -761,6 +772,7 @@ class BendersDecomposition:
         Fit the Benders Decomposition model.
         """
         iteration = 1
+        upfront_iteration = 1
         feasibility_iteration = 1
         optimality_iteration = 1
         max_number_of_iterations = self.config.benders["max_number_of_iterations"]
@@ -784,17 +796,47 @@ class BendersDecomposition:
                         subproblem.change_objective_to_constant()
                         subproblem.remove_design_constraints()
                         subproblem.define_lhs_rhs_for_cuts()
+                    if self.use_monolithic_solution:
+                        self.solve_master_model_with_solution(solution=self.monolithic_model.model.solution)
+
+                elif self.config.benders["cross_validation_scenarios"]:
+                    logging.info("--- Cross-validating the subproblems optimal solution ---")
+                    self.solve_subproblems_models(tolernace_change=True)
+                    solution_subproblems = [subproblem.model.solution for subproblem in self.subproblem_models]
+                    for subproblem in self.subproblem_models:
+                        subproblem.change_objective_to_constant()
+                        subproblem.remove_design_constraints()
+                        subproblem.define_lhs_rhs_for_cuts()
+                    for solution in solution_subproblems:
+                        self.fix_design_variables_in_subproblem_model(
+                            problem_type="subproblem", solution_model=solution
+                        )
+                        self.solve_subproblems_models()
+                        if any(
+                            subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
+                        ):
+                            feasibility_cuts = self.define_list_of_feasibility_cuts()
+                            filtered_feasibility_cuts = self.filter_redundant_cuts(feasibility_cuts)
+                            self.add_feasibility_cuts_to_master(
+                                filtered_feasibility_cuts, upfront_iteration, iteration, upfront=True
+                            )
+                            upfront_iteration += 1
+                        if all(
+                            subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
+                        ):
+                            if self.master_model.only_feasibility_checks:
+                                self.solve_master_model_with_solution(solution=solution)
+                                continue_iterations = False
                 else:
                     self.master_model.check_variables_bounds()
                     for subproblem in self.subproblem_models:
                         subproblem.remove_design_constraints()
                         subproblem.define_lhs_rhs_for_cuts()
+                    if self.use_monolithic_solution:
+                        self.solve_master_model_with_solution(solution=self.monolithic_model.model.solution)
 
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
-            if self.use_monolithic_solution and iteration == 1:
-                self.solve_master_model_with_monolithic_solution(iteration)
-            else:
-                self.solve_master_model(iteration)
+            self.solve_master_model(iteration)
 
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
@@ -805,7 +847,9 @@ class BendersDecomposition:
 
             # Fix the design variables in the subproblems to the optimal solution of the master problem and solve
             # the subproblems
-            self.fix_design_variables_in_subproblem_model()
+            self.fix_design_variables_in_subproblem_model(
+                problem_type="master", solution_model=self.master_model.model.solution
+            )
             self.solve_subproblems_models()
 
             # Check terminatio condition of the subproblems
