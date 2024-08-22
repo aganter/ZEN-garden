@@ -433,6 +433,7 @@ class BendersDecomposition:
                 [constr for constr in gurobi_model.getConstrs()],
                 gurobi_model.getAttr(GRB.Attr.FarkasDual),
             )
+            if abs(multiplier) > 1e-6
         ]
         for gurobi_constr, farkas in farkas_multipliers:
             rhs = gurobi_constr.RHS
