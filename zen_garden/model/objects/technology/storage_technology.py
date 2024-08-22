@@ -58,6 +58,8 @@ class StorageTechnology(Technology):
         self.capacity_addition_min_energy = self.data_input.extract_input_data("capacity_addition_min_energy", index_sets=[], unit_category={"energy_quantity": 1})
         self.capacity_addition_max_energy = self.data_input.extract_input_data("capacity_addition_max_energy", index_sets=[], unit_category={"energy_quantity": 1})
         self.capacity_limit_energy = self.data_input.extract_input_data("capacity_limit_energy", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
+        self.capacity_limit_max_mga_energy = self.data_input.extract_input_data("capacity_limit_max_mga_energy", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
+        self.capacity_limit_min_mga_energy = self.data_input.extract_input_data("capacity_limit_min_mga_energy", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
         self.capacity_existing_energy = self.data_input.extract_input_data("capacity_existing_energy", index_sets=["set_nodes", "set_technologies_existing"], unit_category={"energy_quantity": 1})
         self.capacity_investment_existing_energy = self.data_input.extract_input_data("capacity_investment_existing_energy", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
         self.energy_to_power_ratio = self.data_input.extract_input_data("energy_to_power_ratio", index_sets=[], unit_category={"time": 1})

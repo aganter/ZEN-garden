@@ -1056,7 +1056,7 @@ class TechnologyRules(GenericRule):
         """limited capacity_limit of technology MGA"""
         # Get the capacity limit for the technology taken by the results of the MGA
         capacity_limit_max = self.parameters.capacity_limit_max_mga
-        capacity_limit_max = 1.1 * capacity_limit_max
+        # capacity_limit_max = 1.1 * capacity_limit_max
         capacity_limit_min = self.parameters.capacity_limit_min_mga
 
         # create mask so that skipped if capacity_limit is inf
