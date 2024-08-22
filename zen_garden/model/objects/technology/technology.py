@@ -100,6 +100,18 @@ class Technology(Element):
             time_steps="set_time_steps_yearly",
             unit_category={"energy_quantity": 1, "time": -1},
         )
+        self.capacity_limit_max_mga = self.data_input.extract_input_data(
+            "capacity_limit_max_mga",
+            index_sets=[set_location, "set_time_steps_yearly"],
+            time_steps="set_time_steps_yearly",
+            unit_category={"energy_quantity": 1, "time": -1},
+        )
+        self.capacity_limit_min_mga = self.data_input.extract_input_data(
+            "capacity_limit_min_mga",
+            index_sets=[set_location, "set_time_steps_yearly"],
+            time_steps="set_time_steps_yearly",
+            unit_category={"energy_quantity": 1, "time": -1},
+        )
         self.carbon_intensity_technology = self.data_input.extract_input_data(
             "carbon_intensity_technology",
             index_sets=[set_location],
@@ -505,6 +517,20 @@ class Technology(Element):
             doc="Parameter which specifies the capacity limit of technologies",
             calling_class=cls,
         )
+        optimization_setup.parameters.add_parameter(
+            name="capacity_limit_max_mga",
+            index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"],
+            capacity_types=True,
+            doc="Parameter which specifies the capacity limit min of technologies in MGA",
+            calling_class=cls,
+        )
+        optimization_setup.parameters.add_parameter(
+            name="capacity_limit_min_mga",
+            index_names=["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"],
+            capacity_types=True,
+            doc="Parameter which specifies the capacity min limit of technologies in MGA",
+            calling_class=cls,
+        )
         # minimum load relative to capacity
         optimization_setup.parameters.add_parameter(
             name="min_load",
@@ -766,6 +792,7 @@ class Technology(Element):
         rules = TechnologyRules(optimization_setup)
         #  technology capacity_limit
         rules.constraint_technology_capacity_limit()
+        rules.constraint_technology_capacity_limit_mga()
 
         # minimum capacity
         rules.constraint_technology_min_capacity_addition()
@@ -1020,6 +1047,28 @@ class TechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_cost_opex_total", constraints)
+
+    def constraint_technology_capacity_limit_mga(self):
+        """limited capacity_limit of technology MGA"""
+        # Get the capacity limit for the technology taken by the results of the MGA
+        capacity_limit_max = self.parameters.capacity_limit_max_mga
+        capacity_limit_max = 1.1 * capacity_limit_max
+        capacity_limit_min = self.parameters.capacity_limit_min_mga
+
+        # create mask so that skipped if capacity_limit is inf
+        m_max = capacity_limit_max != np.inf
+        m_min = capacity_limit_min != 0
+
+        lhs_max = self.variables["capacity"].where(m_max)
+        rhs_max = capacity_limit_max.where(m_max, 0.0)
+        constraints_max = lhs_max <= rhs_max
+
+        lhs_min = self.variables["capacity"].where(m_min)
+        rhs_min = capacity_limit_min.where(m_min, 0.0)
+        constraints_min = lhs_min >= rhs_min
+
+        self.constraints.add_constraint("constraint_technology_capacity_limit_mga_max", constraints_max)
+        self.constraints.add_constraint("constraint_technology_capacity_limit_mga_min", constraints_min)
 
     def constraint_technology_capacity_limit(self):
         """limited capacity_limit of technology
