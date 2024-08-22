@@ -797,6 +797,16 @@ class BendersDecomposition:
                         ):
                             if self.master_model.only_feasibility_checks:
                                 self.solve_master_model_with_solution(solution_model=subproblem.model)
+                                table = []
+                                headers = ["Objective", "Monolithic", "Master"]
+                                table.append(
+                                    [
+                                        "Master",
+                                        self.monolithic_model.model.objective.value,
+                                        self.master_model.model.objective.value,
+                                    ]
+                                )
+                                logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
                                 self.save_master_and_subproblems()
                                 continue_iterations = False
                                 break
