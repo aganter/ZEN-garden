@@ -769,6 +769,7 @@ class BendersDecomposition:
                     solution_subproblems = [subproblem.model.solution for subproblem in self.subproblem_models]
                     for subproblem in self.subproblem_models:
                         subproblem.remove_design_constraints()
+                        subproblem.set_objective_to_constant()
                     for index, solution in enumerate(solution_subproblems):
                         # I need to get the correspoding subproblem model, it will be on the same position
                         # in the subproblem_models list
@@ -791,6 +792,7 @@ class BendersDecomposition:
                         ):
                             if self.master_model.only_feasibility_checks:
                                 self.solve_master_model_with_solution(solution_model=subproblem.model)
+                                self.save_master_and_subproblems()
                                 continue_iterations = False
                                 break
                     if not continue_iterations:

@@ -114,23 +114,26 @@ class Subproblem(OptimizationSetup):
         # Define the objective function
         if self.analysis["objective"] == "mga":
             if "capacity" in str(self.monolithic_model.model.objective):
-                self.variables.add_variable(
-                    self.model,
-                    name="mock_objective_subproblem",
-                    index_sets=self.sets["set_time_steps_yearly"],
-                    doc="mock variables for the objective of the subproblems",
-                    unit_category={"time": -1},
-                    bounds=(0, 0),
-                )
-                self.model.add_objective(
-                    sum(
-                        [
-                            self.model.variables["mock_objective_subproblem"][year]
-                            for year in self.energy_system.set_time_steps_yearly
-                        ]
-                    ).to_linexpr(),
-                    overwrite=True,
-                )
+                if self.config.benders["cross_validation_scenarios"]:
+                    self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
+                else:
+                    self.variables.add_variable(
+                        self.model,
+                        name="mock_objective_subproblem",
+                        index_sets=self.sets["set_time_steps_yearly"],
+                        doc="mock variables for the objective of the subproblems",
+                        unit_category={"time": -1},
+                        bounds=(0, 0),
+                    )
+                    self.model.add_objective(
+                        sum(
+                            [
+                                self.model.variables["mock_objective_subproblem"][year]
+                                for year in self.energy_system.set_time_steps_yearly
+                            ]
+                        ).to_linexpr(),
+                        overwrite=True,
+                    )
             elif "flow_import" in str(self.monolithic_model.model.objective):
                 self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
             else:
@@ -156,6 +159,28 @@ class Subproblem(OptimizationSetup):
         for not_coupling_variable in self.not_coupling_variables:
             if not_coupling_variable in self.model.variables:
                 self.model.variables.remove(not_coupling_variable)
+
+    def set_objective_to_constant(self):
+        """
+        Set the objective function of the subproblem to a constant value.
+        """
+        self.variables.add_variable(
+            self.model,
+            name="mock_objective_subproblem",
+            index_sets=self.sets["set_time_steps_yearly"],
+            doc="mock variables for the objective of the subproblems",
+            unit_category={"time": -1},
+            bounds=(0, 0),
+        )
+        self.model.add_objective(
+            sum(
+                [
+                    self.model.variables["mock_objective_subproblem"][year]
+                    for year in self.energy_system.set_time_steps_yearly
+                ]
+            ).to_linexpr(),
+            overwrite=True,
+        )
 
     # def get_linopy_variable(self, row):
     #     """
