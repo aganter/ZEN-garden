@@ -611,7 +611,11 @@ class Technology(Element):
                 )
                 return 0, bound_capacity
             else:
-                return 0, 1e4
+                if optimization_setup.config.benders["place_upper_bound_capacity_expansion"]:
+                    upper_bound = 1e4
+                else:
+                    upper_bound = np.inf
+                return 0, upper_bound
 
         # bounds only needed for Big-M formulation, thus if any technology is modeled with on-off behavior
         techs_on_off = cls.create_custom_set(["set_technologies", "set_on_off"], optimization_setup)[0]

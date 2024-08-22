@@ -22,7 +22,6 @@ import time
 import shutil
 import pandas as pd
 import numpy as np
-import xarray as xr
 from tabulate import tabulate
 from gurobipy import GRB, Env
 
@@ -327,7 +326,7 @@ class BendersDecomposition:
         Solve the subproblems models given in the list self.subproblem_models by leveraging on the OptimizationSetup
         method solve().
         """
-        if self.config.benders["cap_capacity_bounds"] and tolernace_change:
+        if self.config.benders["cross_validation_scenarios"] and tolernace_change:
             self.config.benders.solver_subproblem.solver_options["FeasibilityTol"] = 1e-6
         else:
             self.config.benders.solver_subproblem.solver_options["FeasibilityTol"] = self.feasibility_tol_subproblem
@@ -372,51 +371,6 @@ class BendersDecomposition:
                         subproblem.model.variables[variable_name].upper = variable_solution
         else:
             raise AssertionError("The problem type is not valid.")
-
-    def add_capacity_bounds_to_master(self):
-        """
-        Add the capacity bounds to the master model. The capacity lower bound constraint is defined as
-        the capacity of the master problem greater or equal to the capacity of the subproblem.
-        """
-        variable = None
-        lhs_lower = None
-        lhs_upper = None
-        if hasattr(self.master_model.model.variables, "capacity"):
-            variable = "capacity"
-            lhs_lower = self.master_model.model.variables[variable]
-            lhs_upper = self.master_model.model.variables[variable]
-        if variable is not None:
-
-            solution_arrays = [subproblem.model.solution[variable] for subproblem in self.subproblem_models]
-            if len(solution_arrays) == 1:
-                rhs_min = solution_arrays[0]
-                rhs_max = solution_arrays[0]
-            else:
-                combined_solution_min = solution_arrays[0]
-                combined_solution_max = solution_arrays[0]
-                for solution in solution_arrays[1:]:
-                    combined_solution_min = xr.apply_ufunc(np.minimum, combined_solution_min, solution)
-                    combined_solution_max = xr.apply_ufunc(np.maximum, combined_solution_max, solution)
-
-            coefficients = self.master_model.model.objective.coeffs
-            max_coefficient = np.max(coefficients)
-            min_coefficient = np.min(coefficients)
-            mean_coefficient = np.mean(coefficients)
-            std_coefficient = np.std(coefficients)
-
-            scaling_factor_upper = 1 + 0.8 * (max_coefficient - mean_coefficient) / std_coefficient
-            scaling_factor_lower = 1 - 0.2 * (mean_coefficient - min_coefficient) / std_coefficient
-
-            rhs_min = xr.where(rhs_min < 0, 0, rhs_min)
-            rhs_max = xr.where(rhs_max <= 0, 0, rhs_max)
-
-            rhs_min = combined_solution_min * scaling_factor_lower
-            rhs_max = combined_solution_max * scaling_factor_upper
-
-            constraint_min = lhs_lower >= rhs_min
-            constraint_max = lhs_upper <= rhs_max
-            self.master_model.constraints.add_constraint("constraint_capacity_lower_bound", constraint_min)
-            self.master_model.constraints.add_constraint("constraint_capacity_upper_bound", constraint_max)
 
     def solved_model_to_gurobi(self, linopy_model_solved):
         """
@@ -809,21 +763,7 @@ class BendersDecomposition:
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
             if iteration == 1:
-                if self.config.benders["cap_capacity_bounds"]:
-                    self.solve_subproblems_models(tolernace_change=True)
-                    if any(
-                        subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
-                    ):
-                        continue_iterations = False
-                        break
-                    self.add_capacity_bounds_to_master()
-                    for subproblem in self.subproblem_models:
-                        subproblem.change_objective_to_constant()
-                        subproblem.remove_design_constraints()
-                    if self.use_monolithic_solution:
-                        self.solve_master_model_with_solution(solution_model=self.monolithic_model.model)
-
-                elif self.config.benders["cross_validation_scenarios"]:
+                if self.config.benders["cross_validation_scenarios"]:
                     logging.info("--- Cross-validating the subproblems optimal solution ---")
                     self.solve_subproblems_models(tolernace_change=True)
                     solution_subproblems = [subproblem.model.solution for subproblem in self.subproblem_models]
@@ -852,10 +792,13 @@ class BendersDecomposition:
                             if self.master_model.only_feasibility_checks:
                                 self.solve_master_model_with_solution(solution_model=subproblem.model)
                                 continue_iterations = False
-                else:
-                    self.master_model.check_variables_bounds()
-                    if self.use_monolithic_solution:
-                        self.solve_master_model_with_solution(solution_model=self.monolithic_model.model)
+                                break
+                    if not continue_iterations:
+                        break
+
+                elif self.use_monolithic_solution:
+                    logging.info("--- Using the optimal solution of the monolithic problem ---")
+                    self.solve_master_model_with_solution(solution_model=self.monolithic_model.model)
 
             logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
             self.solve_master_model(iteration)
