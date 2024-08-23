@@ -204,6 +204,7 @@ class BendersDecomposition(Subscriptable):
     max_number_of_iterations: int = 1e8
     cross_validation_scenarios: bool = True
     place_upper_bound_capacity_expansion: bool = False
+    multiplier_threshold: float = 1e-2
 
 
 class ModelingToGenerateAlternatives(Subscriptable):
