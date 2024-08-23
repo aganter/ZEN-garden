@@ -123,13 +123,7 @@ class System(Subscriptable):
 
 
 class SolverOptions(Subscriptable):
-    Method: int = 1
-    env: object = None
-    InfUnbdInfo: int = 1
-    FeasibilityTol: float = 1e-6
-    OptimalityTol: float = 1e-6
-    ScaleFlag: int = -1
-    NumericFocus: int = 0
+    pass
 
 
 class Solver(Subscriptable):
