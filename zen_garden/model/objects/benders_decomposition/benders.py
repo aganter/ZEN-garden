@@ -733,6 +733,8 @@ class BendersDecomposition:
                 shutil.rmtree(self.master_model.solver.solver_dir)
 
             for subproblem in self.subproblem_models:
+                if hasattr(self.config.benders.solver_subproblem.solver_options, "env"):
+                    delattr(self.config.benders.solver_subproblem.solver_options, "env")
                 scenario_name_subproblem, subfolder_subproblem, param_map_subproblem = StringUtils.generate_folder_path(
                     config=self.config.benders,
                     scenario=subproblem.scenario_name,
@@ -767,58 +769,55 @@ class BendersDecomposition:
             logging.info("")
             logging.info("")
             logging.info("--- Iteration %s ---", iteration)
-            if iteration == 1:
-                if self.config.benders["cross_validation_scenarios"]:
-                    logging.info("--- Cross-validating the subproblems optimal solution ---")
-                    self.solve_subproblems_models(tolernace_change=True)
-                    solution_subproblems = [subproblem.model.solution for subproblem in self.subproblem_models]
-                    for subproblem in self.subproblem_models:
-                        subproblem.remove_design_constraints()
-                        subproblem.set_objective_to_constant()
-                    for index, solution in enumerate(solution_subproblems):
-                        # I need to get the correspoding subproblem model, it will be on the same position
-                        # in the subproblem_models list
-                        subproblem = self.subproblem_models[index]
-                        self.fix_design_variables_in_subproblem_model(
-                            problem_type="subproblem", solution_model=solution
+            if self.config.benders["cross_validation_scenarios"] and iteration == 1:
+                logging.info("--- Cross-validating the subproblems optimal solution ---")
+                self.solve_subproblems_models(tolernace_change=True)
+                solution_subproblems = [subproblem.model.solution for subproblem in self.subproblem_models]
+                for subproblem in self.subproblem_models:
+                    subproblem.remove_design_constraints()
+                    subproblem.set_objective_to_constant()
+                for index, solution in enumerate(solution_subproblems):
+                    # I need to get the correspoding subproblem model, it will be on the same position
+                    # in the subproblem_models list
+                    subproblem = self.subproblem_models[index]
+                    self.fix_design_variables_in_subproblem_model(problem_type="subproblem", solution_model=solution)
+                    self.solve_subproblems_models()
+                    if any(
+                        subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
+                    ):
+                        feasibility_cuts = self.define_list_of_feasibility_cuts()
+                        filtered_feasibility_cuts = self.filter_redundant_cuts(feasibility_cuts)
+                        self.add_feasibility_cuts_to_master(
+                            filtered_feasibility_cuts, upfront_iteration, iteration, upfront=True
                         )
-                        self.solve_subproblems_models()
-                        if any(
-                            subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
-                        ):
-                            feasibility_cuts = self.define_list_of_feasibility_cuts()
-                            filtered_feasibility_cuts = self.filter_redundant_cuts(feasibility_cuts)
-                            self.add_feasibility_cuts_to_master(
-                                filtered_feasibility_cuts, upfront_iteration, iteration, upfront=True
+                        upfront_iteration += 1
+                    if all(
+                        subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
+                    ):
+                        if self.master_model.only_feasibility_checks:
+                            self.solve_master_model_with_solution(solution_model=subproblem.model)
+                            table = []
+                            headers = ["Objective", "Monolithic", "Master"]
+                            table.append(
+                                [
+                                    "Master",
+                                    self.monolithic_model.model.objective.value,
+                                    self.master_model.model.objective.value,
+                                ]
                             )
-                            upfront_iteration += 1
-                        if all(
-                            subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
-                        ):
-                            if self.master_model.only_feasibility_checks:
-                                self.solve_master_model_with_solution(solution_model=subproblem.model)
-                                table = []
-                                headers = ["Objective", "Monolithic", "Master"]
-                                table.append(
-                                    [
-                                        "Master",
-                                        self.monolithic_model.model.objective.value,
-                                        self.master_model.model.objective.value,
-                                    ]
-                                )
-                                logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
-                                self.save_master_and_subproblems()
-                                continue_iterations = False
-                                break
-                    if not continue_iterations:
-                        break
+                            logging.info("\n%s", tabulate(table, headers, tablefmt="grid", floatfmt=".6f"))
+                            self.save_master_and_subproblems()
+                            continue_iterations = False
+                            break
+                if not continue_iterations:
+                    break
 
-                elif self.use_monolithic_solution:
-                    logging.info("--- Using the optimal solution of the monolithic problem ---")
-                    self.solve_master_model_with_solution(solution_model=self.monolithic_model.model)
-
-            logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
-            self.solve_master_model(iteration)
+            if self.use_monolithic_solution and iteration == 1:
+                logging.info("--- Using the optimal solution of the monolithic problem ---")
+                self.solve_master_model_with_solution(solution_model=self.monolithic_model.model)
+            else:
+                logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
+                self.solve_master_model(iteration)
 
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
