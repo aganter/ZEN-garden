@@ -47,6 +47,7 @@ class Subproblem(OptimizationSetup):
 
         :param config: dictionary containing the configuration of the optimization problem
         :param config_benders: dictionary containing the configuration of the Benders Decomposition method
+        :param solver: dictionary containing the solver configuration
         :param analysis: dictionary containing the analysis configuration
         :param monolithic_model: OptimizationSetup object of the monolithic problem
         :param model_name: name of the model
@@ -185,9 +186,13 @@ class Subproblem(OptimizationSetup):
             overwrite=True,
         )
 
-    def get_linopy_variable(self, row):
+    def get_linopy_variable(self, row) -> object:
         """
         Helper function to get the corresponding Linopy variable of a constraint.
+
+        :param row: row of the DataFrame containing the constraint
+
+        :return: Linopy variable of the constraint
         """
         label_position = self.master_model.model.variables.get_label_position(row["labels"])
         return self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1])
@@ -206,7 +211,7 @@ class Subproblem(OptimizationSetup):
         # Define the right-hand side of the constraints for the Benders cuts
         self.rhs_cuts = constraints[["labels_con", "rhs"]].drop_duplicates(subset="labels_con", keep="first")
         end_time = time.time()
-        logging.info(f"--- Done in {end_time - start_time:.2f} seconds ---")
+        logging.info("--- Done in %.2f seconds ---", end_time - start_time)
 
         logging.info("--- Defining the left-hand side of the constraints for the Benders cuts ---")
         start_time = time.time()
@@ -218,4 +223,4 @@ class Subproblem(OptimizationSetup):
         # Adding also the corresponding master variable of the Linopy model
         self.lhs_cuts["master_variable"] = self.lhs_cuts.apply(self.get_linopy_variable, axis=1)
         end_time = time.time()
-        logging.info(f"--- Done in {end_time - start_time:.2f} seconds ---")
+        logging.info("--- Done in %.2f seconds ---", end_time - start_time)

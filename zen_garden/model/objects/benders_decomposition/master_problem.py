@@ -91,6 +91,7 @@ class MasterProblem(OptimizationSetup):
         self.folder_output = os.path.abspath(benders_output_folder + "/" + "master_problem")
         self.optimized_time_steps = [0]
 
+        # Add a dummy constraint to ensure the model recognize all the variables in the optimization
         self.add_dummy_constraint()
 
         self.feasibility_master_iteration = 0

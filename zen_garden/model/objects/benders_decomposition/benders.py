@@ -261,7 +261,6 @@ class BendersDecomposition:
 
         :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
-        # Make the directory for the basis file
         self.master_model.solve()
 
         if self.config["run_monolithic_optimization"] and self.master_model.only_feasibility_checks:
@@ -302,6 +301,8 @@ class BendersDecomposition:
         """
         Solve the subproblems models given in the list self.subproblem_models by leveraging on the OptimizationSetup
         method solve().
+
+        :param tolernace_change: boolean to change the feasibility tolerance of the subproblem solver (type: bool)
         """
         if self.config.benders["cross_validation_scenarios"] and tolernace_change:
             self.config.benders.solver_subproblem.solver_options["FeasibilityTol"] = 1e-6
@@ -322,6 +323,9 @@ class BendersDecomposition:
         This function takes the solution of the master problem and fixes the values of the design variables in the
         subproblems by adding the corresponding upper and lower bounds to the variables. In order to keep stability in
         the method, the solution lower than 1e-5 is set to 0, while the NaN values are kept as they are.
+
+        :param problem_type: type of the problem (master or subproblem) (type: str)
+        :param solution_model: model solved with the optimal solution (type: Model)
         """
         if problem_type == "master":
             master_solution = solution_model
@@ -360,11 +364,16 @@ class BendersDecomposition:
         gurobi_model = getattr(linopy_model_solved.model, "solver_model")
         return gurobi_model
 
-    def detect_oscillatory_behavior(self, current_feasibility_cuts, feasibility_iteration):
+    def detect_oscillatory_behavior(self, current_feasibility_cuts, feasibility_iteration) -> bool:
         """
         Detect oscillatory behavior in the Benders Decomposition method. The oscillatory behavior is detected by
         comparing the feasibility cuts of the current iteration with the feasibility cuts of the previous iteration.
         If the feasibility cuts are the same, the oscillatory behavior is detected.
+
+        :param current_feasibility_cuts: list of feasibility cuts of the current iteration (type: list)
+        :param feasibility_iteration: current feasibility_iteration of the Benders Decomposition method (type: int)
+
+        :return: oscillatory_behavior: boolean value indicating if the oscillatory behavior is detected (type: bool)
         """
         oscillatory_behavior = False
         if feasibility_iteration == 1:
@@ -449,7 +458,7 @@ class BendersDecomposition:
         ]
         return feasibility_cuts
 
-    def filter_redundant_cuts(self, feasibility_cuts):
+    def filter_redundant_cuts(self, feasibility_cuts) -> list:
         """
         Filter the redundant feasibility cuts. The function checks if the feasibility cuts are redundant by comparing
         the feasibility cuts of the current iteration with the feasibility cuts of the previous iteration. If the
@@ -478,6 +487,7 @@ class BendersDecomposition:
         :param feasibility_cuts: list of feasibility cuts (type: list)
         :param feasibility_iteration: current feasibility_iteration of the Benders Decomposition method (type: int)
         :param iteration: current iteration of the Benders Decomposition method (type: int)
+        :param upfront: boolean to add the feasibility cuts upfront (type: bool)
         """
         for subproblem_name, feasibility_cut_lhs, feasibility_cut_rhs in feasibility_cuts:
             self.feasibility_cuts_counter += 1
@@ -675,8 +685,6 @@ class BendersDecomposition:
     def save_master_and_subproblems(self):
         """
         Save the master model and the subproblem models in respective output folders.
-
-        :param iteration: current iteration of the Benders Decomposition method (type: int)
         """
         if self.master_model.model.termination_condition == "optimal" and all(
             subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
@@ -736,18 +744,20 @@ class BendersDecomposition:
             logging.info("--- Iteration %s ---", iteration)
             if self.config.benders["cross_validation_scenarios"] and iteration == 1:
                 logging.info("--- Cross-validating the subproblems optimal solution ---")
+                # Solve the subproblems as monolithic problems and save the optimal solution
                 self.solve_subproblems_models(tolernace_change=True)
                 solution_subproblems = [subproblem.model.solution for subproblem in self.subproblem_models]
                 for subproblem in self.subproblem_models:
+                    # Formulate the subproblem as a feasibility problem and save the lhs and rhs for fomulating the cuts
                     subproblem.remove_design_constraints()
                     subproblem.set_objective_to_constant()
                     subproblem.define_lhs_rhs_for_cuts()
+                    # Cross validate the subproblems optimal solution
                 for index, solution in enumerate(solution_subproblems):
-                    # I need to get the correspoding subproblem model, it will be on the same position
-                    # in the subproblem_models list
                     subproblem = self.subproblem_models[index]
                     self.fix_design_variables_in_subproblem_model(problem_type="subproblem", solution_model=solution)
                     self.solve_subproblems_models()
+                    # If any of the subproblems is infeasible, the feasibility cuts are added to the master problem
                     if any(
                         subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
                     ):
@@ -757,6 +767,7 @@ class BendersDecomposition:
                             filtered_feasibility_cuts, upfront_iteration, iteration, upfront=True
                         )
                         upfront_iteration += 1
+                    # If all the subproblems are optimal, the termination criteria is met
                     if all(
                         subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
                     ):
@@ -778,6 +789,7 @@ class BendersDecomposition:
                 if not continue_iterations:
                     break
 
+            # Possibility to use the optimal solution of the monolithic problem as a starting point
             if self.use_monolithic_solution and iteration == 1:
                 logging.info("--- Using the optimal solution of the monolithic problem ---")
                 self.solve_master_model_with_solution(solution_model=self.monolithic_model.model)
@@ -785,6 +797,7 @@ class BendersDecomposition:
                 logging.info("--- Solving master problem, fixing design variables in subproblems and solve them ---")
                 self.solve_master_model(iteration)
 
+            # If master problem is infeasible, the code prints the infeasibilities and stops the iterations
             if self.master_model.model.termination_condition != "optimal":
                 logging.info("--- Master problem is infeasible ---")
                 self.master_model.model.print_infeasibilities()
@@ -799,7 +812,8 @@ class BendersDecomposition:
             )
             self.solve_subproblems_models()
 
-            # Check terminatio condition of the subproblems
+            # Check termination condition of the subproblems, if the subproblems are infeasible, the feasibility cuts
+            # are added to the master problem
             if any(subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- Subproblems are infeasible ---")
                 feasibility_cuts = self.define_list_of_feasibility_cuts()
@@ -814,6 +828,8 @@ class BendersDecomposition:
                 else:
                     continue_iterations = not oscillatory_behavior
 
+            # Check termination condition of the subproblems, if the subproblems are optimal, the code checks whether
+            # the termination criteria is met. If not, the optimality cuts are added to the master problem
             if all(subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models):
                 logging.info("--- All the subproblems are optimal ---")
                 if self.master_model.only_feasibility_checks:
