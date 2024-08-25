@@ -197,6 +197,7 @@ scenarios = dict()
 
 scenarios["1_carbon_storage"] = {
   "analysis": {"objective": "mga"},
+  "EnergySystem": {"attributes": {"file": "attributes_mga"}},
   "ModelingToGenerateAlternatives": {
     "objective_elements_definition": {
       "file": "1_carbon_storage",
@@ -212,6 +213,7 @@ This format exploits the existing functionalities for scenarios, particularly:
 - With the key `"analysis"`, the user needs to change the objective function to `"mga"`.
 - `"file"` sets the file name from which the values must be read.
 - `"default_opt"` is a list of ones with a length equal to the number of iterations of Random MGA the user wants to perform.
+- `"EnergySystem"`: in order to respect the carbon budget and not use the the `price_carbon_emissions_budget_overshoot` due to the allowed increase total cost, is has been formualated an extra constraint to ensure the last year of the optimization the carbon overshoot is zero. That is why, the user can specify an `attributes_mga` file for the MGA iteration, with `price_carbon_emissions_budget_overshoot` default value set to `inf`.
 
 For each defined scenario, it is fundamental to have a corresponding `.json` file inside the `modeling_to_generate_alternatives` folder.
 
@@ -228,3 +230,4 @@ N.B.: In order to be able to perform the supernodes aggregation, the file `set_n
 <p align="center">
     <img src="https://github.com/aganter/ZEN-garden/blob/development_ZENx_MC_AG/documentation/images/superedgeds.png" width="400" />
 </p>
+
