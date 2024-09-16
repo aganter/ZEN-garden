@@ -415,6 +415,9 @@ class Technology(Element):
         # annual capex of having capacity
         variables.add_variable(model, name="capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='annual capex for having technology at location l', unit_category={"money": 1})
+        # annual capex of having capacity
+        variables.add_variable(model, name="capex_yearly_existing", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+            bounds=(0,np.inf), doc='annual capex for having technology at location l', unit_category={"money": 1})
         # total capex
         variables.add_variable(model, name="cost_capex_total", index_sets=sets["set_time_steps_yearly"],
             bounds=(0,np.inf), doc='total capex for installing all technologies in all locations at all times', unit_category={"money": 1})
@@ -949,9 +952,11 @@ class TechnologyRules(GenericRule):
         lhs = lp.merge(1 * self.variables["capex_yearly"], expr, compat="broadcast_equals")
         rhs = (a * self.parameters.existing_capex).broadcast_like(lhs.const)
         constraints = lhs == rhs
+        constraints_ex = lp.merge(1 * self.variables["capex_yearly_existing"], expr, compat="broadcast_equals") == rhs
 
         ### return
         self.constraints.add_constraint("constraint_capex_yearly",constraints)
+        self.constraints.add_constraint("constraint_capex_yearly_existing",constraints)
 
     def constraint_opex_yearly(self):
         """ yearly opex for a technology at a location in each year
