@@ -952,7 +952,8 @@ class TechnologyRules(GenericRule):
         lhs = lp.merge(1 * self.variables["capex_yearly"], expr, compat="broadcast_equals")
         rhs = (a * self.parameters.existing_capex).broadcast_like(lhs.const)
         constraints = lhs == rhs
-        constraints_ex = self.variables["capex_yearly_existing"] == rhs
+        # rhs_ex =
+        constraints_ex = self.variables["capex_yearly_existing"] == (a * self.parameters.existing_capex)
 
         ### return
         self.constraints.add_constraint("constraint_capex_yearly",constraints)
