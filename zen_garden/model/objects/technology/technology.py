@@ -985,7 +985,7 @@ class TechnologyRules(GenericRule):
         # fixed opex for existing capacity
         term_opex_fixed_existing = (self.parameters.opex_specific_fixed * self.parameters.existing_capacities).sum("set_capacity_types")
         lhs_ex = self.variables["opex_yearly_existing"] - term_opex_fixed_existing
-        constraints_ex = lhs_ex == 0
+        constraints_ex = lhs_ex == term_opex_fixed_existing
 
         ### return
         self.constraints.add_constraint("constraint_opex_yearly",constraints)
