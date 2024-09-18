@@ -430,6 +430,9 @@ class Technology(Element):
         # yearly opex
         variables.add_variable(model, name="opex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc="yearly opex for operating technology at location l and year y", unit_category={"money": 1})
+        # yearly opex existing capacities only
+        variables.add_variable(model, name="opex_yearly_existing", index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_yearly"], optimization_setup),
+                               bounds=(0, np.inf), doc="yearly opex for operating technology at location l and year y", unit_category={"money": 1})
         # carbon emissions
         variables.add_variable(model, name="carbon_emissions_technology", index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_operation"], optimization_setup),
             doc="carbon emissions for operating technology at location l and time t", unit_category={"emissions": 1, "time": -1})
@@ -979,9 +982,14 @@ class TechnologyRules(GenericRule):
         lhs = self.variables["opex_yearly"] - term_opex_variable - term_opex_fixed
         rhs = 0
         constraints = lhs == rhs
+        # fixed opex for existing capacity
+        term_opex_fixed_existing = (self.parameters.opex_specific_fixed * self.parameters.existing_capacities).sum("set_capacity_types")
+        lhs_ex = self.variables["opex_yearly_existing"] - term_opex_fixed_existing
+        constraints_ex = lhs_ex == 0
 
         ### return
         self.constraints.add_constraint("constraint_opex_yearly",constraints)
+        self.constraints.add_constraint("constraint_opex_yearly_existing",constraints_ex)
 
     def constraint_carbon_emissions_technology_total(self):
         """ calculate total carbon emissions of each technology
