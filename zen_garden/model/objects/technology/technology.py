@@ -803,16 +803,16 @@ class TechnologyRules(GenericRule):
         expr = (lt_range * capacity_addition).sum("set_time_steps_yearly_prev")
         lhs = lp.merge(1 * self.variables["capacity"], expr, compat="broadcast_equals")
         lhs_previous = lp.merge(1 * self.variables["capacity_previous"], expr, 1 * self.variables["capacity_addition"], compat="broadcast_equals")
-        lhs_existing = lp.merge(1 * self.variables["capacity_existing_yearly"], expr, compat="broadcast_equals")
         rhs = xr.align(lhs.const,self.parameters.existing_capacities,join="left")[1]
         constraints = lhs == rhs
-        constraints_previous = lhs_existing == rhs
+        constraints_previous = lhs_previous == rhs
+        constraints_existing = self.variables["capacity_existing_yearly"] == rhs
 
 
         ### return
         self.constraints.add_constraint("constraint_technology_lifetime",constraints)
         self.constraints.add_constraint("constraint_technology_lifetime_previous",constraints_previous)
-        self.constraints.add_constraint("constraint_technology_lifetime_existing", constraints_previous)
+        self.constraints.add_constraint("constraint_technology_lifetime_existing", constraints_existing)
 
     def constraint_technology_diffusion_limit(self):
         """limited technology diffusion based on the existing capacity in the previous year
