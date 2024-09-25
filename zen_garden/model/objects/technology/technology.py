@@ -403,6 +403,10 @@ class Technology(Element):
         # capacity technology before current year
         variables.add_variable(model, name="capacity_previous", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=capacity_bounds, doc='size of installed technology at location l and BEFORE time t', unit_category={"energy_quantity": 1, "time": -1})
+        # built existing capacity technology
+        variables.add_variable(model, name="capacity_existing_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+                               bounds=capacity_bounds, doc='size of EXISTING technology (invested capacity after construction) at location l and time t',
+                               unit_category={"energy_quantity": 1, "time": -1})
         # built_capacity technology
         variables.add_variable(model, name="capacity_addition", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of built technology (invested capacity after construction) at location l and time t', unit_category={"energy_quantity": 1, "time": -1})
@@ -798,15 +802,17 @@ class TechnologyRules(GenericRule):
         capacity_addition = capacity_addition.broadcast_like(lt_range)
         expr = (lt_range * capacity_addition).sum("set_time_steps_yearly_prev")
         lhs = lp.merge(1 * self.variables["capacity"], expr, compat="broadcast_equals")
-        lhs_previous = lp.merge(1 * self.variables["capacity_previous"], expr, 1 * self.variables["capacity_addition"],
-                                compat="broadcast_equals")
+        lhs_previous = lp.merge(1 * self.variables["capacity_previous"], expr, 1 * self.variables["capacity_addition"], compat="broadcast_equals")
+        lhs_existing = lp.merge(1 * self.variables["capacity_existing_yearly"], expr, compat="broadcast_equals")
         rhs = xr.align(lhs.const,self.parameters.existing_capacities,join="left")[1]
         constraints = lhs == rhs
-        constraints_previous = lhs_previous == rhs
+        constraints_previous = lhs_existing == rhs
+
 
         ### return
         self.constraints.add_constraint("constraint_technology_lifetime",constraints)
         self.constraints.add_constraint("constraint_technology_lifetime_previous",constraints_previous)
+        self.constraints.add_constraint("constraint_technology_lifetime_existing", constraints_previous)
 
     def constraint_technology_diffusion_limit(self):
         """limited technology diffusion based on the existing capacity in the previous year
@@ -983,7 +989,7 @@ class TechnologyRules(GenericRule):
         rhs = 0
         constraints = lhs == rhs
         # fixed opex for existing capacity
-        term_opex_fixed_existing = (self.parameters.opex_specific_fixed * self.parameters.existing_capacities).sum("set_capacity_types")
+        term_opex_fixed_existing = (self.parameters.opex_specific_fixed * self.variables["capacity_existing_yearly"]).sum("set_capacity_types")
         lhs_ex = self.variables["opex_yearly_existing"] - term_opex_fixed_existing
         constraints_ex = lhs_ex == term_opex_fixed_existing
 
