@@ -76,8 +76,8 @@ class ModelingToGenerateAlternatives:
 
         # weight generation
         self.direction_search_vector = {}
-        self.sanity_checks_characteristic_scales_file()
-        self.characteristic_scales = None
+        #self.sanity_checks_characteristic_scales_file()
+        #self.characteristic_scales = None
         self.generate_weights()
 
     def set_mga_solution(self):
@@ -297,7 +297,7 @@ class ModelingToGenerateAlternatives:
         """
         if not hasattr(self, "min_max_values"):
             self.min_max_scaling()
-        self.characteristic_scales = self.generate_characteristic_scales()
+        #self.characteristic_scales = self.generate_characteristic_scales()
         self.direction_search_vector = self.generate_random_directions()
         self.direction_search_vector = pd.Series(self.direction_search_vector)
         weights = self.direction_search_vector / (self.min_max_values["max"] - self.min_max_values["min"])
