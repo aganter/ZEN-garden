@@ -22,6 +22,7 @@ from zen_garden.preprocess.unit_handling import UnitHandling
 from zen_garden.model.objects.component import ZenIndex
 from .time_steps import TimeStepsDicts
 from pathlib import Path
+from linopy.expressions import LinearExpression
 
 
 class EnergySystem:
@@ -322,12 +323,12 @@ class EnergySystem:
         # superlocations
         self.optimization_setup.sets.add_set(
             name="set_supernodes",
-            data=set(self.supernodes.values()),
+            data=set(list(self.supernodes.keys())),
             doc="Set of supernodes",
         )
         self.optimization_setup.sets.add_set(
             name="set_superedges",
-            data=set(self.superedges.values()),
+            data=set(list(self.superedges.keys())),
             doc="Set of superedges",
         )
         self.optimization_setup.sets.add_set(
@@ -544,7 +545,9 @@ class EnergySystem:
             raise KeyError(f"Objective sense {self.optimization_setup.analysis['sense']} not known")
 
         # construct objective
-        self.optimization_setup.model.add_objective(objective.to_linexpr())
+        if not isinstance(objective, LinearExpression):
+            objective = objective.to_linexpr()
+        self.optimization_setup.model.add_objective(objective)
 
 
 class EnergySystemRules(GenericRule):
@@ -804,7 +807,7 @@ class EnergySystemRules(GenericRule):
         :param model: optimization model
         :return: net present cost objective function
         """
-        return sum([model.variables.net_present_cost.at[year] for year in self.energy_system.set_time_steps_yearly])
+        return sum([model.variables["net_present_cost"][year] for year in self.energy_system.set_time_steps_yearly])
 
     def objective_total_carbon_emissions(self, model):
         """objective function to minimize total emissions
@@ -816,7 +819,7 @@ class EnergySystemRules(GenericRule):
         :return: total carbon emissions objective function
         """
         sets = self.sets
-        return sum(model.variables.carbon_emissions_annual.at[year] for year in sets["set_time_steps_yearly"])
+        return model.variables["carbon_emissions_cumulative"][sets["set_time_steps_yearly"][-1]]
 
     def objective_risk(self, model):
         """objective function to minimize total risk
@@ -841,20 +844,22 @@ class EnergySystemRules(GenericRule):
 
         :return: MGA objective function.
         """
-        total = 0
+        # total = 0
         # Iterate over all weights coordinates
-        for index in np.ndindex(self.optimization_setup.mga_weights.shape):
-            coords = {
-                dim: self.optimization_setup.mga_weights.coords[dim].values[index[dim_idx]]
-                for dim_idx, dim in enumerate(self.optimization_setup.mga_weights.dims)
-            }
-            # Get the weight for the current coordinates
-            weight = self.optimization_setup.mga_weights.sel(coords).values
-            # If the weight is not NaN, add the weighted decision variable to the total objective
-            if not np.isnan(weight):
-                # The weight is the same for all time steps
-                model_variables = model.variables[self.optimization_setup.config["objective_variables"]]
-                time_dim = next(dim for dim in model_variables.dims if dim.startswith("set_time_steps"))
-                objective_variable = sum(model_variables.sel(coords).at[year] for year in self.sets[time_dim])
-                total += weight * objective_variable
-        return total
+        obj_var = model.variables[self.optimization_setup.config["objective_variables"]]
+        weighted_obj = (self.optimization_setup.mga_weights * obj_var)
+        weighted_obj = weighted_obj.sum()
+        ## maddalenas version
+        # mga_weights = self.optimization_setup.mga_weights
+        # mga_weights = mga_weights.where(mga_weights>0, drop=True)
+        # for index in np.ndindex(mga_weights.shape):
+        #     coords = {dim: mga_weights.coords[dim].values[index[dim_idx]]for dim_idx, dim in enumerate(mga_weights.dims)}
+        #     # Get the weight for the current coordinates
+        #     weight = mga_weights.sel(coords).values
+        #     # If the weight is not NaN, add the weighted decision variable to the total objective
+        #     if not np.isnan(weight):
+        #         # The weight is the same for all time steps
+        #         model_variables = model.variables[self.optimization_setup.config["objective_variables"]]
+        #         objective_variable = sum(model_variables.sel(coords)[time] for time in self.sets[time_dim])
+        #         total += weight * objective_variable
+        return weighted_obj

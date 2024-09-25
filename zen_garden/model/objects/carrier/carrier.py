@@ -719,15 +719,13 @@ class CarrierRules(GenericRule):
         Sum up the carrier flow import from nodes to supernodes
         """
         nodes_to_supernodes = self.sets["set_nodes_in_supernodes"].data
-        flow = self.variables["flow_import"].to_linexpr()
-        flow_supernodes = self.variables["flow_import_supernodes"].to_linexpr()
-        map_supernodes = [nodes_to_supernodes[node] for node in flow.coords["set_nodes"].values]
-        supernode_coord = xr.DataArray(map_supernodes, dims="set_nodes", coords={"set_nodes": flow.coords["set_nodes"]})
-        flow = flow.groupby(supernode_coord).sum(dim="set_nodes")
-        flow = flow.rename({"group": "set_supernodes"})
-        lhs = lp.merge(flow_supernodes, -flow, compat="broadcast_equals",)
-        rhs = 0
-
-        constraints = lhs == rhs
-
-        self.constraints.add_constraint("constraint_carrier_flow_import_supernodes", constraints)
+        flow = self.variables["flow_import"]
+        flow_supernodes = self.variables["flow_import_supernodes"]
+        for sn in self.sets["set_supernodes"]:
+            nodes = nodes_to_supernodes[sn]
+            flow_sn = flow.loc[{"set_nodes": nodes}].sum("set_nodes")
+            flow_supernodes_sn = flow_supernodes.loc[{"set_supernodes": sn}]
+            lhs = flow_sn - flow_supernodes_sn
+            rhs = 0
+            constraints = lhs == rhs
+            self.constraints.add_constraint(f"constraint_carrier_flow_import_supernodes_{sn}", constraints)

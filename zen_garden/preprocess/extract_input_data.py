@@ -494,8 +494,10 @@ class DataInput:
             raise AssertionError(f"Column {name} is missing in {file_name}.")
 
         filtered_input = input_file[input_file[set_locations].isin(set_location)]
-        for location in set_location:
-            super_locations[location] = filtered_input[filtered_input[set_locations] == location][name].iloc[0]
+        for super_loc in filtered_input[name].unique():
+            if isinstance(super_loc, str):
+                super_locations[super_loc] = filtered_input[filtered_input[name] == super_loc][set_locations].values
+        super_locations.update({f"all_{name}": filtered_input[set_locations].values}) #todo add super nodes to system / solution for all
         return super_locations
 
     def extract_carriers(self, carrier_type):

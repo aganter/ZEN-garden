@@ -18,7 +18,9 @@
 
 import logging
 import math
+import os
 import numpy as np
+import pandas as pd
 import xarray as xr
 from scipy.stats import truncnorm
 
@@ -27,7 +29,8 @@ from zen_garden.preprocess.extract_input_data import DataInputMGA
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
 from zen_garden.postprocess.postprocess import Postprocess
-
+from zen_garden.utils import setup_logger, InputDataChecks, StringUtils, ScenarioUtils
+from pathlib import Path
 
 class ModelingToGenerateAlternatives:
     """
@@ -41,7 +44,7 @@ class ModelingToGenerateAlternatives:
         config: dict,
         optimized_setup: OptimizationSetup,
         scenario_name: str,
-        scenario_dict: dict,
+        scenario_dict: dict
     ):
         """
         Initialize the Modeling to Generate Alternatives object.
@@ -61,6 +64,24 @@ class ModelingToGenerateAlternatives:
         self.input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
         self.input_data_checks.check_dataset()
         # Initialize the OptimizationSetup object for the MGA iteration model
+        self.set_mga_solution()
+        # set input path
+        self.input_path = Path(self.config.analysis.dataset / self.config_mga.input_path) # changed Alissa
+
+        # set DataInputMGA object
+        self.set_data_input_mga()
+        self.sanity_checks_mga_iteration_scenario()
+        self.decision_variables: list[list] = []
+        self.store_input_data()
+
+        # weight generation
+        self.direction_search_vector = {}
+        self.sanity_checks_characteristic_scales_file()
+        self.characteristic_scales = None
+        self.generate_weights()
+
+    def set_mga_solution(self):
+        """set mga solution object"""
         self.mga_solution: OptimizationSetup = OptimizationSetup(
             config=self.config_mga,
             solver=self.config_mga.solver,
@@ -73,9 +94,8 @@ class ModelingToGenerateAlternatives:
         self.mga_objective_obj = None
         self.mga_objective_loc = None
 
-        self.input_path = getattr(self.config_mga, "input_path")
-
-        # Initialize the DataInputMGA object
+    def set_data_input_mga(self):
+        """set data input object for mga"""
         self.mga_data_input = DataInputMGA(
             element=self,
             system=self.config_mga.system,
@@ -85,13 +105,37 @@ class ModelingToGenerateAlternatives:
             unit_handling=None,
             scenario_name=self.scenario_dict["base_scenario"],
         )
-        self.sanity_checks_mga_iteration_scenario()
-        self.decision_variables: list[list] = []
-        self.store_input_data()
 
-        self.direction_search_vector = {}
-        self.sanity_checks_characteristic_scales_file()
-        self.characteristic_scales = None
+    def min_max_scaling(self):
+        """enable min max scaling"""
+        if os.path.exists(self.input_path / f"min_max_values_{self.scenario_name}.csv"):
+            self.min_max_values = pd.read_csv(self.input_path / f"min_max_values_{self.scenario_name}.csv", index_col=[0, 1])
+            return
+        current_scenario = self.scenario_name
+        current_scenario_dict = self.scenario_dict
+        current_subfolder = current_scenario_dict["sub_folder"]
+        objective_weights = {"min": 1, "max": -1}
+        objective_var = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
+        subset_obj = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
+        subset_loc =self.mga_data_input.decision_variables_dict["objective_set"][ self.mga_objective_loc]
+        idx = pd.MultiIndex.from_product([subset_obj, subset_loc], names=[self.mga_objective_obj, self.mga_objective_loc])
+        self.min_max_values = pd.DataFrame(np.nan, index=idx, columns=list(objective_weights.keys()))
+        for sense, weight in objective_weights.items():
+            for tech, loc in idx:
+                sub_folder = "_".join([sense,tech,loc])
+                self.scenario_name = current_scenario+"_"+sub_folder
+                self.scenario_dict["sub_folder"] = sub_folder
+                self.scenario_dict["param_map"][sub_folder] = {"ModelingToGenerateAlternatives": {'objective_elements_definition': {'default_op': 1}}}
+                weights = xr.full_like(objective_var, fill_value=0)
+                weights.loc[tech,:,loc,:] = weight
+                self.mga_solution.mga_weights = weights.rename("weights")
+                self.fit()
+                var = getattr(self.mga_solution.model.solution, self.mga_solution.config["objective_variables"])
+                self.min_max_values.loc[(tech,loc),sense] = var.loc[tech,:,loc,:].sum().sum().values
+        self.min_max_values.to_csv(self.input_path / f"min_max_values_{current_scenario}.csv", index=True)
+        # reset scenario nam
+        self.scenario_name = current_scenario
+        self.scenario_dict["sub_folder"] = current_subfolder
 
     def sanity_checks_mga_iteration_scenario(self):
         """
@@ -158,23 +202,21 @@ class ModelingToGenerateAlternatives:
 
         # ModelingToGenerateAlternatives must be a key of the mga_iteration scenarios dictionary
         if self.name in self.mga_data_input.scenario_dict.keys():
-            self.mga_solution.config["objective_variables"] = self.mga_data_input.decision_variables_dict[
-                "objective_variables"
-            ]
+            self.mga_solution.config["objective_variables"] = self.mga_data_input.decision_variables_dict["objective_variables"]
             # Update the list of decision variables by combining the objectives and the locations
             for obj in self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]:
                 for loc in self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_loc]:
                     self.decision_variables.append([obj, loc])
 
-            if self.mga_solution.config["objective_variables"] in ("capacity", "capacity_supernodes"):
+            if self.mga_solution.config["objective_variables"] in ("capacity_addition", "capacity_addition_supernodes"):
                 list_of_location = list(set([loc for _, loc in self.decision_variables]))
-                if self.mga_solution.config["objective_variables"] == "capacity":
+                if self.mga_solution.config["objective_variables"] == "capacity_addition":
                     set_edges = self.mga_data_input.energy_system.set_edges
                     all_possible_edges = [
                         f"{loc1}-{loc2}" for loc1 in list_of_location for loc2 in list_of_location if loc1 != loc2
                     ]
                 else:
-                    set_edges = list(set(self.mga_data_input.energy_system.superedges.values()))
+                    set_edges = list(set(self.mga_data_input.energy_system.superedges.keys()))
                     all_possible_edges = [f"{loc1}-{loc2}" for loc1 in list_of_location for loc2 in list_of_location]
 
                 transport_technologies = self.mga_data_input.energy_system.set_transport_technologies
@@ -217,9 +259,7 @@ class ModelingToGenerateAlternatives:
         )
         # Extract the array named as the type of variables that we want to set as objective variables from
         # the original optimized solution (e.g. capacity)
-        complete_xr_variables = getattr(
-            self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"]
-        )
+        complete_xr_variables = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
         # Extract the exact name of the variables that we want to set as objective variables from the input data
         subset_objective_vars = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
         # Generate an array that intersects the original array with the subset of variables that we want to set as
@@ -239,7 +279,7 @@ class ModelingToGenerateAlternatives:
 
             if np.isnan(value):
                 characteristic_value = np.nan
-            elif value > 1e-3:
+            elif value < 1e-3:
                 characteristic_value = 1  # value
             else:
                 characteristic_value, _ = self.mga_data_input.extract_attribute_value(
@@ -255,38 +295,23 @@ class ModelingToGenerateAlternatives:
         """
         Generate weights for MGA objective function based on random direction and characteristic scales.
         """
+        if not hasattr(self, "min_max_values"):
+            self.min_max_scaling()
         self.characteristic_scales = self.generate_characteristic_scales()
         self.direction_search_vector = self.generate_random_directions()
-
-        weights = xr.full_like(self.characteristic_scales, fill_value=np.nan)
-
-        for index in np.ndindex(self.characteristic_scales.shape):
-            # Extract the coordinates of interest of the characteristic scales: the name of objective and the location
-            # and select the value of the characteristic scales at the found coordinates
-            coords = {
-                dim: self.characteristic_scales.coords[dim].values[index[dim_idx]]
-                for dim_idx, dim in enumerate(self.characteristic_scales.dims)
-            }
-            coords_subset_tuple = tuple(
-                {key: coords[key] for key in [f"{self.mga_objective_obj}", f"{self.mga_objective_loc}"]}.values()
-            )
-            characteristic_scale = self.characteristic_scales.sel(coords)
-            #  Only if the same coordinates are in the direction_search_vector, and the characteristic scale is not NaN
-            # the weights are calculated
-            if coords_subset_tuple in self.direction_search_vector and not math.isnan(characteristic_scale):
-                direction_search = self.direction_search_vector[coords_subset_tuple]
-                weights.values[index] = direction_search / characteristic_scale
-
+        self.direction_search_vector = pd.Series(self.direction_search_vector)
+        weights = self.direction_search_vector / (self.min_max_values["max"] - self.min_max_values["min"])
+        weights.index.names = [self.mga_objective_obj, self.mga_objective_loc]
+        weights = weights.to_xarray()
+        objective_var = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
+        weights = weights.broadcast_like(objective_var).fillna(0)
         self.mga_solution.mga_weights = weights.rename("weights")
 
     def fit(self):
         """
         Solve the optimization problem and postprocess the results
         """
-
         steps_horizon = self.mga_solution.get_optimization_horizon()
-        self.generate_weights()
-
         # Just for completeness, iterate through horizon steps. It is not tested yet MGA class
         # with multiple steps
         for step in steps_horizon:

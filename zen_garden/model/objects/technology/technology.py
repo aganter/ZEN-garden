@@ -748,7 +748,7 @@ class Technology(Element):
         if optimization_setup.system["run_supernodes"]:
             variables.add_variable(
                 model,
-                name="capacity_supernodes",
+                name="capacity_addition_supernodes",
                 index_sets=cls.create_custom_set(
                     ["set_technologies", "set_capacity_types", "set_superlocation", "set_time_steps_yearly"],
                     optimization_setup,
@@ -1495,20 +1495,14 @@ class TechnologyRules(GenericRule):
         Sum up the carrier flow import from location to superlocation
         """
         loc_to_superloc = {**self.sets["set_nodes_in_supernodes"].data, **self.sets["set_edges_in_superedges"].data}
-        capacity = self.variables["capacity"].to_linexpr()
-        capacity_superloc = self.variables["capacity_supernodes"].to_linexpr()
-        map_supernloc = [loc_to_superloc[loc] for loc in capacity.coords["set_location"].values]
-        superloc_coord = xr.DataArray(
-            map_supernloc, dims="set_location", coords={"set_location": capacity.coords["set_location"]}
-        )
-        capacity = capacity.groupby(superloc_coord).sum(dim="set_location")
-        capacity = capacity.rename({"group": "set_superlocation"})
-        lhs = lp.merge(
-            capacity_superloc,
-            -capacity,
-            compat="broadcast_equals",
-        )
-        rhs = 0
+        capacity = self.variables["capacity_addition"]
+        capacity_sl = self.variables["capacity_addition_supernodes"]
+        for superloc in loc_to_superloc.keys():
+            nodes = loc_to_superloc[superloc]
+            capa_superloc = capacity.loc[{"set_location": nodes}].sum("set_location")
+            capa_sl_superloc = capacity_sl.loc[{"set_superlocation": superloc}]
+            lhs = capa_superloc - capa_sl_superloc
+            rhs = 0
+            constraints = lhs == rhs
+            self.constraints.add_constraint(f"constraint_technologies_capacity_addition_supernodes_{superloc}", constraints)
 
-        constraints = lhs == rhs
-        self.constraints.add_constraint("constraint_technologies_capacity_supernodes", constraints)

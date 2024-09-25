@@ -221,7 +221,8 @@ class ModelingToGenerateAlternatives(Subscriptable):
 
     characteristic_scales_path: str = ""
     cost_slack_variables: float = 0.0
-    input_path: Path = Path("data/")
+    input_path: Path = Path("modeling_to_generate_alternatives/")
+    min_max_scaling: bool = False
     # Keep the same name for code consistency and usability: this are the MGA iterations
     scenarios: dict[str, Any] = {"": {}}
     immutable_system_elements: dict = {

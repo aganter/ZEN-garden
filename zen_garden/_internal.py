@@ -103,26 +103,25 @@ def main(config, dataset_path=None, job_index=None):
                 folder_output=config.mga.analysis["folder_output"],
             )
 
-            scenarios, elements = ScenarioUtils.get_scenarios(
+            mga_scenarios, mga_elements = ScenarioUtils.get_scenarios(
                 config=config.mga, scenario_script_name="mga_iterations", job_index=job_index
             )
-
             ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
 
             # The scenario will create a double level folder structure: the first to be the different MGA objectives
             # and the second to be the iterations for each objective
-            for scenario, scenario_dict in zip(scenarios, elements):
-                parts = scenario.split("_")
-                scenario_name = "_".join(parts[:-2])
+            for mga_scenario, mga_scenario_dict in zip(mga_scenarios, mga_elements):
+                parts = mga_scenario.split("_")
+                mga_scenario_name = "_".join(parts[:-2])
                 iteration = int(parts[-1])
-                logging.info("--- MGA for: %s ---", scenario_name)
+                logging.info("--- MGA for: %s ---", mga_scenario_name)
                 logging.info("--- Iteration %s ---", iteration + 1)
                 logging.info("")
                 mga_iterations = ModelingToGenerateAlternatives(
                     config=config,
                     optimized_setup=optimization_setup,
-                    scenario_name=scenario,
-                    scenario_dict=scenario_dict,
+                    scenario_name=mga_scenario,
+                    scenario_dict=mga_scenario_dict
                 )
                 mga_iterations.fit()
 
