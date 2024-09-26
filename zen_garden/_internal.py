@@ -111,6 +111,9 @@ def main(config, dataset_path=None, job_index=None):
             # The scenario will create a double level folder structure: the first to be the different MGA objectives
             # and the second to be the iterations for each objective
             for mga_scenario, mga_scenario_dict in zip(mga_scenarios, mga_elements):
+                if scenario:
+                    mga_scenario = scenario + "_" + mga_scenario
+                    mga_scenario_dict = scenario_dict.update(mga_scenario_dict)
                 parts = mga_scenario.split("_")
                 mga_scenario_name = "_".join(parts[:-2])
                 iteration = int(parts[-1])

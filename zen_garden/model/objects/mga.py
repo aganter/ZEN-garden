@@ -107,7 +107,9 @@ class ModelingToGenerateAlternatives:
         )
 
     def min_max_scaling(self):
-        """enable min max scaling"""
+        """
+        get min-max values for min-max scaling
+        """
         if os.path.exists(self.input_path / f"min_max_values_{self.scenario_name}.csv"):
             self.min_max_values = pd.read_csv(self.input_path / f"min_max_values_{self.scenario_name}.csv", index_col=[0, 1])
             return
@@ -306,6 +308,7 @@ class ModelingToGenerateAlternatives:
         objective_var = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
         weights = weights.broadcast_like(objective_var).fillna(0)
         self.mga_solution.mga_weights = weights.rename("weights")
+        # todo how to deal with technologies that are not installed?
 
     def fit(self):
         """
