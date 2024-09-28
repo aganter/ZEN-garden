@@ -720,12 +720,13 @@ class CarrierRules(GenericRule):
         """
         nodes_to_supernodes = self.sets["set_nodes_in_supernodes"].data
         flow = self.variables["flow_import"]
-        flow_supernodes = self.variables["flow_import_supernodes"]
-        for sn in self.sets["set_supernodes"]:
-            nodes = nodes_to_supernodes[sn]
+        flow_super = self.variables["flow_import_supernodes"]
+        constraints = dict()
+        for supernode in self.sets["set_supernodes"]:
+            nodes = nodes_to_supernodes[supernode]
             flow_sn = flow.loc[{"set_nodes": nodes}].sum("set_nodes")
-            flow_supernodes_sn = flow_supernodes.loc[{"set_supernodes": sn}]
-            lhs = flow_sn - flow_supernodes_sn
+            flow_super_supernode = flow_super.loc[{"set_supernodes": supernode}]
+            lhs = flow_sn - flow_super_supernode
             rhs = 0
-            constraints = lhs == rhs
-            self.constraints.add_constraint(f"constraint_carrier_flow_import_supernodes_{sn}", constraints)
+            constraints[supernode] = lhs == rhs
+        self.constraints.add_constraint(f"constraint_carrier_flow_import_supernodes", constraints)

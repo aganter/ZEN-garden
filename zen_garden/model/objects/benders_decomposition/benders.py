@@ -69,7 +69,7 @@ class BendersDecomposition:
         self.use_monolithic_solution = use_monolithic_solution
 
         # Define the input path where the design and operational variables and constraints are stored
-        self.input_path = getattr(self.config.benders, "input_path")
+        self.input_path = Path(self.config.analysis.dataset / self.config.benders.input_path) # changed Alissa
         self.energy_system = monolithic_model.energy_system
         self.data_input = DataInput(
             element=self,
@@ -89,9 +89,7 @@ class BendersDecomposition:
             folder_output=self.config.benders.analysis.folder_output,
         )
         self.benders_output_folder = os.path.abspath(self.benders_output_folder) + "/" + scenario_name
-        self.config.benders.solver_master.solver_dir = (
-            os.path.abspath(self.benders_output_folder) + "/" + "master_solver"
-        )
+        self.config.benders.solver_master.solver_dir = os.path.join(self.benders_output_folder, "master_solver")
         # Define the different scenarios for the Benders Decomposition method
         scenarios, elements = ScenarioUtils.get_scenarios(
             config=self.config.benders, scenario_script_name="benders_scenarios", job_index=None
@@ -181,17 +179,9 @@ class BendersDecomposition:
         for _, constraint in benders_constraints.iterrows():
             name = constraint["constraint_name"]
             if constraint["constraint_type"] == "design":
-                if name == "exclusive_retrofit_techs_":
-                    for base_tech in self.config.system["set_exclusive_retrofitting_technologies"].items():
-                        design_constraints.append(f"{name}{base_tech[0]}")
-                else:
-                    design_constraints.append(name)
+                design_constraints = self.check_constraint_name(design_constraints, name)
             elif constraint["constraint_type"] == "operational":
-                if name == "exclusive_retrofit_techs_":
-                    for base_tech in self.config.system["set_exclusive_retrofitting_technologies"].items():
-                        operational_constraints.append(f"{name}{base_tech[0]}")
-                else:
-                    operational_constraints.append(name)
+                operational_constraints = self.check_constraint_name(operational_constraints, name)
             else:
                 raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
 
@@ -211,6 +201,21 @@ class BendersDecomposition:
             )
 
         return design_constraints, operational_constraints
+
+    def check_constraint_name(self, list_constraints, name):
+        """check constraint names for exemptions"""
+        if name == "exclusive_retrofit_techs_":
+            for base_tech in self.config.system["set_exclusive_retrofitting_technologies"].items():
+                list_constraints.append(f"{name}{base_tech[0]}")
+        if "supernodes" in name and not name in self.monolithic_constraints:
+            nodes_edges = list(self.monolithic_model.sets["set_supernodes"])+list(self.monolithic_model.sets["set_superedges"])
+            for supernode in nodes_edges:
+                new_name = f"{name}--{supernode}"
+                if new_name in self.monolithic_constraints:
+                    list_constraints.append(new_name)
+        else:
+            list_constraints.append(name)
+        return list_constraints
 
     def separate_design_operational_variables(self) -> list:
         """
@@ -405,9 +410,6 @@ class BendersDecomposition:
         :return: feasibility_cut_rhs: right-hand side of the feasibility cut (type: float)
         """
         start_time_cuts = time.time()
-        # Initialize feasibility cut components
-        feasibility_cut_lhs = 0
-        feasibility_cut_rhs = 0
         # Get Farkas multipliers for constraints
         farkas_multipliers = [
             (
@@ -759,7 +761,7 @@ class BendersDecomposition:
                     self.solve_subproblems_models()
                     # If any of the subproblems is infeasible, the feasibility cuts are added to the master problem
                     if any(
-                        subproblem.model.termination_condition != "optimal" for subproblem in self.subproblem_models
+                        sp.model.termination_condition != "optimal" for sp in self.subproblem_models
                     ):
                         feasibility_cuts = self.define_list_of_feasibility_cuts()
                         filtered_feasibility_cuts = self.filter_redundant_cuts(feasibility_cuts)
@@ -769,7 +771,7 @@ class BendersDecomposition:
                         upfront_iteration += 1
                     # If all the subproblems are optimal, the termination criteria is met
                     if all(
-                        subproblem.model.termination_condition == "optimal" for subproblem in self.subproblem_models
+                        sp.model.termination_condition == "optimal" for sp in self.subproblem_models
                     ):
                         if self.master_model.only_feasibility_checks:
                             self.solve_master_model_with_solution(solution_model=subproblem.model)

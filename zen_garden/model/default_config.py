@@ -129,7 +129,6 @@ class SolverOptions(Subscriptable):
 class Solver(Subscriptable):
     name: str = "highs"
     solver_options: SolverOptions = SolverOptions()
-    warmstart_fn: str = None
     check_unit_consistency: bool = True
     solver_dir: str = ".//outputs//solver_files"
     keep_files: bool = False
@@ -175,6 +174,7 @@ class Analysis(Subscriptable):
     header_data_inputs: HeaderDataInputs = HeaderDataInputs()
     time_series_aggregation: TimeSeriesAggregation = TimeSeriesAggregation()
     folder_output: str = "./outputs/"
+    folder_output_subfolder: str = ""
     overwrite_output: bool = True
     output_format: str = "h5"
     write_results_yml: bool = False
@@ -199,6 +199,8 @@ class BendersDecomposition(Subscriptable):
         "conduct_scenario_analysis": True,
         "run_default_scenario": True,
     }
+    compute_optimal_solutions: bool = False
+    optimal_solutions_folder: str = "cost_optimal_solutions/"
     use_monolithic_solution: bool = False
     absolute_optimality_gap: int = 1e-2
     max_number_of_iterations: int = 1e8
@@ -213,7 +215,7 @@ class ModelingToGenerateAlternatives(Subscriptable):
     """
 
     modeling_to_generate_alternatives: bool = False
-    run_monolithic_optimization: bool = True
+    run_monolithic_optimization: bool = False
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()

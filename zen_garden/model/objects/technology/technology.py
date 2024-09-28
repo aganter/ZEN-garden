@@ -1497,12 +1497,13 @@ class TechnologyRules(GenericRule):
         loc_to_superloc = {**self.sets["set_nodes_in_supernodes"].data, **self.sets["set_edges_in_superedges"].data}
         capacity = self.variables["capacity_addition"]
         capacity_sl = self.variables["capacity_addition_supernodes"]
+        constraints = dict()
         for superloc in loc_to_superloc.keys():
             nodes = loc_to_superloc[superloc]
             capa_superloc = capacity.loc[{"set_location": nodes}].sum("set_location")
             capa_sl_superloc = capacity_sl.loc[{"set_superlocation": superloc}]
             lhs = capa_superloc - capa_sl_superloc
             rhs = 0
-            constraints = lhs == rhs
-            self.constraints.add_constraint(f"constraint_technologies_capacity_addition_supernodes_{superloc}", constraints)
+            constraints[superloc] = lhs == rhs
+        self.constraints.add_constraint(f"constraint_technologies_capacity_addition_supernodes", constraints)
 

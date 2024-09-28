@@ -75,7 +75,9 @@ class Postprocess:
         if model.config.benders.benders_decomposition and model.name != "ConcreteProblem":
             self.name_dir = Path(model.folder_output)
         else:
-            self.name_dir = Path(self.analysis["folder_output"]).joinpath(self.model_name)
+            self.name_dir = Path(model.config.analysis.folder_output, model_name)
+            if model.config.analysis.folder_output_subfolder:
+                self.name_dir = self.name_dir.joinpath(model.config.analysis.folder_output_subfolder)
 
         # deal with the subfolder
         self.subfolder = subfolder

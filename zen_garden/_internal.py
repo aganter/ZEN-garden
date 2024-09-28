@@ -11,6 +11,7 @@ Compilation  of the optimization problem.
 import importlib
 import logging
 import os
+import json
 
 from zen_garden.model.optimization_setup import OptimizationSetup
 from zen_garden.model.objects.benders_decomposition.benders import BendersDecomposition
@@ -53,6 +54,34 @@ def main(config, dataset_path=None, job_index=None):
     input_data_checks.read_system_file(config)
     input_data_checks.check_technology_selections()
     input_data_checks.check_year_definitions()
+
+    # check if optimal solutions for scenarios should be computed
+    if config.mga.benders.compute_optimal_solutions:
+        logging.info("--- Computing cost-optimal solutions for benders subproblems ---")
+        # save the current system and scenario dictionaries
+        system_conduct_scenario_analysis = config.system.conduct_scenario_analysis
+        # temporary overwrite the system and scenario dictionaries
+        config.system.conduct_scenario_analysis = True
+        config.analysis.folder_output_subfolder = "cost_optimal_solutions"
+        scenarios, elements = ScenarioUtils.get_scenarios(
+            config=config, scenario_script_name="benders_scenarios", job_index=None)
+        # Get the name of the dataset and clean sub-scenarios if necessary
+        model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
+        ScenarioUtils.clean_scenario_folder(config, out_folder)
+        for scenario, scenario_dict in zip(scenarios, elements):
+            optimization_setup = OptimizationSetup(
+                config,
+                solver=config.solver,
+                model_name=model_name,
+                scenario_name=scenario,
+                scenario_dict=scenario_dict,
+                input_data_checks=input_data_checks,
+            )
+            optimization_setup.fit()
+        config.system.conduct_scenario_analysis = system_conduct_scenario_analysis
+        config.benders.compute_optimal_solutions = False
+        config.analysis.folder_output_subfolder = ""
+
     # Overwrite default system and scenario dictionaries
     scenarios, elements = ScenarioUtils.get_scenarios(
         config=config, scenario_script_name="scenarios", job_index=job_index
@@ -61,6 +90,7 @@ def main(config, dataset_path=None, job_index=None):
     model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
     # Clean sub-scenarios if necessary
     ScenarioUtils.clean_scenario_folder(config, out_folder)
+
     # ITERATE THROUGH SCENARIOS
     for scenario, scenario_dict in zip(scenarios, elements):
         # FORMULATE THE OPTIMIZATION PROBLEM

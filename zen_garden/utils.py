@@ -1423,6 +1423,10 @@ class StringUtils:
             os.makedirs(folder_output, exist_ok=True)
         if not os.path.exists(out_folder := os.path.join(folder_output, model_name)):
             os.makedirs(out_folder, exist_ok=True)
+        if analysis.folder_output_subfolder:
+            out_folder = os.path.join(out_folder, analysis.folder_output_subfolder)
+            if not os.path.exists(out_folder):
+                os.makedirs(out_folder, exist_ok=True)
         else:
             logging.warning(f"The output folder '{out_folder}' already exists")
             if analysis["overwrite_output"]:

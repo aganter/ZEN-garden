@@ -110,10 +110,13 @@ class ModelingToGenerateAlternatives:
         """
         get min-max values for min-max scaling
         """
-        if os.path.exists(self.input_path / f"min_max_values_{self.scenario_name}.csv"):
-            self.min_max_values = pd.read_csv(self.input_path / f"min_max_values_{self.scenario_name}.csv", index_col=[0, 1])
+        if os.path.exists(self.input_path / f"min_max_values.csv"):
+            self.min_max_values = pd.read_csv(self.input_path / f"min_max_values.csv", index_col=[0, 1])
             return
-        current_scenario = self.scenario_name
+        run_benders = self.config_mga.benders.benders_decomposition
+        run_monolithic = self.config_mga.run_monolithic_optimization
+        self.config_mga.benders.benders_decomposition = False
+        self.config_mga.run_monolithic_optimization = True
         current_scenario_dict = self.scenario_dict
         current_subfolder = current_scenario_dict["sub_folder"]
         objective_weights = {"min": 1, "max": -1}
@@ -122,10 +125,9 @@ class ModelingToGenerateAlternatives:
         subset_loc =self.mga_data_input.decision_variables_dict["objective_set"][ self.mga_objective_loc]
         idx = pd.MultiIndex.from_product([subset_obj, subset_loc], names=[self.mga_objective_obj, self.mga_objective_loc])
         self.min_max_values = pd.DataFrame(np.nan, index=idx, columns=list(objective_weights.keys()))
-        for sense, weight in objective_weights.items():
-            for tech, loc in idx:
+        for tech, loc in idx:
+            for sense, weight in objective_weights.items():
                 sub_folder = "_".join([sense,tech,loc])
-                self.scenario_name = current_scenario+"_"+sub_folder
                 self.scenario_dict["sub_folder"] = sub_folder
                 self.scenario_dict["param_map"][sub_folder] = {"ModelingToGenerateAlternatives": {'objective_elements_definition': {'default_op': 1}}}
                 weights = xr.full_like(objective_var, fill_value=0)
@@ -134,10 +136,12 @@ class ModelingToGenerateAlternatives:
                 self.fit()
                 var = getattr(self.mga_solution.model.solution, self.mga_solution.config["objective_variables"])
                 self.min_max_values.loc[(tech,loc),sense] = var.loc[tech,:,loc,:].sum().sum().values
-        self.min_max_values.to_csv(self.input_path / f"min_max_values_{current_scenario}.csv", index=True)
-        # reset scenario nam
-        self.scenario_name = current_scenario
+        self.min_max_values.to_csv(self.input_path / f"min_max_values.csv", index=True)
+        # reset scenario subfolder
         self.scenario_dict["sub_folder"] = current_subfolder
+        # return to original settings
+        self.config_mga.benders.benders_decomposition = run_benders
+        self.config_mga.run_monolithic_optimization = run_monolithic
 
     def sanity_checks_mga_iteration_scenario(self):
         """
@@ -302,13 +306,14 @@ class ModelingToGenerateAlternatives:
         #self.characteristic_scales = self.generate_characteristic_scales()
         self.direction_search_vector = self.generate_random_directions()
         self.direction_search_vector = pd.Series(self.direction_search_vector)
-        weights = self.direction_search_vector / (self.min_max_values["max"] - self.min_max_values["min"])
+        delta = self.min_max_values["max"] - self.min_max_values["min"]
+        delta[delta.round(1)==0] = 1 # avoid division by zero if technology remains unused
+        weights = self.direction_search_vector / delta
         weights.index.names = [self.mga_objective_obj, self.mga_objective_loc]
         weights = weights.to_xarray()
         objective_var = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
         weights = weights.broadcast_like(objective_var).fillna(0)
         self.mga_solution.mga_weights = weights.rename("weights")
-        # todo how to deal with technologies that are not installed?
 
     def fit(self):
         """

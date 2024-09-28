@@ -136,7 +136,7 @@ class MasterProblem(OptimizationSetup):
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
-            if "capacity" in str(self.monolithic_model.model.objective):
+            if "capacity_addition" in str(self.monolithic_model.model.objective):
                 self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
                 self.only_feasibility_checks = True
             elif "flow_import" in str(self.monolithic_model.model.objective):

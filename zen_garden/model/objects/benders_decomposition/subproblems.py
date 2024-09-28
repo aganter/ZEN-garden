@@ -15,8 +15,10 @@
 import logging
 import os
 import time
+import json
 
 from zen_garden.model.optimization_setup import OptimizationSetup
+from zen_garden.postprocess.results import Results
 
 
 class Subproblem(OptimizationSetup):
@@ -83,7 +85,8 @@ class Subproblem(OptimizationSetup):
         # Attributes from the monolithic problem needed to ensure robustness in case of solving Benders for MGA
         self.mga_weights = self.monolithic_model.mga_weights
         self.mga_objective_coords = self.monolithic_model.mga_objective_coords
-        self.cost_optimal_mga = self.monolithic_model.cost_optimal_mga
+        self.cost_optimal_mga = self.get_cost_optimal_mga()
+        # self.cost_optimal_mga = self.monolithic_model.cost_optimal_mga
         self.building_subproblem = True
 
         self.create_subproblem()
@@ -95,6 +98,19 @@ class Subproblem(OptimizationSetup):
         self.lhs_cuts = None
         if not self.config.benders["cross_validation_scenarios"]:
             self.define_lhs_rhs_for_cuts()
+
+    def get_cost_optimal_mga(self):
+        """
+        get cost optimal value for subproblem
+        """
+        if not hasattr(self,"cost_optimal_solutions"):
+            dataset = os.path.split(self.config.analysis.dataset)[-1]
+            folder = os.path.join(self.config.analysis.folder_output, dataset, self.config.benders.optimal_solutions_folder)
+            results = Results(folder)
+            self.cost_optimal_solutions = results.get_total("net_present_cost").sum(1)
+        scenario = "scenario_"+self.scenario_name
+        assert scenario in self.cost_optimal_solutions.index, f"Scenario {self.scenario_name} not found in the cost optimal solutions"
+        return self.cost_optimal_solutions.loc[scenario]
 
     def create_subproblem(self):
         """
@@ -117,7 +133,7 @@ class Subproblem(OptimizationSetup):
 
         # Define the objective function
         if self.analysis["objective"] == "mga":
-            if "capacity" in str(self.monolithic_model.model.objective):
+            if "capacity_addition" in str(self.monolithic_model.model.objective):
                 if self.config.benders["cross_validation_scenarios"]:
                     self.model.add_objective(self.monolithic_model.model.objective.expression, overwrite=True)
                 else:

@@ -578,7 +578,6 @@ class OptimizationSetup(object):
                 io_api=self.solver["io_api"],
                 keep_files=self.solver["keep_files"],
                 sanitize_zeros=True,
-                warmstart_fn=self.solver["warmstart_fn"],
                 # remaining kwargs are passed to the solver
                 **solver_options,
             )
