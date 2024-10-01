@@ -112,15 +112,19 @@ class ModelingToGenerateAlternatives:
         """
         get min-max values for min-max scaling
         """
+        import copy
         if os.path.exists(self.input_path / f"min_max_values.csv"):
             self.min_max_values = pd.read_csv(self.input_path / f"min_max_values.csv", index_col=[0, 1])
             return
         run_benders = self.config_mga.benders.benders_decomposition
         run_monolithic = self.config_mga.run_monolithic_optimization
+        current_scenario_dict = copy.deepcopy(self.scenario_dict)
+        base_scenario = self.scenario_dict["base_scenario"]
         self.config_mga.benders.benders_decomposition = False
         self.config_mga.run_monolithic_optimization = True
-        current_scenario_dict = self.scenario_dict
-        current_subfolder = current_scenario_dict["sub_folder"]
+        self.scenario_dict["param_map"] = {}
+        self.scenario_dict["base_scenario"] = "min_max_values"
+
         objective_weights = {"min": 1, "max": -1}
         objective_var = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])
         subset_obj = self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_obj]
@@ -139,11 +143,10 @@ class ModelingToGenerateAlternatives:
                 var = getattr(self.mga_solution.model.solution, self.mga_solution.config["objective_variables"])
                 self.min_max_values.loc[(tech,loc),sense] = var.loc[tech,:,loc,:].sum().sum().values
         self.min_max_values.to_csv(self.input_path / f"min_max_values.csv", index=True)
-        # reset scenario subfolder
-        self.scenario_dict["sub_folder"] = current_subfolder
         # return to original settings
         self.config_mga.benders.benders_decomposition = run_benders
         self.config_mga.run_monolithic_optimization = run_monolithic
+        self.scenario_dict = current_scenario_dict
 
     def sanity_checks_mga_iteration_scenario(self):
         """
