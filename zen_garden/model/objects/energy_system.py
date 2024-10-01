@@ -789,8 +789,13 @@ class EnergySystemRules(GenericRule):
             NPC = \sum_{y\in\mathcal{Y}} NPC_y \leq (1 + \lambda) NPC_{\mathrm{opt}}
 
         """
+        if "cost_slack_variables" in self.optimization_setup.config.keys():
+            cost_slack_variables = self.optimization_setup.config.cost_slack_variables
+        else:
+            cost_slack_variables = 0
+
         lhs = self.variables["net_present_cost"].sum(dim="set_time_steps_yearly")
-        rhs = (1 + self.optimization_setup.config["cost_slack_variables"]) * self.optimization_setup.cost_optimal_mga
+        rhs = (1 + cost_slack_variables) * self.optimization_setup.cost_optimal_mga
         cost_constraint = lhs <= rhs
 
         self.constraints.add_constraint("constraint_optimal_cost_total_deviation", cost_constraint)

@@ -64,7 +64,7 @@ def main(config, dataset_path=None, job_index=None):
         config.system.conduct_scenario_analysis = True
         config.analysis.folder_output_subfolder = "cost_optimal_solutions"
         scenarios, elements = ScenarioUtils.get_scenarios(
-            config=config, scenario_script_name="benders_scenarios", job_index=None)
+            config=config.mga, scenario_script_name="benders_scenarios", job_index=None)
         # Get the name of the dataset and clean sub-scenarios if necessary
         model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
         ScenarioUtils.clean_scenario_folder(config, out_folder)
@@ -82,81 +82,58 @@ def main(config, dataset_path=None, job_index=None):
         config.benders.compute_optimal_solutions = False
         config.analysis.folder_output_subfolder = ""
 
-    # Overwrite default system and scenario dictionaries
-    scenarios, elements = ScenarioUtils.get_scenarios(
-        config=config, scenario_script_name="scenarios", job_index=job_index
-    )
-    # Get the name of the dataset
+    # FORMULATE AND SOLVE THE OPTIMIZATION PROBLEM
+    # Get the name of the dataset and clean sub-scenarios if necessary
     model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
-    # Clean sub-scenarios if necessary
     ScenarioUtils.clean_scenario_folder(config, out_folder)
+    optimization_setup = OptimizationSetup(
+        config,
+        solver=config.solver,
+        model_name=model_name,
+        scenario_name="",
+        scenario_dict=dict(),
+        input_data_checks=input_data_checks,
+    )
+    # Fit the optimization problem for every steps defined in the config and save the results
+    optimization_setup.fit()
+    logging.info("")
 
     # ITERATE THROUGH SCENARIOS
-    for scenario, scenario_dict in zip(scenarios, elements):
-        # FORMULATE THE OPTIMIZATION PROBLEM
-        optimization_setup = OptimizationSetup(
-            config,
-            solver=config.solver,
-            model_name=model_name,
-            scenario_name=scenario,
-            scenario_dict=scenario_dict,
-            input_data_checks=input_data_checks,
+    # MODELING TO GENERATE ALTERNATIVES
+    if config.mga["modeling_to_generate_alternatives"]:
+        # Overwrite default system and scenario dictionaries
+        mga_output_folder = StringUtils.get_output_folder(
+            analysis=config.mga.analysis,
+            system=config.mga["system"],
+            folder_output=config.mga.analysis["folder_output"],
         )
-        # Fit the optimization problem for every steps defined in the config and save the results
-        optimization_setup.fit()
-        logging.info("")
-
-        # BENDERS DECOMPOSITION
-        if config.benders.benders_decomposition:
-            logging.info("--- Benders Decomposition accessed ---")
-            if config.solver["use_scaling"]:
-                optimization_setup.scaling.scale_again_solution()
-            benders_decomposition = BendersDecomposition(
-                config=config,
-                analysis=config.analysis,
-                monolithic_model=optimization_setup,
-                scenario_name=scenario,
-                use_monolithic_solution=config.benders.use_monolithic_solution,
-            )
-            benders_decomposition.fit()
-
-        # MODELING TO GENERATE ALTERNATIVES
-        if config.mga["modeling_to_generate_alternatives"]:
+        config.mga.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
+        config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
+        config.mga.system.update(config.system)
+        config.mga.system.update(config.mga.immutable_system_elements)
+        scenarios, elements = ScenarioUtils.get_scenarios(
+            config=config.mga, scenario_script_name="mga_iterations", job_index=job_index
+        )
+        ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
+        for mga_scenario, mga_scenario_dict in zip(scenarios, elements):
             logging.info("--- Modeling to Generate Alternatives accessed to generate near-optimal solutions ---")
-            config.mga.analysis["dataset"] = os.path.abspath(config.analysis["dataset"])
-            config.mga.analysis["folder_output"] = os.path.abspath(config.mga.analysis["folder_output"])
-            config.mga.system.update(config.system)
-            config.mga.system.update(config.mga.immutable_system_elements)
-            mga_output_folder = StringUtils.get_output_folder(
-                analysis=config.mga.analysis,
-                system=config.mga["system"],
-                folder_output=config.mga.analysis["folder_output"],
-            )
-
-            mga_scenarios, mga_elements = ScenarioUtils.get_scenarios(
-                config=config.mga, scenario_script_name="mga_iterations", job_index=job_index
-            )
-            ScenarioUtils.clean_scenario_folder(config.mga, mga_output_folder)
 
             # The scenario will create a double level folder structure: the first to be the different MGA objectives
             # and the second to be the iterations for each objective
-            for mga_scenario, mga_scenario_dict in zip(mga_scenarios, mga_elements):
-                if scenario:
-                    mga_scenario = scenario + "_" + mga_scenario
-                    mga_scenario_dict = scenario_dict.update(mga_scenario_dict)
-                parts = mga_scenario.split("_")
-                mga_scenario_name = "_".join(parts[:-2])
-                iteration = int(parts[-1])
-                logging.info("--- MGA for: %s ---", mga_scenario_name)
-                logging.info("--- Iteration %s ---", iteration + 1)
-                logging.info("")
-                mga_iterations = ModelingToGenerateAlternatives(
-                    config=config,
-                    optimized_setup=optimization_setup,
-                    scenario_name=mga_scenario,
-                    scenario_dict=mga_scenario_dict
-                )
-                mga_iterations.fit()
+            parts = mga_scenario.split("_")
+            mga_scenario_name = "_".join(parts[:-2])
+            iteration = int(parts[-1])
+            logging.info("--- MGA for: %s ---", mga_scenario_name)
+            logging.info("--- Iteration %s ---", iteration + 1)
+            logging.info("")
+            mga_iterations = ModelingToGenerateAlternatives(
+                config=config,
+                optimized_setup=optimization_setup,
+                scenario_name=mga_scenario,
+                scenario_dict=mga_scenario_dict,
+                iteration=iteration
+            )
+            mga_iterations.fit()
 
             logging.info("--- MGA run finished ---")
 

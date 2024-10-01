@@ -44,7 +44,8 @@ class ModelingToGenerateAlternatives:
         config: dict,
         optimized_setup: OptimizationSetup,
         scenario_name: str,
-        scenario_dict: dict
+        scenario_dict: dict,
+        iteration: int
     ):
         """
         Initialize the Modeling to Generate Alternatives object.
@@ -60,6 +61,7 @@ class ModelingToGenerateAlternatives:
         self.optimized_setup = optimized_setup
         self.scenario_name = scenario_name
         self.scenario_dict = scenario_dict
+        self.iteration = iteration
 
         self.input_data_checks = InputDataChecks(config=self.config_mga, optimization_setup=None)
         self.input_data_checks.check_dataset()
@@ -247,10 +249,26 @@ class ModelingToGenerateAlternatives:
 
         :return: Random direction_search_vector for each of the decision variables (type: dict)
         """
-        self.direction_search_vector = {
-            tuple(component): truncnorm.rvs(-1, 1, loc=0, scale=1) for component in self.decision_variables
-        }
-        return self.direction_search_vector
+        scenarios = self.config_mga.scenarios.keys()
+        idx_dv = pd.MultiIndex.from_tuples(self.decision_variables,
+                                           names=[self.mga_objective_obj, self.mga_objective_loc])
+        if os.path.exists(self.input_path / f"random_directions_matrix.csv"):
+            direction_search_matrix = pd.read_csv(self.input_path / f"random_directions_matrix.csv", index_col=[0, 1])
+            direction_search_matrix.rename({col: int(col) for col in direction_search_matrix.columns}, axis=1, inplace=True)
+            idx = direction_search_matrix.index
+            if len(direction_search_matrix.columns) >= len(scenarios) and set(idx_dv).issubset(set(idx)):
+                self.direction_search_vector = direction_search_matrix.loc[idx_dv,self.iteration] #TODO check if is series
+                return
+
+        logging.info("Generating new random directions matrix")
+        direction_search_matrix = pd.DataFrame((np.random.rand(len(idx_dv), len(scenarios)) - 0.5)*2, index=idx_dv, columns=np.arange(0,len(scenarios)))
+        direction_search_matrix.to_csv(self.input_path / f"random_directions_matrix.csv", index=True)
+
+        self.direction_search_vector = direction_search_matrix.loc[idx_dv,self.iteration]
+        # self.direction_search_vector = {
+        #     tuple(component): truncnorm.rvs(-1, 1, loc=0, scale=1) for component in self.decision_variables
+        # }
+        # return self.direction_search_vector
 
     def generate_characteristic_scales(self) -> xr.DataArray:
         """
@@ -304,8 +322,7 @@ class ModelingToGenerateAlternatives:
         if not hasattr(self, "min_max_values"):
             self.min_max_scaling()
         #self.characteristic_scales = self.generate_characteristic_scales()
-        self.direction_search_vector = self.generate_random_directions()
-        self.direction_search_vector = pd.Series(self.direction_search_vector)
+        self.generate_random_directions()
         delta = self.min_max_values["max"] - self.min_max_values["min"]
         delta[delta.round(1)==0] = 1 # avoid division by zero if technology remains unused
         weights = self.direction_search_vector / delta
@@ -332,6 +349,14 @@ class ModelingToGenerateAlternatives:
                 self.mga_solution.scaling.run_scaling()
             else:
                 self.mga_solution.scaling.analyze_numerics()
+            # Create scenario name, subfolder and param_map for postprocessing
+            scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
+                config=self.config_mga,
+                scenario=self.scenario_name,
+                scenario_dict=self.scenario_dict,
+                steps_horizon=steps_horizon,
+                step=step,
+            )
             if self.config_mga["run_monolithic_optimization"]:
                 # Solve the optimization problem
                 self.mga_solution.solve()
@@ -347,14 +372,6 @@ class ModelingToGenerateAlternatives:
                 # Save new capacity additions and cumulative carbon emissions for next time step
                 self.mga_solution.add_results_of_optimization_step(step)
                 # Evaluate results
-                # Create scenario name, subfolder and param_map for postprocessing
-                scenario_name, subfolder, param_map = StringUtils.generate_folder_path(
-                    config=self.config_mga,
-                    scenario=self.scenario_name,
-                    scenario_dict=self.scenario_dict,
-                    steps_horizon=steps_horizon,
-                    step=step,
-                )
                 # Write results
                 Postprocess(
                     model=self.mga_solution,

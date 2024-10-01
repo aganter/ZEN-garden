@@ -147,7 +147,7 @@ class BendersDecomposition:
             logging.info("")
             logging.info("--- Creating the subproblem %s ---", scenario)
             subproblem = Subproblem(
-                config=self.monolithic_model.config,
+                config=self.config,
                 config_benders=self.config.benders,
                 solver=self.config.benders.solver_subproblem,
                 analysis=self.analysis,
