@@ -249,19 +249,20 @@ class ModelingToGenerateAlternatives:
 
         :return: Random direction_search_vector for each of the decision variables (type: dict)
         """
-        scenarios = self.config_mga.scenarios.keys()
         idx_dv = pd.MultiIndex.from_tuples(self.decision_variables,
                                            names=[self.mga_objective_obj, self.mga_objective_loc])
         if os.path.exists(self.input_path / f"random_directions_matrix.csv"):
             direction_search_matrix = pd.read_csv(self.input_path / f"random_directions_matrix.csv", index_col=[0, 1])
             direction_search_matrix.rename({col: int(col) for col in direction_search_matrix.columns}, axis=1, inplace=True)
             idx = direction_search_matrix.index
-            if len(direction_search_matrix.columns) >= len(scenarios) and set(idx_dv).issubset(set(idx)):
+            if len(direction_search_matrix.columns) >= len(self.config_mga.scenarios) and set(idx_dv).issubset(set(idx)):
                 self.direction_search_vector = direction_search_matrix.loc[idx_dv,self.iteration] #TODO check if is series
                 return
 
         logging.info("Generating new random directions matrix")
-        direction_search_matrix = pd.DataFrame((np.random.rand(len(idx_dv), len(scenarios)) - 0.5)*2, index=idx_dv, columns=np.arange(0,len(scenarios)))
+        rdm_vals = (np.random.rand(len(idx_dv), len(self.config_mga.scenarios)) - 0.5)*2
+        columns = np.arange(0, len(self.config_mga.scenarios))
+        direction_search_matrix = pd.DataFrame(rdm_vals, index=idx_dv, columns=columns)
         direction_search_matrix.to_csv(self.input_path / f"random_directions_matrix.csv", index=True)
 
         self.direction_search_vector = direction_search_matrix.loc[idx_dv,self.iteration]
