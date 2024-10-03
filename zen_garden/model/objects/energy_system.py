@@ -518,6 +518,7 @@ class EnergySystem:
         if self.optimization_setup.analysis["objective"] == "mga":
             logging.info("--- Adding Constraint for the Total Cost Deviation allowed ---")
             self.rules.constraint_cost_total_deviation()
+            self.rules.constraint_cost_capex_deviation()
 
     def construct_objective(self):
         """constructs the pe.Objective of the class <EnergySystem>"""
@@ -799,6 +800,49 @@ class EnergySystemRules(GenericRule):
         cost_constraint = lhs <= rhs
 
         self.constraints.add_constraint("constraint_optimal_cost_total_deviation", cost_constraint)
+
+    def constraint_cost_capex_deviation(self):
+        """
+        Limit on the total cost objective of the energy system based on the optimized total cost of the energy system
+        and a chosen deviation indicated by the cost_slack_variables.
+
+        .. math::
+            NPC = \sum_{y\in\mathcal{Y}} NPC_y \leq (1 + \lambda) NPC_{\mathrm{opt}}
+
+        """
+        if "cost_slack_variables" in self.optimization_setup.config.keys():
+            cost_slack_variables = self.optimization_setup.config.cost_slack_variables
+        else:
+            cost_slack_variables = 0
+
+        ## dicounting of capex
+        factor = pd.Series(index=self.energy_system.set_time_steps_yearly)
+        for year in self.energy_system.set_time_steps_yearly:
+
+            ### auxiliary calculations
+            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
+                interval_between_years = 1
+            else:
+                interval_between_years = self.system["interval_between_years"]
+            # economic discount
+            factor[year] = sum(
+                (
+                        (1 / (1 + self.parameters.discount_rate))
+                        ** (
+                                self.system["interval_between_years"] * (
+                                    year - self.energy_system.set_time_steps_yearly[0])
+                                + _intermediate_time_step
+                        )
+                )
+                for _intermediate_time_step in range(0, interval_between_years)
+            )
+        term_discounted_cost_total = self.variables["cost_capex_total"] * factor
+
+        lhs =  term_discounted_cost_total.sum(dim="set_time_steps_yearly")
+        rhs = (1 + cost_slack_variables) * self.optimization_setup.cost_optimal_mga
+        cost_constraint = lhs <= rhs
+
+        self.constraints.add_constraint("constraint_optimal_cost_capex_deviation", cost_constraint)
 
     # Objective rules
     # ---------------
