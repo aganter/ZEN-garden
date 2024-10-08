@@ -100,7 +100,7 @@ class BendersDecomposition:
         self.monolithic_constraints = self.monolithic_model.model.constraints
         self.monolithic_variables = self.monolithic_model.model.variables
         self.design_constraints, self.operational_constraints = self.separate_design_operational_constraints()
-        self.design_variables, self.operational_variables, self.not_coupling_variables = (
+        self.design_variables, self.operational_variables = (
             self.separate_design_operational_variables()
         )
 
@@ -157,7 +157,6 @@ class BendersDecomposition:
                 scenario_name=scenario,
                 scenario_dict=scenario_dict,
                 input_data_checks=self.monolithic_model.input_data_checks,
-                not_coupling_variables=self.not_coupling_variables,
                 design_constraints=self.design_constraints,
                 benders_output_folder=self.benders_output_folder,
             )
@@ -172,39 +171,37 @@ class BendersDecomposition:
         :return: design_constraints, operational_constraints (type: lists of strings)
         """
         benders_constraints = self.data_input.read_input_csv("constraints")
-        design_constraints = []
-        operational_constraints = []
+        design = []
+        operational = []
+        unassigned = []
 
         # The benders_constraints is a dataframe with columns: constraint_name and constraint_type
         for _, constraint in benders_constraints.iterrows():
             name = constraint["constraint_name"]
             if constraint["constraint_type"] == "design":
-                design_constraints = self.check_constraint_name(design_constraints, name)
+                design = self.check_constraint_name(design, name)
             elif constraint["constraint_type"] == "operational":
-                operational_constraints = self.check_constraint_name(operational_constraints, name)
+                operational = self.check_constraint_name(operational, name)
+            elif np.isnan(constraint['constraint_type']):
+                unassigned = self.check_constraint_name(unassigned, name)
             else:
                 raise AssertionError(f"Constraint {constraint['constraint_name']} has an invalid type.")
 
         # Remove from the two list the constraints that are not in the monolithic problem
-        design_constraints = [
-            constraint for constraint in design_constraints if constraint in self.monolithic_constraints
-        ]
-        operational_constraints = [
-            constraint for constraint in operational_constraints if constraint in self.monolithic_constraints
-        ]
+        design = [constraint for constraint in design if constraint in self.monolithic_constraints]
+        operational = [constraint for constraint in operational if constraint in self.monolithic_constraints]
+        unassigned = [constraint for constraint in unassigned if constraint in self.monolithic_constraints]
 
         # Sanity check on the constraints
-        if len(design_constraints) + len(operational_constraints) != len(self.monolithic_constraints):
-            missing_constraints = set(self.monolithic_constraints) - set(design_constraints + operational_constraints)
-            raise AssertionError(
-                f"The following constraints are missing in the benders decomposition: {missing_constraints}"
-            )
+        if len(design) + len(operational) + len(unassigned) != len(self.monolithic_constraints):
+            missing = set(self.monolithic_constraints) - set(design + operational + unassigned)
+            raise AssertionError(f"The following constraints are missing in the benders decomposition: {missing}")
 
-        return design_constraints, operational_constraints
+        return design, operational
 
     def check_constraint_name(self, list_constraints, name):
         """check constraint names for exemptions"""
-        if name == "exclusive_retrofit_techs_":
+        if name == "constraint_exclusive_retrofit_techs_":
             for base_tech in self.config.system["set_exclusive_retrofitting_technologies"].items():
                 list_constraints.append(f"{name}{base_tech[0]}")
         if "supernodes" in name and not name in self.monolithic_constraints:
@@ -220,44 +217,36 @@ class BendersDecomposition:
     def separate_design_operational_variables(self) -> list:
         """
         Separate the design and operational variables based on the user input preferences defined in the config file.
-        The function stores also variables defined as not coupling variables. These variables are design variables that
-        are not included in the subproblems becasue they are not coupled with the operational variables.
         It also perfomers a sanity check to ensure that all the variables of the monolithic problem are included in the
         benders decomposition.
 
         :return: design_variables, operational_variables (type: lists of strings)
         """
         benders_variables = self.data_input.read_input_csv("variables")
-        not_subproblem_variables = self.data_input.read_input_csv("not_coupling_variables")
-        design_variables = []
-        operational_variables = []
-        not_coupling_variables = []
+        design = []
+        operational = []
+        unassigned = []
 
         # The benders_variables is a dataframe with columns: variable_name and variable_type
         for _, variable in benders_variables.iterrows():
             if variable["variable_name"] in self.monolithic_variables:
                 if variable["variable_type"] == "design":
-                    design_variables.append(variable["variable_name"])
+                    design.append(variable["variable_name"])
                 elif variable["variable_type"] == "operational":
-                    operational_variables.append(variable["variable_name"])
+                    operational.append(variable["variable_name"])
+                elif np.isnan(variable['variable_type']):
+                    unassigned.append(variable["variable_name"])
                 else:
                     raise AssertionError(f"Variable {variable['variable_name']} has an invalid type.")
 
         # Sanity check on the variables
-        if len(design_variables) + len(operational_variables) != len(self.monolithic_variables):
-            missing_variables = set(self.monolithic_variables) - set(design_variables + operational_variables)
+        if len(design+operational+unassigned) != len(self.monolithic_variables):
+            missing_variables = set(self.monolithic_variables) - set(design + operational + unassigned)
             raise AssertionError(
                 f"The following variables are missing in the benders decomposition: {missing_variables}"
             )
-        # Define the not coupling variables
-        for _, variable in not_subproblem_variables.iterrows():
-            if variable["variable_name"] in self.monolithic_variables:
-                if variable["variable_type"] == "design":
-                    not_coupling_variables.append(variable["variable_name"])
-                else:
-                    raise AssertionError(f"The variable {variable['variable_name']} must be a design variable.")
 
-        return design_variables, operational_variables, not_coupling_variables
+        return design, operational
 
     def solve_master_model(self, iteration):
         """
@@ -297,6 +286,8 @@ class BendersDecomposition:
                 self.master_model.model.variables[variable_name].upper = variable_solution
         # Solve the master model
         self.master_model.solve()
+        # check variable names based on index
+        # self.master_model.model.variables.get_label_position(52270)
         # Restore the original bounds of the master variables
         for variable_name in self.master_model.model.variables:
             self.master_model.model.variables[variable_name].lower = original_bounds[variable_name][0]

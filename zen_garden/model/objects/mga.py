@@ -119,7 +119,6 @@ class ModelingToGenerateAlternatives:
         run_benders = self.config_mga.benders.benders_decomposition
         run_monolithic = self.config_mga.run_monolithic_optimization
         current_scenario_dict = copy.deepcopy(self.scenario_dict)
-        base_scenario = self.scenario_dict["base_scenario"]
         self.config_mga.benders.benders_decomposition = False
         self.config_mga.run_monolithic_optimization = True
         self.scenario_dict["param_map"] = {}
@@ -330,6 +329,7 @@ class ModelingToGenerateAlternatives:
         delta = self.min_max_values["max"] - self.min_max_values["min"]
         delta[delta.round(1)==0] = 1 # avoid division by zero if technology remains unused
         weights = self.direction_search_vector / delta
+        assert weights[weights==np.inf].empty, "Infinite values in objective function weights"
         weights.index.names = [self.mga_objective_obj, self.mga_objective_loc]
         weights = weights.to_xarray()
         objective_var = getattr(self.optimized_setup.model.solution, self.mga_solution.config["objective_variables"])

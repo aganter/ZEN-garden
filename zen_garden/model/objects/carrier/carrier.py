@@ -285,18 +285,18 @@ class Carrier(Element):
             unit_category={"money": 1, "time": -1},
         )
 
-        if optimization_setup.system["run_supernodes"]:
-            variables.add_variable(
-                model,
-                name="flow_import_supernodes",
-                index_sets=cls.create_custom_set(
-                    ["set_carriers", "set_supernodes", "set_time_steps_operation"],
-                    optimization_setup,
-                ),
-                bounds=(0, np.inf),
-                doc="supernode- and time-dependent carrier import from the grid",
-                unit_category={"energy_quantity": 1, "time": -1},
-            )
+        # if optimization_setup.system["run_supernodes"]:
+        #     variables.add_variable(
+        #         model,
+        #         name="flow_import_supernodes",
+        #         index_sets=cls.create_custom_set(
+        #             ["set_carriers", "set_supernodes", "set_time_steps_operation"],
+        #             optimization_setup,
+        #         ),
+        #         bounds=(0, np.inf),
+        #         doc="supernode- and time-dependent carrier import from the grid",
+        #         unit_category={"energy_quantity": 1, "time": -1},
+        #     )
 
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
@@ -334,8 +334,8 @@ class Carrier(Element):
         # energy balance
         rules.constraint_nodal_energy_balance()
 
-        if optimization_setup.system["run_supernodes"]:
-            rules.constraint_carrier_flow_import_supernodes()
+        # if optimization_setup.system["run_supernodes"]:
+        #     rules.constraint_carrier_flow_import_supernodes()
 
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
@@ -714,19 +714,19 @@ class CarrierRules(GenericRule):
         ### return
         self.constraints.add_constraint("constraint_nodal_energy_balance", constraints)
 
-    def constraint_carrier_flow_import_supernodes(self):
-        """
-        Sum up the carrier flow import from nodes to supernodes
-        """
-        nodes_to_supernodes = self.sets["set_nodes_in_supernodes"].data
-        flow = self.variables["flow_import"]
-        flow_super = self.variables["flow_import_supernodes"]
-        constraints = dict()
-        for supernode in self.sets["set_supernodes"]:
-            nodes = nodes_to_supernodes[supernode]
-            flow_sn = flow.loc[{"set_nodes": nodes}].sum("set_nodes")
-            flow_super_supernode = flow_super.loc[{"set_supernodes": supernode}]
-            lhs = flow_sn - flow_super_supernode
-            rhs = 0
-            constraints[supernode] = lhs == rhs
-        self.constraints.add_constraint(f"constraint_carrier_flow_import_supernodes", constraints)
+    # def constraint_carrier_flow_import_supernodes(self):
+    #     """
+    #     Sum up the carrier flow import from nodes to supernodes
+    #     """
+    #     nodes_to_supernodes = self.sets["set_nodes_in_supernodes"].data
+    #     flow = self.variables["flow_import"]
+    #     flow_super = self.variables["flow_import_supernodes"]
+    #     constraints = dict()
+    #     for supernode in self.sets["set_supernodes"]:
+    #         nodes = nodes_to_supernodes[supernode]
+    #         flow_sn = flow.loc[{"set_nodes": nodes}].sum("set_nodes")
+    #         flow_super_supernode = flow_super.loc[{"set_supernodes": supernode}]
+    #         lhs = flow_sn - flow_super_supernode
+    #         rhs = 0
+    #         constraints[supernode] = lhs == rhs
+    #     self.constraints.add_constraint(f"constraint_carrier_flow_import_supernodes", constraints)

@@ -64,7 +64,7 @@ def main(config, dataset_path=None, job_index=None):
         config.system.conduct_scenario_analysis = True
         config.analysis.folder_output_subfolder = "cost_optimal_solutions"
         scenarios, elements = ScenarioUtils.get_scenarios(
-            config=config.mga, scenario_script_name="benders_scenarios", job_index=None)
+            config=config, scenario_script_name="benders_scenarios", job_index=None)
         # Get the name of the dataset and clean sub-scenarios if necessary
         model_name, out_folder = StringUtils.get_model_name(config.analysis, config.system)
         ScenarioUtils.clean_scenario_folder(config, out_folder)

@@ -573,6 +573,7 @@ class OptimizationSetup(object):
         logging.disable(logging.WARNING)
 
         if solver_name == "gurobi":
+            # self.model.variables.get_label_position(113)
             self.model.solve(
                 solver_name=solver_name,
                 io_api=self.solver["io_api"],
@@ -581,6 +582,7 @@ class OptimizationSetup(object):
                 # remaining kwargs are passed to the solver
                 **solver_options,
             )
+            a=1
         else:
             self.model.solve(
                 solver_name=solver_name,

@@ -167,9 +167,25 @@ class RetrofittingTechnologyRules(GenericRule):
         )
         lhs = term_flow_base - retrofit_flow_coupling * term_flow_retrofit
         rhs = 0
-        constraints = lhs <= rhs
+        constraints_flows = lhs <= rhs
 
-        self.constraints.add_constraint("retrofit_flow_coupling", constraints)
+        self.constraints.add_constraint("constraint_retrofit_flow_coupling", constraints_flows)
+
+        ## limit for capacity
+        # times = retrofit_flow_coupling.coords["set_time_steps_operation"]
+        # nodes = retrofit_flow_coupling.coords["set_nodes"]
+        # time_step_year = xr.DataArray(
+        #     [self.optimization_setup.energy_system.time_steps.convert_time_step_operation2year(t) for t in times.data],
+        #     coords=[times])
+        # term_capacity = self.variables["capacity"].rename({"set_location": "set_nodes",
+        #                                                    "set_technologies": "set_conversion_technologies"})
+        # term_capacity_base = term_capacity.sel({"set_conversion_technologies": self.sets["set_retrofitting_base_technologies"]})
+        # term_capacity_retrofit = self.map_and_expand(term_capacity, retrofit_base_technologies)
+        # lhs = (term_capacity_base.loc[:, :, nodes, time_step_year]
+        #        - retrofit_flow_coupling * term_capacity_retrofit.loc[:, :, nodes, time_step_year])
+        # # lhs =   term_capacity_base - retrofit_flow_coupling.max() * term_capacity_retrofit
+        # constraints_capacity = lhs <= rhs
+        # self.constraints.add_constraint("constraint_retrofit_capacity_coupling", constraints_capacity)
 
         # only one CCS tech can be coupled
         for base, techs in self.system["set_exclusive_retrofitting_technologies"].items():
@@ -186,4 +202,4 @@ class RetrofittingTechnologyRules(GenericRule):
             ) - term_flow_reference.loc[mask]
             rhs = 0
             constraints = lhs <= rhs
-            self.constraints.add_constraint(f"exclusive_retrofit_techs_{base}", constraints)
+            self.constraints.add_constraint(f"constraint_exclusive_retrofit_techs_{base}", constraints)

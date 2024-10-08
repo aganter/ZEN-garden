@@ -40,7 +40,6 @@ class Subproblem(OptimizationSetup):
         scenario_name: str,
         scenario_dict: dict,
         input_data_checks,
-        not_coupling_variables,
         design_constraints,
         benders_output_folder,
     ):
@@ -56,7 +55,6 @@ class Subproblem(OptimizationSetup):
         :param scenario_name: name of the scenario
         :param scenario_dict: dictionary containing the scenario data
         :param input_data_checks: dictionary containing the input data checks
-        :param not_coupling_variables: list of not coupling variables
         :param design_constraints: list of design constraints
         :param benders_output_folder: path to the Benders Decomposition output
         """
@@ -80,7 +78,6 @@ class Subproblem(OptimizationSetup):
         self.monolithic_model = monolithic_model
         self.master_model = master_model
         self.design_constraints = design_constraints
-        self.not_coupling_variables = not_coupling_variables
 
         # Attributes from the monolithic problem needed to ensure robustness in case of solving Benders for MGA
         self.mga_weights = self.monolithic_model.mga_weights
@@ -106,6 +103,8 @@ class Subproblem(OptimizationSetup):
         if not hasattr(self,"cost_optimal_solutions"):
             dataset = os.path.split(self.config.analysis.dataset)[-1]
             folder = os.path.join(self.config.analysis.folder_output, dataset, self.config.benders.optimal_solutions_folder)
+            if not os.path.exists(folder):
+                raise FileNotFoundError(f"Folder {folder} not found. You must compute cost optimal solutions for subproblems first.")
             results = Results(folder)
             self.cost_optimal_solutions = results.get_total("net_present_cost").sum(1)
         scenario = "scenario_"+self.scenario_name
@@ -175,10 +174,6 @@ class Subproblem(OptimizationSetup):
         for design_constraint in self.design_constraints:
             if design_constraint in self.model.constraints:
                 self.model.constraints.remove(design_constraint)
-        logging.info("--- Removing not coupling design variables from the subproblem ---")
-        for not_coupling_variable in self.not_coupling_variables:
-            if not_coupling_variable in self.model.variables:
-                self.model.variables.remove(not_coupling_variable)
 
     def set_objective_to_constant(self):
         """
