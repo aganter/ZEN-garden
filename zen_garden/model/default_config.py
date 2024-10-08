@@ -195,6 +195,7 @@ class BendersDecomposition(Subscriptable):
     solver_subproblem: Solver = Solver()
     input_path: Path = Path("benders_decomposition/")
     scenarios: dict[str, Any] = {"": {}}
+    generate_cuts: bool = False
     immutable_system_elements: dict = {
         "conduct_scenario_analysis": True,
         "run_default_scenario": True,
