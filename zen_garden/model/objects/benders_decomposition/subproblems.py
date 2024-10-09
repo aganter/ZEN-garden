@@ -205,8 +205,9 @@ class Subproblem(OptimizationSetup):
 
         :return: Linopy variable of the constraint
         """
-        label_position = self.master_model.model.variables.get_label_position(row["labels"])
-        return self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1])
+        #label_position = self.master_model.model.variables.get_label_position(row["labels"])
+        #return self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1])
+        return self.master_model.model.variables[row["labels_var"]].sel(row["pos_var"])
 
     def define_lhs_rhs_for_cuts(self):
         """
@@ -214,32 +215,42 @@ class Subproblem(OptimizationSetup):
         These are shared between the feasibility and optimality cuts and remain always the same. What changes are the
         multipliers of the cuts.
         """
-        folder_path = os.path.join(self.config.analysis.dataset, self.config.benders.input_path)
+        folder_path = os.path.join(self.config.analysis.dataset, self.config.benders.input_path, "rhs_lhs_cuts")
         file_path_rhs = os.path.join(folder_path, f"benders_cuts_rhs_{self.scenario_name}.csv")
         file_path_lhs = os.path.join(folder_path, f"benders_cuts_lhs_{self.scenario_name}.csv")
         constraints = self.model.constraints.flat
-        if (not self.config.benders.generate_cuts
-                and os.path.exists(file_path_rhs) and os.path.exists(file_path_lhs)):
-            self.rhs_cuts = pd.read_csv(file_path_rhs)
-            self.lhs_cuts = pd.read_csv(file_path_lhs)
-        else:
-            start_time = time.time()
-            logging.info("--- Defining the right-hand side of the constraints for the Benders cuts ---")
-            constraints.rename(columns={"labels": "labels_con", "vars": "labels"}, inplace=True)
-            # Define the right-hand side of the constraints for the Benders cuts
-            self.rhs_cuts = constraints[["labels_con", "rhs"]].drop_duplicates(subset="labels_con", keep="first")
-            self.rhs_cuts.to_csv(file_path_rhs, index=False)
-            end_time = time.time()
-            logging.info("--- Done in %.2f seconds ---", end_time - start_time)
+        #if (not self.config.benders.generate_cuts
+        #        and os.path.exists(file_path_rhs) and os.path.exists(file_path_lhs)):
+        #    logging.info("--- Loading the right-hand side of the constraints for the Benders cuts ---")
+        #    self.rhs_cuts = pd.read_csv(file_path_rhs)
+        #    logging.info("--- Loading the left-hand side of the constraints for the Benders cuts ---")
+        #    self.lhs_cuts = pd.read_csv(file_path_lhs)
+        #else:
+        #    if not os.path.exists(folder_path):
+        #        os.makedirs(folder_path)
+        start_time = time.time()
+        logging.info("--- Defining the right-hand side of the constraints for the Benders cuts ---")
+        constraints.rename(columns={"labels": "labels_con", "vars": "labels"}, inplace=True)
+        # Define the right-hand side of the constraints for the Benders cuts
+        self.rhs_cuts = constraints[["labels_con", "rhs"]].drop_duplicates(subset="labels_con", keep="first")
+        # self.rhs_cuts.to_csv(file_path_rhs, index=False)
+        end_time = time.time()
+        logging.info("--- Done in %.2f seconds ---", end_time - start_time)
 
-            # Define the left-hand side of the constraints for the Benders cuts, including only the variables that are
-            # shared between the master and subproblems, so the design variables
-            logging.info("--- Defining the left-hand side of the constraints for the Benders cuts ---")
-            start_time = time.time()
-            shared_labels = self.master_model.model.variables.flat[["labels"]]
-            self.lhs_cuts = constraints.merge(shared_labels, on="labels")
-            # Adding also the corresponding master variable of the Linopy model
-            self.lhs_cuts["master_variable"] = self.lhs_cuts.apply(self.get_linopy_variable, axis=1)
-            self.lhs_cuts.to_csv(file_path_lhs, index=False)
-            end_time = time.time()
-            logging.info("--- Done in %.2f seconds ---", end_time - start_time)
+        # Define the left-hand side of the constraints for the Benders cuts, including only the variables that are
+        # shared between the master and subproblems, so the design variables
+        logging.info("--- Defining the left-hand side of the constraints for the Benders cuts ---")
+        start_time = time.time()
+        shared_labels = self.master_model.model.variables.flat["labels"]
+        self.lhs_cuts = constraints.merge(shared_labels, on="labels")
+        labels_pos = self.master_model.model.variables.get_label_position(self.lhs_cuts["labels"])
+        labels, pos = zip(*labels_pos)
+        self.lhs_cuts["labels_var"] = labels
+        self.lhs_cuts["pos_var"] = pos
+        # Adding also the corresponding master variable of the Linopy model
+        # label_position_dict = {i: self.master_model.model.variables[label_position[i][0]].sel(label_position[i][1]) for i in idx}
+        # self.master_model.model.variables[f"{label_position[0]}"].sel(label_position[1])
+        #self.lhs_cuts["master_variable"] = self.lhs_cuts.apply(self.get_linopy_variable, axis=1)
+        # self.lhs_cuts.to_csv(file_path_lhs, index=False)
+        end_time = time.time()
+        logging.info("--- Done in %.2f seconds ---", end_time - start_time)

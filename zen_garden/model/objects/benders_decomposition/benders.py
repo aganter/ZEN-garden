@@ -417,7 +417,9 @@ class BendersDecomposition:
         merged_lhs_df = pd.merge(farkas_multipliers_df, subproblem.lhs_cuts, on="labels_con")
         merged_lhs_df["product"] = merged_lhs_df["multiplier"] * merged_lhs_df["coeffs"]
         filtered_df = merged_lhs_df[merged_lhs_df["product"] != 0]
-        linear_expression_list = list(filtered_df["product"] * filtered_df["master_variable"])
+        master_variables = filtered_df.apply(subproblem.get_linopy_variable, axis=1)
+        #filtered_df["master_variable"] = filtered_df.apply(subproblem.get_linopy_variable, axis=1)
+        linear_expression_list = list(filtered_df["product"] * master_variables)
         feasibility_cut_lhs = lp.merge(linear_expression_list)
         end_time_cuts = time.time()
         total_time_cuts = end_time_cuts - start_time_cuts
