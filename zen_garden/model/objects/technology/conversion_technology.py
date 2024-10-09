@@ -475,6 +475,13 @@ class ConversionTechnologyRules(GenericRule):
 
         self.constraints.add_constraint("constraint_linear_capex",constraints)
 
+        # avoid error with unassigned variables
+        mask = capex_specific_conversion==0
+        lhs = self.align_and_mask(self.variables["capacity_approximation"], mask)
+        rhs = 0
+        constraints = lhs >= rhs
+        self.constraints.add_constraint("constraint_linear_capex_zero", constraints)
+
     def constraint_capacity_capex_coupling(self):
         """ couples capacity variables based on modeling technique
 
