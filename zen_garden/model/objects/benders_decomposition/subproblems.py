@@ -15,6 +15,8 @@
 import logging
 import os
 import time
+import yaml
+import ast
 import pandas as pd
 
 from zen_garden.model.optimization_setup import OptimizationSetup
@@ -224,7 +226,7 @@ class Subproblem(OptimizationSetup):
             logging.info("--- Loading the right-hand side of the constraints for the Benders cuts ---")
             self.rhs_cuts = pd.read_csv(file_path_rhs)
             logging.info("--- Loading the left-hand side of the constraints for the Benders cuts ---")
-            self.lhs_cuts = pd.read_csv(file_path_lhs)
+            self.lhs_cuts = pd.read_csv(file_path_lhs, converters = {'pos_var': ast.literal_eval})
         else:
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
