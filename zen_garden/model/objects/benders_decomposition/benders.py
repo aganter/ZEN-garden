@@ -404,10 +404,10 @@ class BendersDecomposition:
         # Get Farkas multipliers for constraints
         farkas_multipliers = [
             (
-                int(constr.ConstrName[1:]),
-                multiplier if abs(multiplier) > self.config.benders["multiplier_threshold"] else 0,
+                int(constr.ConstrName[1:]), multiplier,
             )
             for constr, multiplier in zip(gurobi_model.getConstrs(), gurobi_model.getAttr(GRB.Attr.FarkasDual))
+            if abs(multiplier) > self.config.benders["multiplier_threshold"]
         ]
 
         farkas_multipliers_df = pd.DataFrame(farkas_multipliers, columns=["labels_con", "multiplier"])
