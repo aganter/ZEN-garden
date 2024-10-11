@@ -22,7 +22,7 @@ from zen_garden.preprocess.unit_handling import UnitHandling
 from zen_garden.model.objects.component import ZenIndex
 from .time_steps import TimeStepsDicts
 from pathlib import Path
-
+import LinearExpression
 
 class EnergySystem:
     """
@@ -544,7 +544,9 @@ class EnergySystem:
             raise KeyError(f"Objective sense {self.optimization_setup.analysis['sense']} not known")
 
         # construct objective
-        self.optimization_setup.model.add_objective(objective.to_linexpr())
+        if not isinstance(objective, LinearExpression):
+            objective = objective.to_linexpr()
+        self.optimization_setup.model.add_objective(objective)
 
 
 class EnergySystemRules(GenericRule):
@@ -804,7 +806,7 @@ class EnergySystemRules(GenericRule):
         :param model: optimization model
         :return: net present cost objective function
         """
-        return sum([model.variables.net_present_cost.at[year] for year in self.energy_system.set_time_steps_yearly])
+        return sum([model.variables.net_present_cost.loc[year] for year in self.energy_system.set_time_steps_yearly])
 
     def objective_total_carbon_emissions(self, model):
         """objective function to minimize total emissions
@@ -816,7 +818,7 @@ class EnergySystemRules(GenericRule):
         :return: total carbon emissions objective function
         """
         sets = self.sets
-        return sum(model.variables.carbon_emissions_annual.at[year] for year in sets["set_time_steps_yearly"])
+        return sum(model.variables.carbon_emissions_annual.loc[year] for year in sets["set_time_steps_yearly"])
 
     def objective_risk(self, model):
         """objective function to minimize total risk
@@ -855,6 +857,6 @@ class EnergySystemRules(GenericRule):
                 # The weight is the same for all time steps
                 model_variables = model.variables[self.optimization_setup.config["objective_variables"]]
                 time_dim = next(dim for dim in model_variables.dims if dim.startswith("set_time_steps"))
-                objective_variable = sum(model_variables.sel(coords).at[year] for year in self.sets[time_dim])
+                objective_variable = sum(model_variables.sel(coords).loc[year] for year in self.sets[time_dim])
                 total += weight * objective_variable
         return total
