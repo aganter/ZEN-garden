@@ -22,7 +22,7 @@ from zen_garden.preprocess.unit_handling import UnitHandling
 from zen_garden.model.objects.component import ZenIndex
 from .time_steps import TimeStepsDicts
 from pathlib import Path
-import LinearExpression
+from linopy.expressions import LinearExpression
 
 class EnergySystem:
     """
