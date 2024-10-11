@@ -100,18 +100,6 @@ class Technology(Element):
             time_steps="set_time_steps_yearly",
             unit_category={"energy_quantity": 1, "time": -1},
         )
-        # self.capacity_limit_max_mga = self.data_input.extract_input_data(
-        #     "capacity_limit_max_mga",
-        #     index_sets=[set_location, "set_time_steps_yearly"],
-        #     time_steps="set_time_steps_yearly",
-        #     unit_category={"energy_quantity": 1, "time": -1},
-        # )
-        # self.capacity_limit_min_mga = self.data_input.extract_input_data(
-        #     "capacity_limit_min_mga",
-        #     index_sets=[set_location, "set_time_steps_yearly"],
-        #     time_steps="set_time_steps_yearly",
-        #     unit_category={"energy_quantity": 1, "time": -1},
-        # )
         self.carbon_intensity_technology = self.data_input.extract_input_data(
             "carbon_intensity_technology",
             index_sets=[set_location],
@@ -748,13 +736,13 @@ class Technology(Element):
         if optimization_setup.system["run_supernodes"]:
             variables.add_variable(
                 model,
-                name="capacity_supernodes",
+                name="capacity_addition_supernodes",
                 index_sets=cls.create_custom_set(
                     ["set_technologies", "set_capacity_types", "set_superlocation", "set_time_steps_yearly"],
                     optimization_setup,
                 ),
                 bounds=(0, np.inf),
-                doc="capacity of installed technologies at superlocation l and time t",
+                doc="capacity addition of technologies at superlocation l and time t",
                 unit_category={"energy_quantity": 1, "time": -1},
             )
 
@@ -796,7 +784,6 @@ class Technology(Element):
         rules = TechnologyRules(optimization_setup)
         #  technology capacity_limit
         rules.constraint_technology_capacity_limit()
-        # rules.constraint_technology_capacity_limit_mga()
 
         # minimum capacity
         rules.constraint_technology_min_capacity_addition()
@@ -892,7 +879,7 @@ class Technology(Element):
             model.variables.remove("tech_off_var")
 
         if optimization_setup.system["run_supernodes"]:
-            rules.constraint_technology_capacity_supernodes()
+            rules.constraint_technology_capacity_addition_supernodes()
 
         # add pe.Constraints of the child classes
         for subclass in cls.__subclasses__():
@@ -1051,28 +1038,6 @@ class TechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_cost_opex_total", constraints)
-
-    def constraint_technology_capacity_limit_mga(self):
-        """limited capacity_limit of technology MGA"""
-        # Get the capacity limit for the technology taken by the results of the MGA
-        capacity_limit_max = self.parameters.capacity_limit_max_mga
-        # capacity_limit_max = 1.1 * capacity_limit_max
-        capacity_limit_min = self.parameters.capacity_limit_min_mga
-
-        # create mask so that skipped if capacity_limit is inf
-        m_max = capacity_limit_max != np.inf
-        m_min = capacity_limit_min != 0
-
-        lhs_max = self.variables["capacity"].where(m_max)
-        rhs_max = capacity_limit_max.where(m_max, 0.0)
-        constraints_max = lhs_max <= rhs_max
-
-        lhs_min = self.variables["capacity"].where(m_min)
-        rhs_min = capacity_limit_min.where(m_min, 0.0)
-        constraints_min = lhs_min >= rhs_min
-
-        self.constraints.add_constraint("constraint_technology_capacity_limit_mga_max", constraints_max)
-        self.constraints.add_constraint("constraint_technology_capacity_limit_mga_min", constraints_min)
 
     def constraint_technology_capacity_limit(self):
         """limited capacity_limit of technology
@@ -1490,13 +1455,13 @@ class TechnologyRules(GenericRule):
 
         self.constraints.add_constraint("constraint_carbon_emissions_technology_total", constraints)
 
-    def constraint_technology_capacity_supernodes(self):
+    def constraint_technology_capacity_addition_supernodes(self):
         """
         Sum up the carrier flow import from location to superlocation
         """
         loc_to_superloc = {**self.sets["set_nodes_in_supernodes"].data, **self.sets["set_edges_in_superedges"].data}
-        capacity = self.variables["capacity"].to_linexpr()
-        capacity_superloc = self.variables["capacity_supernodes"].to_linexpr()
+        capacity = self.variables["capacity_addition"].to_linexpr()
+        capacity_superloc = self.variables["capacity_addition_supernodes"].to_linexpr()
         map_supernloc = [loc_to_superloc[loc] for loc in capacity.coords["set_location"].values]
         superloc_coord = xr.DataArray(
             map_supernloc, dims="set_location", coords={"set_location": capacity.coords["set_location"]}
@@ -1511,4 +1476,4 @@ class TechnologyRules(GenericRule):
         rhs = 0
 
         constraints = lhs == rhs
-        self.constraints.add_constraint("constraint_technologies_capacity_supernodes", constraints)
+        self.constraints.add_constraint("constraint_technologies_capacity_addition_supernodes", constraints)
