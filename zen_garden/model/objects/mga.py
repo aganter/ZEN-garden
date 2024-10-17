@@ -166,9 +166,9 @@ class ModelingToGenerateAlternatives:
                 for loc in self.mga_data_input.decision_variables_dict["objective_set"][self.mga_objective_loc]:
                     self.decision_variables.append([obj, loc])
 
-            if self.mga_solution.config["objective_variables"] in ("capacity", "capacity_supernodes"):
+            if self.mga_solution.config["objective_variables"] in ("capacity_addition", "capacity_addition_supernodes"):
                 list_of_location = list(set([loc for _, loc in self.decision_variables]))
-                if self.mga_solution.config["objective_variables"] == "capacity":
+                if self.mga_solution.config["objective_variables"] == "capacity_addition":
                     set_edges = self.mga_data_input.energy_system.set_edges
                     all_possible_edges = [
                         f"{loc1}-{loc2}" for loc1 in list_of_location for loc2 in list_of_location if loc1 != loc2
